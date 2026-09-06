@@ -1,5 +1,4 @@
 import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
-import { Validator } from '@seriousme/openapi-schema-validator'
 
 import { doc as exampleQueryV32 } from '../../types/tests/examples/3-2-query-example'
 import { doc as exampleTagsV32 } from '../../types/tests/examples/3-2-tags-example'
@@ -76,33 +75,7 @@ import { doc as tagObjectExampleV32 } from '../../types/tests/schema-tests-3.2/t
 import { doc as validSchemaTypesV32 } from '../../types/tests/schema-tests-3.2/valid-schema-types'
 import { doc as webhookExampleV32 } from '../../types/tests/schema-tests-3.2/webhook-example'
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '../src/index'
-
-function asSpec31(value: unknown): OpenAPIV3_1.OpenAPIObject {
-  return value as OpenAPIV3_1.OpenAPIObject
-}
-
-function asSpec32(value: unknown): OpenAPIV3_2.OpenAPIObject {
-  return value as OpenAPIV3_2.OpenAPIObject
-}
-
-function asValidatorInput(value: unknown): Record<string, unknown> {
-  return value as Record<string, unknown>
-}
-
-async function validate(spec: object) {
-  const validator = new Validator()
-  const result = await validator.validate(
-    asValidatorInput(structuredClone(spec)),
-  )
-  return { result, version: validator.version }
-}
-
-async function expectValidAs(spec: object, expectedVersion: string): Promise<void> {
-  const { result, version } = await validate(spec)
-  expect(result.errors ?? []).toEqual([])
-  expect(result.valid).toBe(true)
-  expect(version).toBe(expectedVersion)
-}
+import { expectValidAs } from './helpers'
 
 /**
  * Excluded 3.1 fixtures:
@@ -120,48 +93,48 @@ const corpus31: readonly (readonly [
   name: string,
   doc: OpenAPIV3_1.OpenAPIObject,
 ])[] = [
-  ['examples/non-oauth-scopes-3-1', asSpec31(exampleNonOauthScopesV31)],
-  ['examples/tictactoe-3-1', asSpec31(exampleTictactoeV31)],
-  ['examples/webhook-example-3-1', asSpec31(exampleWebhookV31)],
-  ['callback-object-examples', asSpec31(callbackObjectExamplesV31)],
-  ['comp-pathitems', asSpec31(compPathitemsV31)],
-  ['components-object-example', asSpec31(componentsObjectExampleV31)],
-  ['example-object-examples', asSpec31(exampleObjectExamplesV31)],
-  ['header-object-examples', asSpec31(headerObjectExamplesV31)],
-  ['info-object-example', asSpec31(infoObjectExampleV31)],
-  ['info-summary', asSpec31(infoSummaryV31)],
-  ['json-schema-dialect', asSpec31(jsonSchemaDialectV31)],
-  ['license-identifier', asSpec31(licenseIdentifierV31)],
-  ['link-object-examples', asSpec31(linkObjectExamplesV31)],
-  ['media-type-examples', asSpec31(mediaTypeExamplesV31)],
-  ['mega', asSpec31(megaV31)],
-  ['minimal-comp', asSpec31(minimalCompV31)],
-  ['minimal-hooks', asSpec31(minimalHooksV31)],
-  ['minimal-paths', asSpec31(minimalPathsV31)],
-  ['non-oauth-scopes', asSpec31(nonOauthScopesV31)],
-  ['operation-object-example', asSpec31(operationObjectExampleV31)],
-  ['parameter-object-examples', asSpec31(parameterObjectExamplesV31)],
+  ['examples/non-oauth-scopes-3-1', exampleNonOauthScopesV31],
+  ['examples/tictactoe-3-1', exampleTictactoeV31],
+  ['examples/webhook-example-3-1', exampleWebhookV31],
+  ['callback-object-examples', callbackObjectExamplesV31],
+  ['comp-pathitems', compPathitemsV31],
+  ['components-object-example', componentsObjectExampleV31],
+  ['example-object-examples', exampleObjectExamplesV31],
+  ['header-object-examples', headerObjectExamplesV31],
+  ['info-object-example', infoObjectExampleV31],
+  ['info-summary', infoSummaryV31],
+  ['json-schema-dialect', jsonSchemaDialectV31],
+  ['license-identifier', licenseIdentifierV31],
+  ['link-object-examples', linkObjectExamplesV31],
+  ['media-type-examples', mediaTypeExamplesV31],
+  ['mega', megaV31],
+  ['minimal-comp', minimalCompV31],
+  ['minimal-hooks', minimalHooksV31],
+  ['minimal-paths', minimalPathsV31],
+  ['non-oauth-scopes', nonOauthScopesV31],
+  ['operation-object-example', operationObjectExampleV31],
+  ['parameter-object-examples', parameterObjectExamplesV31],
   [
     'parameter-object-query-allow-reserved',
-    asSpec31(parameterObjectQueryAllowReservedV31),
+    parameterObjectQueryAllowReservedV31,
   ],
-  ['path-item-object-example', asSpec31(pathItemObjectExampleV31)],
-  ['path-item-servers-parameters', asSpec31(pathItemServersParametersV31)],
-  ['path-no-response', asSpec31(pathNoResponseV31)],
-  ['path-var-empty-pathitem', asSpec31(pathVarEmptyPathitemV31)],
-  ['paths-object-example', asSpec31(pathsObjectExampleV31)],
-  ['request-body-examples', asSpec31(requestBodyExamplesV31)],
-  ['response-object-examples', asSpec31(responseObjectExamplesV31)],
-  ['schema', asSpec31(schemaV31)],
+  ['path-item-object-example', pathItemObjectExampleV31],
+  ['path-item-servers-parameters', pathItemServersParametersV31],
+  ['path-no-response', pathNoResponseV31],
+  ['path-var-empty-pathitem', pathVarEmptyPathitemV31],
+  ['paths-object-example', pathsObjectExampleV31],
+  ['request-body-examples', requestBodyExamplesV31],
+  ['response-object-examples', responseObjectExamplesV31],
+  ['schema', schemaV31],
   [
     'schema-object-deprecated-example-keyword',
-    asSpec31(schemaObjectDeprecatedExampleKeywordV31),
+    schemaObjectDeprecatedExampleKeywordV31,
   ],
-  ['servers', asSpec31(serversV31)],
-  ['specification-extensions', asSpec31(specificationExtensionsV31)],
-  ['tag-object-example', asSpec31(tagObjectExampleV31)],
-  ['valid-schema-types', asSpec31(validSchemaTypesV31)],
-  ['webhook-example', asSpec31(webhookExampleV31)],
+  ['servers', serversV31],
+  ['specification-extensions', specificationExtensionsV31],
+  ['tag-object-example', tagObjectExampleV31],
+  ['valid-schema-types', validSchemaTypesV31],
+  ['webhook-example', webhookExampleV31],
 ]
 
 /**
@@ -175,56 +148,56 @@ const corpus32: readonly (readonly [
   name: string,
   doc: OpenAPIV3_2.OpenAPIObject,
 ])[] = [
-  ['examples/3-2-query-example', asSpec32(exampleQueryV32)],
-  ['examples/3-2-tags-example', asSpec32(exampleTagsV32)],
-  ['callback-object-examples', asSpec32(callbackObjectExamplesV32)],
-  ['comp-pathitems', asSpec32(compPathitemsV32)],
-  ['components-object-example', asSpec32(componentsObjectExampleV32)],
-  ['example-object-examples', asSpec32(exampleObjectExamplesV32)],
-  ['header-object-examples', asSpec32(headerObjectExamplesV32)],
-  ['info-object-example', asSpec32(infoObjectExampleV32)],
-  ['info-summary', asSpec32(infoSummaryV32)],
-  ['json-schema-dialect', asSpec32(jsonSchemaDialectV32)],
-  ['license-identifier', asSpec32(licenseIdentifierV32)],
-  ['link-object-examples', asSpec32(linkObjectExamplesV32)],
-  ['media-type-examples', asSpec32(mediaTypeExamplesV32)],
-  ['mega', asSpec32(megaV32)],
-  ['minimal-comp', asSpec32(minimalCompV32)],
-  ['minimal-hooks', asSpec32(minimalHooksV32)],
-  ['minimal-paths', asSpec32(minimalPathsV32)],
-  ['non-oauth-scopes', asSpec32(nonOauthScopesV32)],
-  ['operation-object-example', asSpec32(operationObjectExampleV32)],
+  ['examples/3-2-query-example', exampleQueryV32],
+  ['examples/3-2-tags-example', exampleTagsV32],
+  ['callback-object-examples', callbackObjectExamplesV32],
+  ['comp-pathitems', compPathitemsV32],
+  ['components-object-example', componentsObjectExampleV32],
+  ['example-object-examples', exampleObjectExamplesV32],
+  ['header-object-examples', headerObjectExamplesV32],
+  ['info-object-example', infoObjectExampleV32],
+  ['info-summary', infoSummaryV32],
+  ['json-schema-dialect', jsonSchemaDialectV32],
+  ['license-identifier', licenseIdentifierV32],
+  ['link-object-examples', linkObjectExamplesV32],
+  ['media-type-examples', mediaTypeExamplesV32],
+  ['mega', megaV32],
+  ['minimal-comp', minimalCompV32],
+  ['minimal-hooks', minimalHooksV32],
+  ['minimal-paths', minimalPathsV32],
+  ['non-oauth-scopes', nonOauthScopesV32],
+  ['operation-object-example', operationObjectExampleV32],
   [
     'parameter-object-cookie-form-allow-reserved',
-    asSpec32(parameterObjectCookieFormAllowReservedV32),
+    parameterObjectCookieFormAllowReservedV32,
   ],
-  ['parameter-object-examples', asSpec32(parameterObjectExamplesV32)],
+  ['parameter-object-examples', parameterObjectExamplesV32],
   [
     'parameter-object-path-allow-reserved',
-    asSpec32(parameterObjectPathAllowReservedV32),
+    parameterObjectPathAllowReservedV32,
   ],
   [
     'parameter-object-query-allow-reserved',
-    asSpec32(parameterObjectQueryAllowReservedV32),
+    parameterObjectQueryAllowReservedV32,
   ],
-  ['path-item-object-example', asSpec32(pathItemObjectExampleV32)],
-  ['path-item-servers-parameters', asSpec32(pathItemServersParametersV32)],
-  ['path-no-response', asSpec32(pathNoResponseV32)],
-  ['path-var-empty-pathitem', asSpec32(pathVarEmptyPathitemV32)],
-  ['paths-object-example', asSpec32(pathsObjectExampleV32)],
-  ['request-body-examples', asSpec32(requestBodyExamplesV32)],
-  ['response-object-examples', asSpec32(responseObjectExamplesV32)],
-  ['schema', asSpec32(schemaV32)],
+  ['path-item-object-example', pathItemObjectExampleV32],
+  ['path-item-servers-parameters', pathItemServersParametersV32],
+  ['path-no-response', pathNoResponseV32],
+  ['path-var-empty-pathitem', pathVarEmptyPathitemV32],
+  ['paths-object-example', pathsObjectExampleV32],
+  ['request-body-examples', requestBodyExamplesV32],
+  ['response-object-examples', responseObjectExamplesV32],
+  ['schema', schemaV32],
   [
     'schema-object-deprecated-example-keyword',
-    asSpec32(schemaObjectDeprecatedExampleKeywordV32),
+    schemaObjectDeprecatedExampleKeywordV32,
   ],
-  ['servers', asSpec32(serversV32)],
-  ['specification-extensions', asSpec32(specificationExtensionsV32)],
-  ['style-defaults', asSpec32(styleDefaultsV32)],
-  ['tag-object-example', asSpec32(tagObjectExampleV32)],
-  ['valid-schema-types', asSpec32(validSchemaTypesV32)],
-  ['webhook-example', asSpec32(webhookExampleV32)],
+  ['servers', serversV32],
+  ['specification-extensions', specificationExtensionsV32],
+  ['style-defaults', styleDefaultsV32],
+  ['tag-object-example', tagObjectExampleV32],
+  ['valid-schema-types', validSchemaTypesV32],
+  ['webhook-example', webhookExampleV32],
 ]
 
 describe('3.1 corpus downgraded to 3.0', () => {

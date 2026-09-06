@@ -8,23 +8,7 @@
  * converted, and existing specification extensions (`x-` keys) as well as
  * unknown keys are always preserved. Constructs 3.0 cannot express are
  * converted where an equivalent exists and removed otherwise — the converter
- * never invents `x-` keys of its own:
- *
- * - Removed: `webhooks`, `components.pathItems`, `jsonSchemaDialect`,
- *   `info.summary`, and `license.identifier`.
- * - Schema keywords are rewritten where 3.0 has an equivalent (`type` arrays
- *   with `"null"` become `nullable`, `const` becomes a single-value `enum`,
- *   numeric exclusive bounds become bound + boolean, the first entry of
- *   `examples` becomes `example`, `contentEncoding: "base64"` and
- *   `contentMediaType: "application/octet-stream"` become `format: "byte"`
- *   and `format: "binary"`), and dropped where dropping merely loosens
- *   validation (`if`/`then`/`else`, `prefixItems`, `patternProperties`,
- *   `unevaluated*`, `$defs`, `$dynamic*`, ...).
- * - Boolean schemas become `{}` / `{ not: {} }`, and a schema `$ref` with
- *   sibling keywords is wrapped in `allOf` (3.0 references must stand alone).
- * - `mutualTLS` security schemes (and the security requirements referencing
- *   them) are removed, and non-OAuth security requirements lose their role
- *   names, as 3.0 supports neither.
+ * never invents `x-` keys of its own. The README lists every mapping.
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html}
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html}
@@ -32,7 +16,7 @@
 
 import type { OpenAPIV3_0, OpenAPIV3_1 } from '@openapi-spec/types'
 
-import type { FieldConverter, FieldTable, UnknownRecord } from './shared'
+import type { FieldConverter, FieldTable } from './shared'
 import {
   convertRecord,
   deepClone,
@@ -54,19 +38,17 @@ function convertRefOr(value: unknown, convert: (item: unknown) => unknown): unkn
   return ref === undefined ? convert(value) : { $ref: ref }
 }
 
-/** Field converter for a map of reference-or-object entries. */
 function refMap(convert: (item: unknown) => unknown): FieldConverter {
   return item =>
     mapRecord(item, entry => convertRefOr(entry, convert))
 }
 
-/** Field converter for a list of reference-or-object entries. */
 function refList(convert: (item: unknown) => unknown): FieldConverter {
   return item =>
     mapArray(item, entry => convertRefOr(entry, convert))
 }
 
-function applyTypes(types: string[], schema: UnknownRecord, out: UnknownRecord): void {
+function applyTypes(types: string[], schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const nullable = types.includes('null')
   const rest = types.filter(item => item !== 'null')
   if (rest.length === 1) {
@@ -112,7 +94,7 @@ function applyTypes(types: string[], schema: UnknownRecord, out: UnknownRecord):
   // Multiple non-null types: 3.0 only allows a single `type`, so the type
   // union moves into `anyOf` branches.
   const variants = rest.map((item) => {
-    const variant: UnknownRecord = { type: item }
+    const variant: Record<string, unknown> = { type: item }
     if (item === 'array') {
       // 3.0 requires `items` whenever `type` is "array".
       variant.items = out.items === undefined ? {} : deepClone(out.items)
@@ -135,7 +117,7 @@ function applyTypes(types: string[], schema: UnknownRecord, out: UnknownRecord):
   // union is dropped rather than clobbering the passed-through allOf.
 }
 
-function convertType(schema: UnknownRecord, out: UnknownRecord): void {
+function convertType(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const { type } = schema
   if (type === undefined) {
     return
@@ -154,22 +136,20 @@ function convertType(schema: UnknownRecord, out: UnknownRecord): void {
     applyTypes(types, schema, out)
     return
   }
-  // Malformed: pass through.
   setKey(out, 'type', deepClone(type))
 }
 
-function convertConst(schema: UnknownRecord, out: UnknownRecord): void {
+function convertConst(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   if (!('const' in schema)) {
     return
   }
-  // `const` is a single-value `enum`.
   out.enum = [deepClone(schema.const)]
   if (schema.const === null) {
     out.nullable = true
   }
 }
 
-function convertExamples(schema: UnknownRecord, out: UnknownRecord): void {
+function convertExamples(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   // 3.0 only has the singular `example`; the first entry wins, unless an
   // explicit `example` already exists. The rest have no 3.0 home.
   if (
@@ -181,7 +161,7 @@ function convertExamples(schema: UnknownRecord, out: UnknownRecord): void {
   }
 }
 
-function convertExclusiveBounds(schema: UnknownRecord, out: UnknownRecord): void {
+function convertExclusiveBounds(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const { exclusiveMaximum, exclusiveMinimum, maximum, minimum } = schema
   // 3.1's numeric exclusive bounds become 3.0's bound + boolean pairs. When
   // an inclusive bound is also present, the tighter constraint wins.
@@ -201,7 +181,7 @@ function convertExclusiveBounds(schema: UnknownRecord, out: UnknownRecord): void
   }
 }
 
-function convertContentKeywords(schema: UnknownRecord, out: UnknownRecord): void {
+function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   // 3.1 replaced 3.0's `format: "byte"` / `format: "binary"` with the JSON
   // Schema content keywords; reconstruct the formats when unambiguous.
   if (out.format !== undefined) {
@@ -243,7 +223,7 @@ function convertXml(value: unknown, schemaType: unknown): unknown {
 }
 
 /** Converts the keywords whose 3.0 form depends on several 3.1 keywords at once. */
-function finishSchema(out: UnknownRecord, schema: UnknownRecord): UnknownRecord {
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>): Record<string, unknown> {
   convertType(schema, out)
   convertConst(schema, out)
   convertExamples(schema, out)
@@ -271,26 +251,9 @@ function finishSchema(out: UnknownRecord, schema: UnknownRecord): UnknownRecord 
   return out
 }
 
-function convertSchema(schema: unknown): unknown {
-  if (schema === true) {
-    return {}
-  }
-  if (schema === false) {
-    return { not: {} }
-  }
-  if (
-    isRecord(schema)
-    && typeof schema.$ref === 'string'
-    && Object.keys(schema).length === 1
-  ) {
-    return { $ref: schema.$ref }
-  }
-  // eslint-disable-next-line ts/no-use-before-define -- mutually recursive with the field table, as schemas are recursive structures
-  return convertRecord(schema, SCHEMA_FIELDS, finishSchema)
+function convertSubschemas(item: unknown): unknown {
+  return mapArray(item, convertSchema)
 }
-
-const convertSubschemas: FieldConverter = item =>
-  mapArray(item, convertSchema)
 
 /**
  * Every 3.1 Schema Object keyword 3.0 treats differently; the rest (including
@@ -309,8 +272,7 @@ const SCHEMA_FIELDS: FieldTable = {
   $dynamicAnchor: DROP,
   $dynamicRef: DROP,
   $id: DROP,
-  // A string $ref is re-attached by finishSchema; malformed values pass
-  // through unchanged.
+  // A string $ref is re-attached by finishSchema.
   $ref: item => (typeof item === 'string' ? DROP : deepClone(item)),
   $schema: DROP,
   $vocabulary: DROP,
@@ -372,11 +334,28 @@ const SCHEMA_FIELDS: FieldTable = {
   xml: (item, schema) => convertXml(item, schema.type),
 }
 
+function convertSchema(schema: unknown): unknown {
+  if (schema === true) {
+    return {}
+  }
+  if (schema === false) {
+    return { not: {} }
+  }
+  if (
+    isRecord(schema)
+    && typeof schema.$ref === 'string'
+    && Object.keys(schema).length === 1
+  ) {
+    return { $ref: schema.$ref }
+  }
+  return convertRecord(schema, SCHEMA_FIELDS, finishSchema)
+}
+
 /**
  * Converts an OpenAPI 3.1 Schema Object to its OpenAPI 3.0 form. A schema
  * consisting solely of `$ref` becomes a 3.0 Reference Object; a `$ref` with
- * sibling keywords is wrapped in `allOf`. See the module documentation for
- * the full keyword mapping.
+ * sibling keywords is wrapped in `allOf`. See the README for the full
+ * keyword mapping.
  */
 export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
   const converted: unknown = convertSchema(schema)
@@ -387,9 +366,7 @@ export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaO
 const SECURITY_SCHEMES_REF_PREFIX = '#/components/securitySchemes/'
 
 interface SecuritySchemeIndex {
-  /** Names of `mutualTLS` schemes, which 3.0 cannot represent at all. */
   mutualTls: Set<string>
-  /** Scheme name to declared `type`, for every recognizable scheme. */
   types: Map<string, string>
 }
 
@@ -397,7 +374,7 @@ interface SecuritySchemeIndex {
  * Resolves the declared `type` of a security scheme, following local
  * reference aliases with cycle protection.
  */
-function resolveSchemeType(name: string, schemes: UnknownRecord, seen: Set<string>): string | undefined {
+function resolveSchemeType(name: string, schemes: Record<string, unknown>, seen: Set<string>): string | undefined {
   if (seen.has(name) || !Object.hasOwn(schemes, name)) {
     return undefined
   }
@@ -481,7 +458,6 @@ function convertSecurity(value: unknown, index: SecuritySchemeIndex): unknown {
 
 function convertInfo(value: unknown): unknown {
   return convertRecord(value, {
-    // No SPDX `identifier` and no `summary` in 3.0.
     license: item => convertRecord(item, { identifier: DROP }),
     summary: DROP,
   })
@@ -492,7 +468,6 @@ function convertParameterOrHeader(value: unknown): unknown {
   return convertRecord(
     value,
     {
-
       content: item => mapRecord(item, convertMediaType),
       examples: refMap(deepClone),
       schema: convertSchema,
@@ -520,8 +495,9 @@ function convertMediaType(value: unknown): unknown {
   })
 }
 
-const convertContent: FieldConverter = item =>
-  mapRecord(item, convertMediaType)
+function convertContent(item: unknown): unknown {
+  return mapRecord(item, convertMediaType)
+}
 
 function convertRequestBody(value: unknown): unknown {
   return convertRecord(value, { content: convertContent })
@@ -535,17 +511,17 @@ function convertResponse(value: unknown): unknown {
   })
 }
 
-const convertResponses: FieldConverter = item =>
-  mapRecord(item, (entry, key) =>
+function convertResponses(item: unknown): unknown {
+  return mapRecord(item, (entry, key) =>
     key.startsWith('x-')
       ? deepClone(entry)
       : convertRefOr(entry, convertResponse))
+}
 
 function convertOperation(value: unknown, index: SecuritySchemeIndex): unknown {
   return convertRecord(
     value,
     {
-
       callbacks: refMap(item => convertCallback(item, index)),
       parameters: refList(convertParameterOrHeader),
       requestBody: item => convertRefOr(item, convertRequestBody),
@@ -565,7 +541,6 @@ function convertOperation(value: unknown, index: SecuritySchemeIndex): unknown {
 
 function convertCallback(value: unknown, index: SecuritySchemeIndex): unknown {
   return mapRecord(value, (item, key) =>
-
     key.startsWith('x-') ? deepClone(item) : convertPathItem(item, index))
 }
 
@@ -588,7 +563,6 @@ function convertComponents(value: unknown, index: SecuritySchemeIndex): unknown 
     headers: refMap(convertParameterOrHeader),
     links: refMap(deepClone),
     parameters: refMap(convertParameterOrHeader),
-    // 3.0 has no reusable path items.
     pathItems: DROP,
     requestBodies: refMap(convertRequestBody),
     responses: refMap(convertResponse),
@@ -606,7 +580,6 @@ function convertSpec(spec: unknown): unknown {
     {
       components: item => convertComponents(item, index),
       info: convertInfo,
-      // 3.0 has neither schema-dialect selection nor webhooks.
       jsonSchemaDialect: DROP,
       paths: item => convertPaths(item, index),
       security: item => convertSecurity(item, index),

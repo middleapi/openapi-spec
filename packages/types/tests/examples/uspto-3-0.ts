@@ -2,7 +2,7 @@
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.0'
 
-export const doc = {
+export const doc: OpenAPIObject = {
   openapi: '3.0.1',
   servers: [
     {
@@ -256,4 +256,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject
+}

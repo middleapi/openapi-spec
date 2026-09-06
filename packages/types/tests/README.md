@@ -1,6 +1,6 @@
 # Real-document fixtures
 
-Type-level fixtures generated from official OpenAPI documents. Each file embeds a complete document as an object literal checked with `satisfies OpenAPIObject` against the version module matching its `openapi` field, so `tsc` at the repository root re-validates the whole corpus.
+Type-level fixtures generated from official OpenAPI documents. Each file embeds a complete document as an object literal typed as the `OpenAPIObject` of the version module matching its `openapi` field, so `tsc` at the repository root re-validates the whole corpus and rejects properties the specification does not allow.
 
 Sources (Apache-2.0, © the OpenAPI Initiative):
 
