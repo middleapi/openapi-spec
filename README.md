@@ -77,4 +77,4 @@ Like what we build over at [middleapi](https://github.com/middleapi)? You can he
   </tr>
 </table>
 
-With thanks to [37 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get Oasty here.
+With thanks to [37 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get openapi-spec here.

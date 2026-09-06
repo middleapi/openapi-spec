@@ -1,4 +1,4 @@
-# @oasty/downgrader
+# @openapi-spec/downgrader
 
 Downgrade [OpenAPI Specification](https://spec.openapis.org/) documents one minor version at a time: 3.2 → 3.1 and 3.1 → 3.0. Each converter works on an entire document or on a single Schema Object.
 
@@ -14,7 +14,7 @@ import {
   downgradeSchemaV32ToV31,
   downgradeSpecV31ToV30,
   downgradeSpecV32ToV31,
-} from "@oasty/downgrader";
+} from "@openapi-spec/downgrader";
 
 const v31 = downgradeSpecV32ToV31(v32Document);
 const v30 = downgradeSpecV31ToV30(v31Document);

@@ -1,20 +1,24 @@
-# @oasty/types
+# @openapi-spec/types
 
 TypeScript types for the [OpenAPI Specification](https://spec.openapis.org/), covering versions 3.0, 3.1, and 3.2 with complete inline documentation.
 
 Each version module is authored against the latest patch release of its minor line:
 
-- `@oasty/types/v3.0` — OpenAPI [3.0.4](https://spec.openapis.org/oas/v3.0.4.html)
-- `@oasty/types/v3.1` — OpenAPI [3.1.2](https://spec.openapis.org/oas/v3.1.2.html), reusing 3.0 types where unchanged
-- `@oasty/types/v3.2` — OpenAPI [3.2.0](https://spec.openapis.org/oas/v3.2.0.html), reusing 3.1 types where unchanged
+- `@openapi-spec/types/v3.0` — OpenAPI [3.0.4](https://spec.openapis.org/oas/v3.0.4.html)
+- `@openapi-spec/types/v3.1` — OpenAPI [3.1.2](https://spec.openapis.org/oas/v3.1.2.html), reusing 3.0 types where unchanged
+- `@openapi-spec/types/v3.2` — OpenAPI [3.2.0](https://spec.openapis.org/oas/v3.2.0.html), reusing 3.1 types where unchanged
 
 ## Usage
 
 ```ts
-import type { OpenAPIObject, SchemaObject } from "@oasty/types/v3.1";
+import type { OpenAPIObject, SchemaObject } from "@openapi-spec/types/v3.1";
 
 // or via namespaces from the root export
-import type { OpenAPIV3_0, OpenAPIV3_1, OpenAPIV3_2 } from "@oasty/types";
+import type {
+  OpenAPIV3_0,
+  OpenAPIV3_1,
+  OpenAPIV3_2,
+} from "@openapi-spec/types";
 
 // SchemaObject accepts an optional data type for its data-carrying fields
 // (`enum`, `default`, `example`, and in 3.1+ `const` and `examples`).
@@ -104,4 +108,4 @@ Like what we build over at [middleapi](https://github.com/middleapi)? You can he
   </tr>
 </table>
 
-With thanks to [37 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get Oasty here.
+With thanks to [37 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get openapi-spec here.

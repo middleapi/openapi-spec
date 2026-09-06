@@ -1,6 +1,6 @@
 /* oxlint-disable anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- the helpers deliberately accept and return `unknown` so tests can feed malformed input to the graceful-degradation branches and inspect loosely-shaped output */
 
-import type { OpenAPIV3_2 } from "@oasty/types";
+import type { OpenAPIV3_2 } from "@openapi-spec/types";
 
 import type { UnknownRecord } from "./shared";
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from "./v3.2-to-v3.1";
