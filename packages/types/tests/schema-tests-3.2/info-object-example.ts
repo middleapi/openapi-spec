@@ -2,7 +2,7 @@
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.2'
 
-export const doc = {
+export const doc: OpenAPIObject = {
   openapi: '3.2.0',
   $self: 'https://example.com/openapi',
   info: {
@@ -26,4 +26,4 @@ export const doc = {
     url: 'https://example.com',
   },
   components: {},
-} satisfies OpenAPIObject
+}

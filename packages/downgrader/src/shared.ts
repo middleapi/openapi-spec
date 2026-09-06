@@ -4,8 +4,6 @@
  * through unchanged.
  */
 
-export type UnknownRecord = Record<string, unknown>
-
 /**
  * Returned by a converter to remove its entry from the surrounding object or
  * array: the single signal for constructs the target version cannot express.
@@ -16,7 +14,7 @@ export const DROP = Symbol('drop')
  * Converts one field of a record. The whole source record is passed along
  * for decisions that depend on sibling fields.
  */
-export type FieldConverter = (item: unknown, source: UnknownRecord) => unknown
+export type FieldConverter = (item: unknown, source: Record<string, unknown>) => unknown
 
 /**
  * What happens to each known field of a record: a converter, or `DROP` to
@@ -25,7 +23,8 @@ export type FieldConverter = (item: unknown, source: UnknownRecord) => unknown
  */
 export type FieldTable = Readonly<Record<string, FieldConverter | typeof DROP>>
 
-export const HTTP_METHODS = [
+/** The Path Item operation fields of OpenAPI 3.0 and 3.1; 3.2 adds `query`. */
+export const HTTP_METHODS_UP_TO_V31 = [
   'delete',
   'get',
   'head',
@@ -36,9 +35,8 @@ export const HTTP_METHODS = [
   'trace',
 ] as const
 
-/** Field-table entries routing every Operation Object of a Path Item to `convert`. */
 export function operationFields(convert: FieldConverter): FieldTable {
-  return Object.fromEntries(HTTP_METHODS.map(method => [method, convert]))
+  return Object.fromEntries(HTTP_METHODS_UP_TO_V31.map(method => [method, convert]))
 }
 
 /**
@@ -46,7 +44,7 @@ export function operationFields(convert: FieldConverter): FieldTable {
  * into). Arrays, class instances, and primitives are handled by reference or
  * by dedicated array helpers.
  */
-export function isRecord(value: unknown): value is UnknownRecord {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
     return false
   }
@@ -58,7 +56,7 @@ export function isRecord(value: unknown): value is UnknownRecord {
  * Sets a key on the output record with define-property semantics, so hostile
  * key names like `__proto__` become plain own properties.
  */
-export function setKey(target: UnknownRecord, key: string, value: unknown): void {
+export function setKey(target: Record<string, unknown>, key: string, value: unknown): void {
   Object.defineProperty(target, key, {
     configurable: true,
     enumerable: true,
@@ -83,7 +81,7 @@ function cloneValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
     }
     return out
   }
-  const out: UnknownRecord = {}
+  const out: Record<string, unknown> = {}
   seen.set(value, out)
   for (const [key, item] of Object.entries(value)) {
     setKey(out, key, cloneValue(item, seen))
@@ -118,13 +116,13 @@ const converting = new WeakSet<object>()
  * higher up the call stack: a cyclic reference, which would otherwise recurse
  * forever.
  */
-export function convertRecord(value: unknown, fields: FieldTable, finish?: (out: UnknownRecord, source: UnknownRecord) => unknown): unknown {
+export function convertRecord(value: unknown, fields: FieldTable, finish?: (out: Record<string, unknown>, source: Record<string, unknown>) => unknown): unknown {
   if (!isRecord(value) || converting.has(value)) {
     return deepClone(value)
   }
   converting.add(value)
   try {
-    const out: UnknownRecord = {}
+    const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
       if (convert === DROP) {
@@ -143,16 +141,11 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: (out:
   }
 }
 
-/**
- * Applies `convert` to every value of a plain object, preserving key order
- * and leaving out entries it turns into `DROP`. Non-object input is
- * deep-cloned unchanged.
- */
 export function mapRecord(value: unknown, convert: (item: unknown, key: string) => unknown): unknown {
   if (!isRecord(value)) {
     return deepClone(value)
   }
-  const out: UnknownRecord = {}
+  const out: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
     const converted = convert(item, key)
     if (converted !== DROP) {
@@ -162,10 +155,6 @@ export function mapRecord(value: unknown, convert: (item: unknown, key: string) 
   return out
 }
 
-/**
- * Applies `convert` to every element of an array, leaving out elements it
- * turns into `DROP`. Non-array input is deep-cloned unchanged.
- */
 export function mapArray(value: unknown, convert: (item: unknown) => unknown): unknown {
   if (!Array.isArray(value)) {
     return deepClone(value)
@@ -173,10 +162,6 @@ export function mapArray(value: unknown, convert: (item: unknown) => unknown): u
   return value.map(item => convert(item)).filter(item => item !== DROP)
 }
 
-/**
- * Returns the `$ref` string of a Reference-Object-shaped value, or
- * `undefined` when the value is not one.
- */
 export function getRef(value: unknown): string | undefined {
   if (isRecord(value) && typeof value.$ref === 'string') {
     return value.$ref

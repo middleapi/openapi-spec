@@ -2,7 +2,7 @@
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.1'
 
-export const doc = {
+export const doc: OpenAPIObject = {
   openapi: '3.1.0',
   info: {
     title: 'allowReserved only permitted with in: query',
@@ -18,4 +18,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject
+}

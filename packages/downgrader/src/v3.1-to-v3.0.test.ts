@@ -1,24 +1,7 @@
 import type { OpenAPIV3_1 } from '@openapi-spec/types'
 
-import type { UnknownRecord } from './shared'
+import { dig } from '../tests/helpers'
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from './v3.1-to-v3.0'
-
-function asSpec(value: unknown): OpenAPIV3_1.OpenAPIObject {
-  return value as OpenAPIV3_1.OpenAPIObject
-}
-
-function asSchema(value: unknown): OpenAPIV3_1.SchemaObject {
-  return value as OpenAPIV3_1.SchemaObject
-}
-
-function dig(value: unknown, ...path: string[]): unknown {
-  let current: unknown = value
-  for (const key of path) {
-    // SAFETY: tests walk converter output whose shape the surrounding assertions pin down.
-    current = (current as UnknownRecord)[key]
-  }
-  return current
-}
 
 const info = { title: 't', version: '1' }
 
@@ -26,8 +9,8 @@ const info = { title: 't', version: '1' }
 const base = { info, openapi: '3.1.0', paths: {} }
 const converted = { info, openapi: '3.0.4', paths: {} }
 
-function convertSpec(fields: UnknownRecord) {
-  return downgradeSpecV31ToV30(asSpec({ ...base, ...fields }))
+function convertSpec(fields: Record<string, unknown>) {
+  return downgradeSpecV31ToV30({ ...base, ...fields } as any)
 }
 
 function convertPathItem(pathItem: unknown): unknown {
@@ -44,7 +27,7 @@ function convertComponent(kind: string, value: unknown): unknown {
 }
 
 function convertSchema(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(asSchema(schema))
+  return downgradeSchemaV31ToV30(schema as any)
 }
 
 describe('downgradeSpecV31ToV30', () => {
@@ -56,7 +39,7 @@ describe('downgradeSpecV31ToV30', () => {
     })
 
     it('adds openapi 3.0.4 and an empty paths object when they are missing', () => {
-      expect(downgradeSpecV31ToV30(asSpec({ info }))).toEqual(converted)
+      expect(downgradeSpecV31ToV30({ info } as any)).toEqual(converted)
     })
 
     it('removes jsonSchemaDialect and webhooks without leaving traces', () => {
@@ -77,11 +60,11 @@ describe('downgradeSpecV31ToV30', () => {
     })
 
     it('clones non-object input unchanged', () => {
-      expect(downgradeSpecV31ToV30(asSpec(null))).toBeNull()
-      expect(downgradeSpecV31ToV30(asSpec(42))).toBe(42)
-      expect(downgradeSpecV31ToV30(asSpec('spec'))).toBe('spec')
+      expect(downgradeSpecV31ToV30(null as any)).toBeNull()
+      expect(downgradeSpecV31ToV30(42 as any)).toBe(42)
+      expect(downgradeSpecV31ToV30('spec' as any)).toBe('spec')
       const list = [1, { a: 1 }]
-      const result = downgradeSpecV31ToV30(asSpec(list))
+      const result = downgradeSpecV31ToV30(list as any)
       expect(result).toEqual(list)
       expect(result).not.toBe(list)
     })
@@ -603,7 +586,7 @@ describe('downgradeSpecV31ToV30', () => {
 
   describe('robustness', () => {
     it('never mutates the input document', () => {
-      const input = asSpec({
+      const input: OpenAPIV3_1.OpenAPIObject = {
         components: {
           pathItems: { Reusable: { get: { summary: 's' } } },
           schemas: { S: { $ref: '#/c/s', type: ['string', 'null'] } },
@@ -630,15 +613,15 @@ describe('downgradeSpecV31ToV30', () => {
         },
         security: [{ mtls: [] }],
         webhooks: { newPet: { post: { summary: 's' } } },
-      })
+      }
       const before = structuredClone(input)
       downgradeSpecV31ToV30(input)
       expect(input).toEqual(before)
     })
 
     it('converts a path item that cycles through its callbacks without throwing', () => {
-      const callback: UnknownRecord = {}
-      const pathItem: UnknownRecord = {
+      const callback: Record<string, unknown> = {}
+      const pathItem: Record<string, unknown> = {
         get: { callbacks: { cb: callback }, responses: {} },
       }
       callback.expr = pathItem
@@ -1202,7 +1185,7 @@ describe('downgradeSchemaV31ToV30', () => {
 
   describe('robustness', () => {
     it('never mutates the input schema', () => {
-      const input = asSchema({
+      const input: OpenAPIV3_1.SchemaObject = {
         $ref: '#/c/s',
         allOf: [{ type: 'string' }],
         const: null,
@@ -1212,23 +1195,23 @@ describe('downgradeSchemaV31ToV30', () => {
         prefixItems: [{ type: 'string' }],
         properties: { a: { type: ['string', 'null'] } },
         type: ['object', 'null'],
-      })
+      }
       const before = structuredClone(input)
       downgradeSchemaV31ToV30(input)
       expect(input).toEqual(before)
     })
 
     it('converts deeply nested schemas without throwing', () => {
-      let deep = asSchema({ type: 'string' })
+      let deep: OpenAPIV3_1.SchemaObject = { type: 'string' }
       for (let index = 0; index < 1000; index += 1) {
-        deep = asSchema({ items: deep, type: 'array' })
+        deep = { items: deep, type: 'array' }
       }
       expect(() => downgradeSchemaV31ToV30(deep)).not.toThrow()
     })
 
     it('converts a schema whose subtree cycles back to itself without throwing', () => {
-      const properties: UnknownRecord = {}
-      const node: UnknownRecord = { properties, type: 'object' }
+      const properties: Record<string, unknown> = {}
+      const node: Record<string, unknown> = { properties, type: 'object' }
       properties.self = node
       expect(convertSchema(node)).toHaveProperty(
         ['properties', 'self', 'type'],

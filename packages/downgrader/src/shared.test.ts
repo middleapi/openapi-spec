@@ -1,10 +1,10 @@
-import type { UnknownRecord } from './shared'
+import { dig } from '../tests/helpers'
 import {
   convertRecord,
   deepClone,
   DROP,
   getRef,
-  HTTP_METHODS,
+  HTTP_METHODS_UP_TO_V31,
   isRecord,
   mapArray,
   mapRecord,
@@ -14,10 +14,6 @@ import {
 
 function identity<T>(value: T): T {
   return value
-}
-
-function asRecord(value: unknown): UnknownRecord {
-  return value as UnknownRecord
 }
 
 /** A converter that recurses into `self`, so a self-referencing node re-enters convertRecord. */
@@ -95,17 +91,17 @@ describe('deepClone', () => {
 
   it('copies a hostile __proto__ own key as a plain own data property without prototype pollution', () => {
     const input: unknown = JSON.parse('{"__proto__": {"polluted": true}}')
-    const clone = asRecord(deepClone(input))
+    const clone = deepClone(input)
     expect(Object.getOwnPropertyNames(clone)).toContain('__proto__')
     expect(Object.getOwnPropertyDescriptor(clone, '__proto__')?.value).toEqual({
       polluted: true,
     })
     expect(Object.getPrototypeOf(clone)).toBe(Object.prototype)
-    expect(asRecord({}).polluted).toBeUndefined()
+    expect('polluted' in {}).toBe(false)
   })
 
   it('preserves key order', () => {
-    const input: UnknownRecord = {}
+    const input: Record<string, unknown> = {}
     input.zebra = 1
     input.apple = 2
     input.mango = 3
@@ -113,13 +109,13 @@ describe('deepClone', () => {
   })
 
   it('preserves object cycles instead of recursing forever', () => {
-    const child: UnknownRecord = {}
-    const node: UnknownRecord = { child, name: 'root' }
+    const child: Record<string, unknown> = {}
+    const node: Record<string, unknown> = { child, name: 'root' }
     child.parent = node
     const clone = deepClone(node)
     expect(clone).not.toBe(node)
     expect(clone.name).toBe('root')
-    expect(asRecord(clone.child).parent).toBe(clone)
+    expect(dig(clone, 'child', 'parent')).toBe(clone)
   })
 
   it('preserves array cycles', () => {
@@ -143,12 +139,10 @@ describe('deepClone', () => {
 describe('convertRecord', () => {
   it('routes listed fields through their converters and deep-clones the rest', () => {
     const extra = { deep: true }
-    const result = asRecord(
-      convertRecord(
-        { a: 1, b: 2, extra },
-        { a: item => [item], b: () => 'converted' },
-      ),
-    )
+    const result = convertRecord(
+      { a: 1, b: 2, extra },
+      { a: item => [item], b: () => 'converted' },
+    ) as Record<string, unknown>
     expect(result).toEqual({ a: [1], b: 'converted', extra: { deep: true } })
     expect(result.extra).not.toBe(extra)
   })
@@ -176,11 +170,11 @@ describe('convertRecord', () => {
   })
 
   it('preserves key order', () => {
-    const input: UnknownRecord = {}
+    const input: Record<string, unknown> = {}
     input.zebra = 1
     input.apple = 2
     input.mango = 3
-    const result = asRecord(convertRecord(input, { apple: identity }))
+    const result = convertRecord(input, { apple: identity }) as Record<string, unknown>
     expect(Object.keys(result)).toEqual(['zebra', 'apple', 'mango'])
   })
 
@@ -199,7 +193,7 @@ describe('convertRecord', () => {
     const input: unknown = JSON.parse(
       '{"constructor": 1, "toString": 2, "__proto__": {"polluted": true}}',
     )
-    const result = asRecord(convertRecord(input, {}))
+    const result = convertRecord(input, {})
     expect(Object.getOwnPropertyDescriptor(result, 'constructor')?.value).toBe(
       1,
     )
@@ -208,15 +202,15 @@ describe('convertRecord', () => {
       { polluted: true },
     )
     expect(Object.getPrototypeOf(result)).toBe(Object.prototype)
-    expect(asRecord({}).polluted).toBeUndefined()
+    expect('polluted' in {}).toBe(false)
   })
 
   it('falls back to a cycle-preserving clone when re-entered for the same object', () => {
-    const node: UnknownRecord = { name: 'root' }
+    const node: Record<string, unknown> = { name: 'root' }
     node.self = node
-    const result = asRecord(convertNode(node))
+    const result = convertNode(node) as Record<string, unknown>
     expect(result.name).toBe('converted')
-    const inner = asRecord(result.self)
+    const inner = result.self as Record<string, unknown>
     expect(inner).not.toBe(node)
     expect(inner.name).toBe('root')
     expect(inner.self).toBe(inner)
@@ -250,7 +244,7 @@ describe('convertRecord', () => {
 describe('operationFields', () => {
   it('routes every HTTP method of a path item to the converter', () => {
     const fields = operationFields(identity)
-    expect(Object.keys(fields)).toEqual([...HTTP_METHODS])
+    expect(Object.keys(fields)).toEqual([...HTTP_METHODS_UP_TO_V31])
     expect(Object.values(fields).every(entry => entry === identity)).toBe(
       true,
     )
@@ -279,10 +273,10 @@ describe('mapRecord', () => {
   })
 
   it('preserves key order', () => {
-    const input: UnknownRecord = {}
+    const input: Record<string, unknown> = {}
     input.zebra = 1
     input.apple = 2
-    const result = asRecord(mapRecord(input, identity))
+    const result = mapRecord(input, identity) as Record<string, unknown>
     expect(Object.keys(result)).toEqual(['zebra', 'apple'])
   })
 
@@ -351,7 +345,7 @@ describe('getRef', () => {
 
 describe('setKey', () => {
   it('defines an enumerable, writable, configurable own property', () => {
-    const target: UnknownRecord = {}
+    const target: Record<string, unknown> = {}
     setKey(target, 'name', 'value')
     expect(Object.getOwnPropertyDescriptor(target, 'name')).toEqual({
       configurable: true,
@@ -362,12 +356,12 @@ describe('setKey', () => {
   })
 
   it('sets a __proto__ key as a plain own property without prototype pollution', () => {
-    const target: UnknownRecord = {}
+    const target: Record<string, unknown> = {}
     setKey(target, '__proto__', { polluted: true })
     const descriptor = Object.getOwnPropertyDescriptor(target, '__proto__')
     expect(descriptor?.value).toEqual({ polluted: true })
     expect(descriptor?.enumerable).toBe(true)
     expect(Object.getPrototypeOf(target)).toBe(Object.prototype)
-    expect(asRecord({}).polluted).toBeUndefined()
+    expect('polluted' in {}).toBe(false)
   })
 })

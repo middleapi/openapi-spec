@@ -1,5 +1,4 @@
 import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
-import { Validator } from '@seriousme/openapi-schema-validator'
 
 import { doc as queryExample } from '../../types/tests/examples/3-2-query-example'
 import { doc as tagsExample } from '../../types/tests/examples/3-2-tags-example'
@@ -10,34 +9,12 @@ import { doc as webhookExample } from '../../types/tests/examples/webhook-exampl
 import { doc as mega31 } from '../../types/tests/schema-tests-3.1/mega'
 import { doc as mega32 } from '../../types/tests/schema-tests-3.2/mega'
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '../src/index'
-
-function asSpec31(value: unknown): OpenAPIV3_1.OpenAPIObject {
-  return value as OpenAPIV3_1.OpenAPIObject
-}
-
-function asValidatorInput(value: unknown): Record<string, unknown> {
-  return value as Record<string, unknown>
-}
-
-async function validate(spec: object) {
-  const validator = new Validator()
-  const result = await validator.validate(
-    asValidatorInput(structuredClone(spec)),
-  )
-  return { result, version: validator.version }
-}
-
-async function expectValidAs(spec: object, expectedVersion: string): Promise<void> {
-  const { result, version } = await validate(spec)
-  expect(result.errors ?? []).toEqual([])
-  expect(result.valid).toBe(true)
-  expect(version).toBe(expectedVersion)
-}
+import { expectValidAs } from './helpers'
 
 describe('3.1 example documents downgraded to 3.0', () => {
   it('converts the tictactoe example to a valid 3.0.4 document without mutating the input', async () => {
     const before = structuredClone(tictactoe)
-    const converted = downgradeSpecV31ToV30(asSpec31(tictactoe))
+    const converted = downgradeSpecV31ToV30(tictactoe)
     expect(converted.openapi).toBe('3.0.4')
     await expectValidAs(converted, '3.0')
     expect(converted).toMatchSnapshot()
@@ -97,7 +74,7 @@ describe('3.1 example documents downgraded to 3.0', () => {
   })
 
   it('leaves $refs into the removed components.pathItems untouched, letting them dangle', () => {
-    const doc = asSpec31({
+    const doc: OpenAPIV3_1.OpenAPIObject = {
       components: {
         pathItems: {
           shared: {
@@ -110,7 +87,7 @@ describe('3.1 example documents downgraded to 3.0', () => {
       paths: {
         '/shared': { $ref: '#/components/pathItems/shared' },
       },
-    })
+    }
     const before = structuredClone(doc)
     const converted = downgradeSpecV31ToV30(doc)
     expect(converted.components).not.toHaveProperty('pathItems')
@@ -123,7 +100,7 @@ describe('3.1 example documents downgraded to 3.0', () => {
   })
 
   it('clones a discriminator with defaultMapping as-is into the 3.0 document', async () => {
-    const doc = asSpec31({
+    const doc = {
       components: {
         schemas: {
           Cat: {
@@ -144,7 +121,7 @@ describe('3.1 example documents downgraded to 3.0', () => {
       info: { title: 'Discriminated', version: '1.0.0' },
       openapi: '3.1.0',
       paths: {},
-    })
+    } as any
     const before = structuredClone(doc)
     const converted = downgradeSpecV31ToV30(doc)
     // defaultMapping is not a schema keyword the 3.0 converter touches, and
@@ -258,7 +235,7 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
 describe('already-3.0-shaped documents', () => {
   it('passes the petstore example through untouched apart from the version stamp', () => {
     const before = structuredClone(petstore)
-    const converted = downgradeSpecV31ToV30(asSpec31(petstore))
+    const converted = downgradeSpecV31ToV30(petstore as any)
     expect(converted).toEqual({
       ...structuredClone(petstore),
       openapi: '3.0.4',
@@ -268,7 +245,7 @@ describe('already-3.0-shaped documents', () => {
 })
 
 describe('kitchen-sink 3.2 document chained down to 3.0', () => {
-  const kitchenSink = {
+  const kitchenSink: OpenAPIV3_2.OpenAPIObject = {
     $self: 'https://api.example.com/openapi.json',
     components: {
       mediaTypes: {
@@ -379,7 +356,7 @@ describe('kitchen-sink 3.2 document chained down to 3.0', () => {
     },
     security: [{ deviceAuth: ['events:read'] }],
     servers: [{ name: 'production', url: 'https://api.example.com' }],
-  } satisfies OpenAPIV3_2.OpenAPIObject
+  }
 
   it('converts every 3.2-only construct and stays valid through both hops', async () => {
     const before = structuredClone(kitchenSink)

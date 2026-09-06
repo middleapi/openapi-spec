@@ -2,7 +2,7 @@
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.1'
 
-export const doc = {
+export const doc: OpenAPIObject = {
   openapi: '3.1.0',
   info: {
     summary: 'Testing jsonSchemaDialect',
@@ -24,4 +24,4 @@ export const doc = {
     },
   },
   paths: {},
-} satisfies OpenAPIObject
+}
