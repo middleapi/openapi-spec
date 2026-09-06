@@ -240,8 +240,13 @@ export const noTagHierarchy = {
   paths: {},
   tags: [
     {
+      // @ts-expect-error: The Tag Object's `kind` field was added in OpenAPI 3.2.
+      kind: 'nav',
+      name: 'animals',
+    },
+    {
       name: 'pets',
-      // @ts-expect-error: The Tag Object's `parent` and `kind` fields were added in OpenAPI 3.2.
+      // @ts-expect-error: The Tag Object's `parent` field was added in OpenAPI 3.2.
       parent: 'animals',
     },
   ],
