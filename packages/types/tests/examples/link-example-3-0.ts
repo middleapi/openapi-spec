@@ -1,160 +1,159 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/link-example-3.0.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.0";
+import type { OpenAPIObject } from '../../src/v3.0'
 
 export const doc = {
-  openapi: "3.0.0",
+  openapi: '3.0.0',
   info: {
-    title: "Link Example",
-    version: "1.0.0",
+    title: 'Link Example',
+    version: '1.0.0',
   },
   paths: {
-    "/2.0/users/{username}": {
+    '/2.0/users/{username}': {
       get: {
-        operationId: "getUserByName",
+        operationId: 'getUserByName',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "200": {
-            description: "The User",
+          200: {
+            description: 'The User',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/user",
+                  $ref: '#/components/schemas/user',
                 },
               },
             },
             links: {
               userRepositories: {
-                $ref: "#/components/links/UserRepositories",
+                $ref: '#/components/links/UserRepositories',
               },
             },
           },
         },
       },
     },
-    "/2.0/repositories/{username}": {
+    '/2.0/repositories/{username}': {
       get: {
-        operationId: "getRepositoriesByOwner",
+        operationId: 'getRepositoriesByOwner',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "200": {
-            description: "repositories owned by the supplied user",
+          200: {
+            description: 'repositories owned by the supplied user',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "array",
+                  type: 'array',
                   items: {
-                    $ref: "#/components/schemas/repository",
+                    $ref: '#/components/schemas/repository',
                   },
                 },
               },
             },
             links: {
               userRepository: {
-                $ref: "#/components/links/UserRepository",
+                $ref: '#/components/links/UserRepository',
               },
             },
           },
         },
       },
     },
-    "/2.0/repositories/{username}/{slug}": {
+    '/2.0/repositories/{username}/{slug}': {
       get: {
-        operationId: "getRepository",
+        operationId: 'getRepository',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "slug",
-            in: "path",
+            name: 'slug',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "200": {
-            description: "The repository",
+          200: {
+            description: 'The repository',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/repository",
+                  $ref: '#/components/schemas/repository',
                 },
               },
             },
             links: {
               repositoryPullRequests: {
-                $ref: "#/components/links/RepositoryPullRequests",
+                $ref: '#/components/links/RepositoryPullRequests',
               },
             },
           },
         },
       },
     },
-    "/2.0/repositories/{username}/{slug}/pullrequests": {
+    '/2.0/repositories/{username}/{slug}/pullrequests': {
       get: {
-        operationId: "getPullRequestsByRepository",
+        operationId: 'getPullRequestsByRepository',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "slug",
-            in: "path",
+            name: 'slug',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "state",
-            in: "query",
+            name: 'state',
+            in: 'query',
             schema: {
-              type: "string",
-              enum: ["open", "merged", "declined"],
+              type: 'string',
+              enum: ['open', 'merged', 'declined'],
             },
           },
         ],
         responses: {
-          "200": {
-            description: "an array of pull request objects",
+          200: {
+            description: 'an array of pull request objects',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "array",
+                  type: 'array',
                   items: {
-                    $ref: "#/components/schemas/pullrequest",
+                    $ref: '#/components/schemas/pullrequest',
                   },
                 },
               },
@@ -163,86 +162,86 @@ export const doc = {
         },
       },
     },
-    "/2.0/repositories/{username}/{slug}/pullrequests/{pid}": {
+    '/2.0/repositories/{username}/{slug}/pullrequests/{pid}': {
       get: {
-        operationId: "getPullRequestsById",
+        operationId: 'getPullRequestsById',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "slug",
-            in: "path",
+            name: 'slug',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "pid",
-            in: "path",
+            name: 'pid',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "200": {
-            description: "a pull request object",
+          200: {
+            description: 'a pull request object',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/pullrequest",
+                  $ref: '#/components/schemas/pullrequest',
                 },
               },
             },
             links: {
               pullRequestMerge: {
-                $ref: "#/components/links/PullRequestMerge",
+                $ref: '#/components/links/PullRequestMerge',
               },
             },
           },
         },
       },
     },
-    "/2.0/repositories/{username}/{slug}/pullrequests/{pid}/merge": {
+    '/2.0/repositories/{username}/{slug}/pullrequests/{pid}/merge': {
       post: {
-        operationId: "mergePullRequest",
+        operationId: 'mergePullRequest',
         parameters: [
           {
-            name: "username",
-            in: "path",
+            name: 'username',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "slug",
-            in: "path",
+            name: 'slug',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "pid",
-            in: "path",
+            name: 'pid',
+            in: 'path',
             required: true,
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "204": {
-            description: "the PR was successfully merged",
+          204: {
+            description: 'the PR was successfully merged',
           },
         },
       },
@@ -251,74 +250,74 @@ export const doc = {
   components: {
     links: {
       UserRepositories: {
-        operationId: "getRepositoriesByOwner",
+        operationId: 'getRepositoriesByOwner',
         parameters: {
-          username: "$response.body#/username",
+          username: '$response.body#/username',
         },
       },
       UserRepository: {
-        operationId: "getRepository",
+        operationId: 'getRepository',
         parameters: {
-          username: "$response.body#/owner/username",
-          slug: "$response.body#/slug",
+          username: '$response.body#/owner/username',
+          slug: '$response.body#/slug',
         },
       },
       RepositoryPullRequests: {
-        operationId: "getPullRequestsByRepository",
+        operationId: 'getPullRequestsByRepository',
         parameters: {
-          username: "$response.body#/owner/username",
-          slug: "$response.body#/slug",
+          username: '$response.body#/owner/username',
+          slug: '$response.body#/slug',
         },
       },
       PullRequestMerge: {
-        operationId: "mergePullRequest",
+        operationId: 'mergePullRequest',
         parameters: {
-          username: "$response.body#/author/username",
-          slug: "$response.body#/repository/slug",
-          pid: "$response.body#/id",
+          username: '$response.body#/author/username',
+          slug: '$response.body#/repository/slug',
+          pid: '$response.body#/id',
         },
       },
     },
     schemas: {
       user: {
-        type: "object",
+        type: 'object',
         properties: {
           username: {
-            type: "string",
+            type: 'string',
           },
           uuid: {
-            type: "string",
+            type: 'string',
           },
         },
       },
       repository: {
-        type: "object",
+        type: 'object',
         properties: {
           slug: {
-            type: "string",
+            type: 'string',
           },
           owner: {
-            $ref: "#/components/schemas/user",
+            $ref: '#/components/schemas/user',
           },
         },
       },
       pullrequest: {
-        type: "object",
+        type: 'object',
         properties: {
           id: {
-            type: "integer",
+            type: 'integer',
           },
           title: {
-            type: "string",
+            type: 'string',
           },
           repository: {
-            $ref: "#/components/schemas/repository",
+            $ref: '#/components/schemas/repository',
           },
           author: {
-            $ref: "#/components/schemas/user",
+            $ref: '#/components/schemas/user',
           },
         },
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

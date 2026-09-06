@@ -1,70 +1,69 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/schema.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   paths: {},
   components: {
     schemas: {
       model: {
-        type: "object",
+        type: 'object',
         properties: {
           one: {
-            description: "type array",
-            type: ["integer", "string"],
+            description: 'type array',
+            type: ['integer', 'string'],
           },
           two: {
-            description: "type 'null'",
-            type: "null",
+            description: 'type \'null\'',
+            type: 'null',
           },
           three: {
-            description: "type array including 'null'",
-            type: ["string", "null"],
+            description: 'type array including \'null\'',
+            type: ['string', 'null'],
           },
           four: {
-            description: "array with no items",
-            type: "array",
+            description: 'array with no items',
+            type: 'array',
           },
           five: {
-            description: "singular example",
-            type: "string",
-            examples: ["exampleValue"],
+            description: 'singular example',
+            type: 'string',
+            examples: ['exampleValue'],
           },
           six: {
-            description: "exclusiveMinimum true",
+            description: 'exclusiveMinimum true',
             exclusiveMinimum: 10,
           },
           seven: {
-            description: "exclusiveMinimum false",
+            description: 'exclusiveMinimum false',
             minimum: 10,
           },
           eight: {
-            description: "exclusiveMaximum true",
+            description: 'exclusiveMaximum true',
             exclusiveMaximum: 20,
           },
           nine: {
-            description: "exclusiveMaximum false",
+            description: 'exclusiveMaximum false',
             maximum: 20,
           },
           ten: {
-            description: "nullable string",
-            type: ["string", "null"],
+            description: 'nullable string',
+            type: ['string', 'null'],
           },
           eleven: {
-            description: "x-nullable string",
-            type: ["string", "null"],
+            description: 'x-nullable string',
+            type: ['string', 'null'],
           },
           twelve: {
-            description: "file/binary",
+            description: 'file/binary',
           },
         },
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

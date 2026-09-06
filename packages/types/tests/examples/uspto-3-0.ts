@@ -1,75 +1,74 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/uspto-3.0.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.0";
+import type { OpenAPIObject } from '../../src/v3.0'
 
 export const doc = {
-  openapi: "3.0.1",
+  openapi: '3.0.1',
   servers: [
     {
-      url: "{scheme}://developer.uspto.gov/ds-api",
+      url: '{scheme}://developer.uspto.gov/ds-api',
       variables: {
         scheme: {
-          description: "The Data Set API is accessible via https and http",
-          enum: ["https", "http"],
-          default: "https",
+          description: 'The Data Set API is accessible via https and http',
+          enum: ['https', 'http'],
+          default: 'https',
         },
       },
     },
   ],
   info: {
     description:
-      "The Data Set API (DSAPI) allows the public users to discover and search USPTO exported data sets. This is a generic API that allows USPTO users to make any CSV based data files searchable through API. With the help of GET call, it returns the list of data fields that are searchable. With the help of POST call, data can be fetched based on the filters on the field names. Please note that POST call is used to search the actual data. The reason for the POST call is that it allows users to specify any complex search criteria without worry about the GET size limitations as well as encoding of the input parameters.",
-    version: "1.0.0",
-    title: "USPTO Data Set API",
+      'The Data Set API (DSAPI) allows the public users to discover and search USPTO exported data sets. This is a generic API that allows USPTO users to make any CSV based data files searchable through API. With the help of GET call, it returns the list of data fields that are searchable. With the help of POST call, data can be fetched based on the filters on the field names. Please note that POST call is used to search the actual data. The reason for the POST call is that it allows users to specify any complex search criteria without worry about the GET size limitations as well as encoding of the input parameters.',
+    version: '1.0.0',
+    title: 'USPTO Data Set API',
     contact: {
-      name: "Open Data Portal",
-      url: "https://developer.uspto.gov",
-      email: "developer@uspto.gov",
+      name: 'Open Data Portal',
+      url: 'https://developer.uspto.gov',
+      email: 'developer@uspto.gov',
     },
   },
   tags: [
     {
-      name: "metadata",
-      description: "Find out about the data sets",
+      name: 'metadata',
+      description: 'Find out about the data sets',
     },
     {
-      name: "search",
-      description: "Search a data set",
+      name: 'search',
+      description: 'Search a data set',
     },
   ],
   paths: {
-    "/": {
+    '/': {
       get: {
-        tags: ["metadata"],
-        operationId: "list-data-sets",
-        summary: "List available data sets",
+        tags: ['metadata'],
+        operationId: 'list-data-sets',
+        summary: 'List available data sets',
         responses: {
-          "200": {
-            description: "Returns a list of data sets",
+          200: {
+            description: 'Returns a list of data sets',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/dataSetList",
+                  $ref: '#/components/schemas/dataSetList',
                 },
                 example: {
                   total: 2,
                   apis: [
                     {
-                      apiKey: "oa_citations",
-                      apiVersionNumber: "v1",
+                      apiKey: 'oa_citations',
+                      apiVersionNumber: 'v1',
                       apiUrl:
-                        "https://developer.uspto.gov/ds-api/oa_citations/v1/fields",
+                        'https://developer.uspto.gov/ds-api/oa_citations/v1/fields',
                       apiDocumentationUrl:
-                        "https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/oa_citations.json",
+                        'https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/oa_citations.json',
                     },
                     {
-                      apiKey: "cancer_moonshot",
-                      apiVersionNumber: "v1",
+                      apiKey: 'cancer_moonshot',
+                      apiVersionNumber: 'v1',
                       apiUrl:
-                        "https://developer.uspto.gov/ds-api/cancer_moonshot/v1/fields",
+                        'https://developer.uspto.gov/ds-api/cancer_moonshot/v1/fields',
                       apiDocumentationUrl:
-                        "https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/cancer_moonshot.json",
+                        'https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/cancer_moonshot.json',
                     },
                   ],
                 },
@@ -79,55 +78,55 @@ export const doc = {
         },
       },
     },
-    "/{dataset}/{version}/fields": {
+    '/{dataset}/{version}/fields': {
       get: {
-        tags: ["metadata"],
+        tags: ['metadata'],
         summary:
-          "Provides the general information about the API and the list of fields that can be used to query the dataset.",
+          'Provides the general information about the API and the list of fields that can be used to query the dataset.',
         description:
-          "This GET API returns the list of all the searchable field names that are in the oa_citations. Please see the 'fields' attribute which returns an array of field names. Each field or a combination of fields can be searched using the syntax options shown below.",
-        operationId: "list-searchable-fields",
+          'This GET API returns the list of all the searchable field names that are in the oa_citations. Please see the \'fields\' attribute which returns an array of field names. Each field or a combination of fields can be searched using the syntax options shown below.',
+        operationId: 'list-searchable-fields',
         parameters: [
           {
-            name: "dataset",
-            in: "path",
-            description: "Name of the dataset.",
+            name: 'dataset',
+            in: 'path',
+            description: 'Name of the dataset.',
             required: true,
-            example: "oa_citations",
+            example: 'oa_citations',
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
           {
-            name: "version",
-            in: "path",
-            description: "Version of the dataset.",
+            name: 'version',
+            in: 'path',
+            description: 'Version of the dataset.',
             required: true,
-            example: "v1",
+            example: 'v1',
             schema: {
-              type: "string",
+              type: 'string',
             },
           },
         ],
         responses: {
-          "200": {
+          200: {
             description:
-              "The dataset API for the given version is found and it is accessible to consume.",
+              'The dataset API for the given version is found and it is accessible to consume.',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "string",
+                  type: 'string',
                 },
               },
             },
           },
-          "404": {
+          404: {
             description:
-              "The combination of dataset name and version is not found in the system or it is not published yet to be consumed by public.",
+              'The combination of dataset name and version is not found in the system or it is not published yet to be consumed by public.',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "string",
+                  type: 'string',
                 },
               },
             },
@@ -135,83 +134,83 @@ export const doc = {
         },
       },
     },
-    "/{dataset}/{version}/records": {
+    '/{dataset}/{version}/records': {
       post: {
-        tags: ["search"],
+        tags: ['search'],
         summary:
-          "Provides search capability for the data set with the given search criteria.",
+          'Provides search capability for the data set with the given search criteria.',
         description:
-          "This API is based on Solr/Lucene Search. The data is indexed using SOLR. This GET API returns the list of all the searchable field names that are in the Solr Index. Please see the 'fields' attribute which returns an array of field names. Each field or a combination of fields can be searched using the Solr/Lucene Syntax. Please refer https://lucene.apache.org/core/3_6_2/queryparsersyntax.html#Overview for the query syntax. List of field names that are searchable can be determined using above GET api.",
-        operationId: "perform-search",
+          'This API is based on Solr/Lucene Search. The data is indexed using SOLR. This GET API returns the list of all the searchable field names that are in the Solr Index. Please see the \'fields\' attribute which returns an array of field names. Each field or a combination of fields can be searched using the Solr/Lucene Syntax. Please refer https://lucene.apache.org/core/3_6_2/queryparsersyntax.html#Overview for the query syntax. List of field names that are searchable can be determined using above GET api.',
+        operationId: 'perform-search',
         parameters: [
           {
-            name: "version",
-            in: "path",
-            description: "Version of the dataset.",
+            name: 'version',
+            in: 'path',
+            description: 'Version of the dataset.',
             required: true,
             schema: {
-              type: "string",
-              default: "v1",
+              type: 'string',
+              default: 'v1',
             },
           },
           {
-            name: "dataset",
-            in: "path",
+            name: 'dataset',
+            in: 'path',
             description:
-              "Name of the dataset. In this case, the default value is oa_citations",
+              'Name of the dataset. In this case, the default value is oa_citations',
             required: true,
             schema: {
-              type: "string",
-              default: "oa_citations",
+              type: 'string',
+              default: 'oa_citations',
             },
           },
         ],
         responses: {
-          "200": {
-            description: "successful operation",
+          200: {
+            description: 'successful operation',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "array",
+                  type: 'array',
                   items: {
-                    type: "object",
+                    type: 'object',
                     additionalProperties: {
-                      type: "object",
+                      type: 'object',
                     },
                   },
                 },
               },
             },
           },
-          "404": {
-            description: "No matching record found for the given criteria.",
+          404: {
+            description: 'No matching record found for the given criteria.',
           },
         },
         requestBody: {
           content: {
-            "application/x-www-form-urlencoded": {
+            'application/x-www-form-urlencoded': {
               schema: {
-                type: "object",
+                type: 'object',
                 properties: {
                   criteria: {
                     description:
-                      "Uses Lucene Query Syntax in the format of propertyName:value, propertyName:[num1 TO num2] and date range format: propertyName:[yyyyMMdd TO yyyyMMdd]. In the response please see the 'docs' element which has the list of record objects. Each record structure would consist of all the fields and their corresponding values.",
-                    type: "string",
-                    default: "*:*",
+                      'Uses Lucene Query Syntax in the format of propertyName:value, propertyName:[num1 TO num2] and date range format: propertyName:[yyyyMMdd TO yyyyMMdd]. In the response please see the \'docs\' element which has the list of record objects. Each record structure would consist of all the fields and their corresponding values.',
+                    type: 'string',
+                    default: '*:*',
                   },
                   start: {
-                    description: "Starting record number. Default value is 0.",
-                    type: "integer",
+                    description: 'Starting record number. Default value is 0.',
+                    type: 'integer',
                     default: 0,
                   },
                   rows: {
                     description:
-                      "Specify number of rows to be returned. If you run the search with default values, in the response you will see 'numFound' attribute which will tell the number of records available in the dataset.",
-                    type: "integer",
+                      'Specify number of rows to be returned. If you run the search with default values, in the response you will see \'numFound\' attribute which will tell the number of records available in the dataset.',
+                    type: 'integer',
                     default: 100,
                   },
                 },
-                required: ["criteria"],
+                required: ['criteria'],
               },
             },
           },
@@ -222,33 +221,33 @@ export const doc = {
   components: {
     schemas: {
       dataSetList: {
-        type: "object",
+        type: 'object',
         properties: {
           total: {
-            type: "integer",
+            type: 'integer',
           },
           apis: {
-            type: "array",
+            type: 'array',
             items: {
-              type: "object",
+              type: 'object',
               properties: {
                 apiKey: {
-                  type: "string",
-                  description: "To be used as a dataset parameter value",
+                  type: 'string',
+                  description: 'To be used as a dataset parameter value',
                 },
                 apiVersionNumber: {
-                  type: "string",
-                  description: "To be used as a version parameter value",
+                  type: 'string',
+                  description: 'To be used as a version parameter value',
                 },
                 apiUrl: {
-                  type: "string",
-                  format: "uri-reference",
-                  description: "The URL describing the dataset's fields",
+                  type: 'string',
+                  format: 'uri-reference',
+                  description: 'The URL describing the dataset\'s fields',
                 },
                 apiDocumentationUrl: {
-                  type: "string",
-                  format: "uri-reference",
-                  description: "A URL to the API console for each API",
+                  type: 'string',
+                  format: 'uri-reference',
+                  description: 'A URL to the API console for each API',
                 },
               },
             },
@@ -257,4 +256,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

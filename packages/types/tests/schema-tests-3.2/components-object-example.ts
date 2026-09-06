@@ -1,88 +1,87 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/components-object-example.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   components: {
     schemas: {
       GeneralError: {
-        type: "object",
+        type: 'object',
         properties: {
           code: {
-            type: "integer",
-            format: "int32",
+            type: 'integer',
+            format: 'int32',
           },
           message: {
-            type: "string",
+            type: 'string',
           },
         },
       },
       Category: {
-        type: "object",
+        type: 'object',
         properties: {
           id: {
-            type: "integer",
-            format: "int64",
+            type: 'integer',
+            format: 'int64',
           },
           name: {
-            type: "string",
+            type: 'string',
           },
         },
       },
       Tag: {
-        type: "object",
+        type: 'object',
         properties: {
           id: {
-            type: "integer",
-            format: "int64",
+            type: 'integer',
+            format: 'int64',
           },
           name: {
-            type: "string",
+            type: 'string',
           },
         },
       },
     },
     parameters: {
       skipParam: {
-        name: "skip",
-        in: "query",
-        description: "number of items to skip",
+        name: 'skip',
+        in: 'query',
+        description: 'number of items to skip',
         required: true,
         schema: {
-          type: "integer",
-          format: "int32",
+          type: 'integer',
+          format: 'int32',
         },
       },
       limitParam: {
-        name: "limit",
-        in: "query",
-        description: "max records to return",
+        name: 'limit',
+        in: 'query',
+        description: 'max records to return',
         required: true,
         schema: {
-          type: "integer",
-          format: "int32",
+          type: 'integer',
+          format: 'int32',
         },
       },
     },
     responses: {
       NotFound: {
-        description: "Entity not found.",
+        description: 'Entity not found.',
       },
       IllegalInput: {
-        description: "Illegal input for operation.",
+        description: 'Illegal input for operation.',
       },
       GeneralError: {
-        description: "General Error",
+        description: 'General Error',
         content: {
-          "application/json": {
+          'application/json': {
             schema: {
-              $ref: "#/components/schemas/GeneralError",
+              $ref: '#/components/schemas/GeneralError',
             },
           },
         },
@@ -90,22 +89,22 @@ export const doc = {
     },
     securitySchemes: {
       api_key: {
-        type: "apiKey",
-        name: "api-key",
-        in: "header",
+        type: 'apiKey',
+        name: 'api-key',
+        in: 'header',
       },
       petstore_auth: {
-        type: "oauth2",
+        type: 'oauth2',
         flows: {
           implicit: {
-            authorizationUrl: "https://example.org/api/oauth/dialog",
+            authorizationUrl: 'https://example.org/api/oauth/dialog',
             scopes: {
-              "write:pets": "modify pets in your account",
-              "read:pets": "read your pets",
+              'write:pets': 'modify pets in your account',
+              'read:pets': 'read your pets',
             },
           },
         },
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

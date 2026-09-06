@@ -1,39 +1,38 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.1-dev/tests/schema/pass/link-object-examples.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.1";
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc = {
-  openapi: "3.1.0",
+  openapi: '3.1.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   paths: {
-    "/users/{id}": {
+    '/users/{id}': {
       parameters: [
         {
-          name: "id",
-          in: "path",
+          name: 'id',
+          in: 'path',
           required: true,
-          description: "the user identifier, as userId",
+          description: 'the user identifier, as userId',
           schema: {
-            type: "string",
+            type: 'string',
           },
         },
       ],
       get: {
         responses: {
-          "200": {
-            description: "the user being returned",
+          200: {
+            description: 'the user being returned',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "object",
+                  type: 'object',
                   properties: {
                     uuid: {
-                      type: "string",
-                      format: "uuid",
+                      type: 'string',
+                      format: 'uuid',
                     },
                   },
                 },
@@ -41,34 +40,34 @@ export const doc = {
             },
             links: {
               address: {
-                operationId: "getUserAddress",
+                operationId: 'getUserAddress',
                 parameters: {
-                  userid: "$request.path.id",
+                  userid: '$request.path.id',
                 },
               },
               address2: {
-                operationId: "getUserAddressByUUID",
+                operationId: 'getUserAddressByUUID',
                 parameters: {
-                  userUuid: "$response.body#/uuid",
+                  userUuid: '$response.body#/uuid',
                 },
               },
               UserRepositories: {
-                operationRef: "#/paths/~12.0~1repositories~1%7Busername%7D/get",
+                operationRef: '#/paths/~12.0~1repositories~1%7Busername%7D/get',
                 parameters: {
-                  username: "$response.body#/username",
+                  username: '$response.body#/username',
                 },
               },
               UserRepositories2: {
                 operationRef:
-                  "https://na2.gigantic-server.com/#/paths/~12.0~1repositories~1%7Busername%7D/get",
+                  'https://na2.gigantic-server.com/#/paths/~12.0~1repositories~1%7Busername%7D/get',
                 parameters: {
-                  username: "$response.body#/username",
+                  username: '$response.body#/username',
                 },
               },
               withBody: {
-                operationId: "queryUserWithBody",
+                operationId: 'queryUserWithBody',
                 requestBody: {
-                  userId: "$request.path.id",
+                  userId: '$request.path.id',
                 },
               },
             },
@@ -76,26 +75,26 @@ export const doc = {
         },
       },
     },
-    "/users/{userid}/address": {
+    '/users/{userid}/address': {
       parameters: [
         {
-          name: "userid",
-          in: "path",
+          name: 'userid',
+          in: 'path',
           required: true,
-          description: "the user identifier, as userId",
+          description: 'the user identifier, as userId',
           schema: {
-            type: "string",
+            type: 'string',
           },
         },
       ],
       get: {
-        operationId: "getUserAddress",
+        operationId: 'getUserAddress',
         responses: {
-          "200": {
-            description: "the user's address",
+          200: {
+            description: 'the user\'s address',
           },
         },
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

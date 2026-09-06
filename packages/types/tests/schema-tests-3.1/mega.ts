@@ -1,45 +1,44 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.1-dev/tests/schema/pass/mega.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.1";
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc = {
-  openapi: "3.1.0",
+  openapi: '3.1.0',
   info: {
-    summary: "My API's summary",
-    title: "My API",
-    version: "1.0.0",
+    summary: 'My API\'s summary',
+    title: 'My API',
+    version: '1.0.0',
     license: {
-      name: "Apache 2.0",
-      identifier: "Apache-2.0",
+      name: 'Apache 2.0',
+      identifier: 'Apache-2.0',
     },
   },
   paths: {
-    "/": {
+    '/': {
       get: {
         parameters: [],
       },
     },
-    "/{pathTest}": {},
+    '/{pathTest}': {},
   },
   webhooks: {
     myWebhook: {
-      $ref: "#/components/pathItems/myPathItem",
-      description: "Overriding description",
+      $ref: '#/components/pathItems/myPathItem',
+      description: 'Overriding description',
     },
   },
   components: {
     securitySchemes: {
       mtls: {
-        type: "mutualTLS",
+        type: 'mutualTLS',
       },
     },
     schemas: {
       Foo: {
-        type: "object",
+        type: 'object',
         properties: {
           type: {
-            const: "foo",
+            const: 'foo',
           },
         },
       },
@@ -50,43 +49,43 @@ export const doc = {
           requestBody: {
             required: true,
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
                   externalDocs: {
-                    description: "More docs!",
-                    url: "https://example.com/elsewhere.html",
+                    description: 'More docs!',
+                    url: 'https://example.com/elsewhere.html',
                   },
-                  type: "object",
+                  type: 'object',
                   properties: {
                     type: {
-                      type: "string",
+                      type: 'string',
                     },
                     int: {
-                      type: "integer",
+                      type: 'integer',
                       exclusiveMaximum: 100,
                       exclusiveMinimum: 0,
                     },
                     none: {
-                      type: "null",
+                      type: 'null',
                     },
                     arr: {
-                      type: "array",
-                      $comment: "Array without items keyword",
+                      type: 'array',
+                      $comment: 'Array without items keyword',
                     },
                     either: {
-                      type: ["string", "null"],
+                      type: ['string', 'null'],
                     },
                   },
                   discriminator: {
-                    propertyName: "type",
-                    mapping: {
-                      foo: "Foo",
+                    'propertyName': 'type',
+                    'mapping': {
+                      foo: 'Foo',
                     },
-                    "x-extension": true,
+                    'x-extension': true,
                   },
                   anyOf: [
                     {
-                      $ref: "#/components/schemas/Foo",
+                      $ref: '#/components/schemas/Foo',
                     },
                   ],
                   myArbitraryKeyword: true,
@@ -98,4 +97,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

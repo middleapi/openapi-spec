@@ -1,59 +1,58 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/example-object-examples.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   components: {
     examples: {
-      "zip-example": {},
-      "confirmation-success": {},
+      'zip-example': {},
+      'confirmation-success': {},
     },
     schemas: {
       SuccessResponse: {},
       Address: {},
     },
     requestBodies: {
-      "with-example": {
+      'with-example': {
         content: {
-          "application/json": {
+          'application/json': {
             schema: {
-              $ref: "#/components/schemas/Address",
+              $ref: '#/components/schemas/Address',
             },
             examples: {
               foo: {
-                summary: "A foo example",
+                summary: 'A foo example',
                 value: {
-                  foo: "bar",
+                  foo: 'bar',
                 },
               },
               bar: {
-                summary: "A bar example",
+                summary: 'A bar example',
                 value: {
-                  bar: "baz",
+                  bar: 'baz',
                 },
               },
             },
           },
-          "application/xml": {
+          'application/xml': {
             examples: {
               xmlExample: {
-                summary: "This is an example in XML",
+                summary: 'This is an example in XML',
                 externalValue:
-                  "https://example.org/examples/address-example.xml",
+                  'https://example.org/examples/address-example.xml',
               },
             },
           },
-          "text/plain": {
+          'text/plain': {
             examples: {
               textExample: {
-                summary: "This is a text example",
-                externalValue: "https://foo.bar/examples/address-example.txt",
+                summary: 'This is a text example',
+                externalValue: 'https://foo.bar/examples/address-example.txt',
               },
             },
           },
@@ -61,53 +60,53 @@ export const doc = {
       },
     },
     parameters: {
-      "with-example": {
-        name: "zipCode",
-        in: "query",
+      'with-example': {
+        name: 'zipCode',
+        in: 'query',
         schema: {
-          type: "string",
-          format: "zip-code",
+          type: 'string',
+          format: 'zip-code',
         },
         examples: {
-          "zip-example": {
-            $ref: "#/components/examples/zip-example",
+          'zip-example': {
+            $ref: '#/components/examples/zip-example',
           },
         },
       },
     },
     responses: {
-      "200": {
-        description: "your car appointment has been booked",
+      200: {
+        description: 'your car appointment has been booked',
         content: {
-          "application/json": {
+          'application/json': {
             schema: {
-              $ref: "#/components/schemas/SuccessResponse",
+              $ref: '#/components/schemas/SuccessResponse',
             },
             examples: {
-              "confirmation-success": {
-                $ref: "#/components/examples/confirmation-success",
+              'confirmation-success': {
+                $ref: '#/components/examples/confirmation-success',
               },
             },
           },
-          "application/x-www-form-urlencoded": {
+          'application/x-www-form-urlencoded': {
             schema: {
-              type: "object",
+              type: 'object',
               properties: {
                 jsonValue: {
-                  type: "string",
+                  type: 'string',
                 },
               },
             },
             encoding: {
               jsonValue: {
-                contentType: "application/json",
+                contentType: 'application/json',
               },
             },
             examples: {
               jsonFormValue: {
                 description: 'The JSON string "json" as a form value',
-                dataValue: "json",
-                serializedValue: "jsonValue=%22json%22",
+                dataValue: 'json',
+                serializedValue: 'jsonValue=%22json%22',
               },
             },
           },
@@ -115,4 +114,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

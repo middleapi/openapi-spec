@@ -1,20 +1,19 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/non-oauth-scopes.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "Non-oAuth Scopes example",
-    version: "1.0.0",
+    title: 'Non-oAuth Scopes example',
+    version: '1.0.0',
   },
   paths: {
-    "/users": {
+    '/users': {
       get: {
         security: [
           {
-            bearerAuth: ["read:users", "public"],
+            bearerAuth: ['read:users', 'public'],
           },
         ],
       },
@@ -23,12 +22,12 @@ export const doc = {
   components: {
     securitySchemes: {
       bearerAuth: {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "jwt",
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'jwt',
         description:
-          "note: non-oauth scopes are not defined at the securityScheme level",
+          'note: non-oauth scopes are not defined at the securityScheme level',
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject
