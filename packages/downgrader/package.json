@@ -1,25 +1,25 @@
 {
-  "name": "@oasty/downgrader",
+  "name": "@openapi-spec/downgrader",
   "version": "0.0.0",
   "description": "Downgrade OpenAPI specifications one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0, for whole documents or individual schemas",
   "keywords": [
     "converter",
     "downgrade",
     "oas",
-    "oasty",
     "openapi",
     "openapi-3.0",
     "openapi-3.1",
     "openapi-3.2",
+    "openapi-spec",
     "specification",
     "swagger",
     "typescript"
   ],
-  "homepage": "https://github.com/middleapi/oasty",
+  "homepage": "https://github.com/middleapi/openapi-spec",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/middleapi/oasty.git",
+    "url": "git+https://github.com/middleapi/openapi-spec.git",
     "directory": "packages/downgrader"
   },
   "funding": [
@@ -63,6 +63,6 @@
     "type:check": "tsc -b"
   },
   "dependencies": {
-    "@oasty/types": "workspace:^"
+    "@openapi-spec/types": "workspace:^"
   }
 }

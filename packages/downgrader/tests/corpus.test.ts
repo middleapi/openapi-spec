@@ -1,4 +1,4 @@
-import type { OpenAPIV3_1, OpenAPIV3_2 } from "@oasty/types";
+import type { OpenAPIV3_1, OpenAPIV3_2 } from "@openapi-spec/types";
 /* oxlint-disable anti-slop/no-unknown-parameters, anti-slop/no-object-parameters, anti-slop/no-unsafe-dictionary-type -- these corpus tests bulk-feed whole OpenAPI documents into the converters and a generic JSON-schema validator, so version-agnostic document shapes are the domain contract */
 import { Validator } from "@seriousme/openapi-schema-validator";
 

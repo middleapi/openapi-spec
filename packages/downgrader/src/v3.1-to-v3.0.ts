@@ -32,7 +32,7 @@
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html}
  */
 
-import type { OpenAPIV3_0, OpenAPIV3_1 } from "@oasty/types";
+import type { OpenAPIV3_0, OpenAPIV3_1 } from "@openapi-spec/types";
 
 import type { FieldConverter, FieldTable, UnknownRecord } from "./shared";
 import {

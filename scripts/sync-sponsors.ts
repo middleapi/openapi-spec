@@ -197,7 +197,7 @@ const buildSponsorsSection = (sponsors: Sponsor[]): string => {
     const noun = pastSponsors.length === 1 ? "past sponsor" : "past sponsors";
 
     lines.push(
-      `With thanks to [${pastSponsors.length} ${noun}](${PAST_SPONSORS_URL}) who helped get Oasty here.`,
+      `With thanks to [${pastSponsors.length} ${noun}](${PAST_SPONSORS_URL}) who helped get openapi-spec here.`,
       ""
     );
   }

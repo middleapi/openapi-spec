@@ -148,7 +148,7 @@ importers:
 
   packages/downgrader:
     dependencies:
-      '@oasty/types':
+      '@openapi-spec/types':
         specifier: workspace:^
         version: link:../types
 
