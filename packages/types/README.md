@@ -11,22 +11,23 @@ Each version module is authored against the latest patch release of its minor li
 ## Usage
 
 ```ts
-import type { OpenAPIObject, SchemaObject } from "@openapi-spec/types/v3.1";
-
-// or via namespaces from the root export
+// Namespaces via the root export
 import type {
   OpenAPIV3_0,
   OpenAPIV3_1,
   OpenAPIV3_2,
-} from "@openapi-spec/types";
+} from '@openapi-spec/types'
+
+// or one version's module directly
+import type { OpenAPIObject, SchemaObject } from '@openapi-spec/types/v3.1'
 
 // SchemaObject accepts an optional data type for its data-carrying fields
 // (`enum`, `default`, `example`, and in 3.1+ `const` and `examples`).
 const status = {
-  type: "string",
-  enum: ["available", "pending", "sold"],
-  default: "available",
-} satisfies SchemaObject<string>;
+  type: 'string',
+  enum: ['available', 'pending', 'sold'],
+  default: 'available',
+} satisfies SchemaObject<string>
 ```
 
 Type names follow the specification's section names (`InfoObject`, `PathItemObject`, `SchemaObject`, ...), and every field carries its specification description as JSDoc, linked back to the relevant spec section.

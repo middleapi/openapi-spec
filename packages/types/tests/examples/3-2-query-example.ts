@@ -1,104 +1,103 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/3.2-query-example.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "Flight API",
-    version: "1.0.0",
+    title: 'Flight API',
+    version: '1.0.0',
   },
   paths: {
-    "/flights/search": {
+    '/flights/search': {
       query: {
-        summary: "Search flights with complex criteria",
+        summary: 'Search flights with complex criteria',
         description:
-          "Uses the HTTP QUERY method to perform a safe, idempotent flight search with filters that are too complex for a URL query string.",
-        operationId: "searchFlights",
+          'Uses the HTTP QUERY method to perform a safe, idempotent flight search with filters that are too complex for a URL query string.',
+        operationId: 'searchFlights',
         requestBody: {
           required: true,
           content: {
-            "application/json": {
+            'application/json': {
               schema: {
-                type: "object",
+                type: 'object',
                 properties: {
                   origin: {
-                    type: "string",
-                    example: "ATL",
+                    type: 'string',
+                    example: 'ATL',
                   },
                   destination: {
-                    type: "string",
-                    example: "LHR",
+                    type: 'string',
+                    example: 'LHR',
                   },
                   departureDate: {
-                    type: "string",
-                    format: "date",
-                    example: "2026-06-15",
+                    type: 'string',
+                    format: 'date',
+                    example: '2026-06-15',
                   },
                   returnDate: {
-                    type: "string",
-                    format: "date",
-                    example: "2026-06-25",
+                    type: 'string',
+                    format: 'date',
+                    example: '2026-06-25',
                   },
                   passengers: {
-                    type: "integer",
+                    type: 'integer',
                     minimum: 1,
                     example: 2,
                   },
                   cabinClass: {
-                    type: "string",
-                    enum: ["economy", "premium-economy", "business", "first"],
-                    example: "business",
+                    type: 'string',
+                    enum: ['economy', 'premium-economy', 'business', 'first'],
+                    example: 'business',
                   },
                   nonStopOnly: {
-                    type: "boolean",
+                    type: 'boolean',
                     example: true,
                   },
                 },
-                required: ["origin", "destination", "departureDate"],
+                required: ['origin', 'destination', 'departureDate'],
               },
             },
           },
         },
         responses: {
-          "200": {
-            description: "Matching flights",
+          200: {
+            description: 'Matching flights',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "object",
+                  type: 'object',
                   properties: {
                     flights: {
-                      type: "array",
+                      type: 'array',
                       items: {
-                        type: "object",
+                        type: 'object',
                         properties: {
                           flightNumber: {
-                            type: "string",
-                            example: "DL30",
+                            type: 'string',
+                            example: 'DL30',
                           },
                           origin: {
-                            type: "string",
-                            example: "ATL",
+                            type: 'string',
+                            example: 'ATL',
                           },
                           destination: {
-                            type: "string",
-                            example: "LHR",
+                            type: 'string',
+                            example: 'LHR',
                           },
                           departureTime: {
-                            type: "string",
-                            format: "date-time",
-                            example: "2026-06-15T22:30:00Z",
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2026-06-15T22:30:00Z',
                           },
                           arrivalTime: {
-                            type: "string",
-                            format: "date-time",
-                            example: "2026-06-16T10:15:00Z",
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2026-06-16T10:15:00Z',
                           },
                           price: {
-                            type: "number",
-                            format: "float",
+                            type: 'number',
+                            format: 'float',
                             example: 1249.99,
                           },
                         },
@@ -113,4 +112,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

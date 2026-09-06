@@ -1,22 +1,21 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.1-dev/tests/schema/pass/schema-object-deprecated-example-keyword.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.1";
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc = {
-  openapi: "3.1.0",
+  openapi: '3.1.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   paths: {
-    "/user": {
+    '/user': {
       parameters: [
         {
-          in: "query",
-          name: "example",
+          in: 'query',
+          name: 'example',
           schema: {
-            type: "object",
+            type: 'object',
             example: {
               numbers: [1, 2],
               flag: null,
@@ -26,4 +25,4 @@ export const doc = {
       ],
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

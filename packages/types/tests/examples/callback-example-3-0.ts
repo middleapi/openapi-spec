@@ -1,47 +1,46 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/callback-example-3.0.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.0";
+import type { OpenAPIObject } from '../../src/v3.0'
 
 export const doc = {
-  openapi: "3.0.0",
+  openapi: '3.0.0',
   info: {
-    title: "Callback Example",
-    version: "1.0.0",
+    title: 'Callback Example',
+    version: '1.0.0',
   },
   paths: {
-    "/streams": {
+    '/streams': {
       post: {
-        description: "subscribes a client to receive out-of-band data",
+        description: 'subscribes a client to receive out-of-band data',
         parameters: [
           {
-            name: "callbackUrl",
-            in: "query",
+            name: 'callbackUrl',
+            in: 'query',
             required: true,
             description:
-              "the location where data will be sent.  Must be network accessible\nby the source server\n",
+              'the location where data will be sent.  Must be network accessible\nby the source server\n',
             schema: {
-              type: "string",
-              format: "uri",
-              example: "https://tonys-server.com",
+              type: 'string',
+              format: 'uri',
+              example: 'https://tonys-server.com',
             },
           },
         ],
         responses: {
-          "201": {
-            description: "subscription successfully created",
+          201: {
+            description: 'subscription successfully created',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  type: "object",
-                  description: "subscription information",
-                  required: ["subscriptionId"],
+                  type: 'object',
+                  description: 'subscription information',
+                  required: ['subscriptionId'],
                   properties: {
                     subscriptionId: {
                       description:
-                        "this unique identifier allows management of the subscription",
-                      type: "string",
-                      example: "2531329f-fb09-4ef7-887e-84e648214436",
+                        'this unique identifier allows management of the subscription',
+                      type: 'string',
+                      example: '2531329f-fb09-4ef7-887e-84e648214436',
                     },
                   },
                 },
@@ -51,21 +50,21 @@ export const doc = {
         },
         callbacks: {
           onData: {
-            "{$request.query.callbackUrl}/data": {
+            '{$request.query.callbackUrl}/data': {
               post: {
                 requestBody: {
-                  description: "subscription payload",
+                  description: 'subscription payload',
                   content: {
-                    "application/json": {
+                    'application/json': {
                       schema: {
-                        type: "object",
+                        type: 'object',
                         properties: {
                           timestamp: {
-                            type: "string",
-                            format: "date-time",
+                            type: 'string',
+                            format: 'date-time',
                           },
                           userData: {
-                            type: "string",
+                            type: 'string',
                           },
                         },
                       },
@@ -73,13 +72,13 @@ export const doc = {
                   },
                 },
                 responses: {
-                  "202": {
+                  202: {
                     description:
-                      "Your server implementation should return this HTTP status code\nif the data was received successfully\n",
+                      'Your server implementation should return this HTTP status code\nif the data was received successfully\n',
                   },
-                  "204": {
+                  204: {
                     description:
-                      "Your server should return this HTTP status code if no longer interested\nin further updates\n",
+                      'Your server should return this HTTP status code if no longer interested\nin further updates\n',
                   },
                 },
               },
@@ -89,4 +88,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

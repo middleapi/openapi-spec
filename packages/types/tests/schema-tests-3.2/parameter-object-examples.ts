@@ -1,81 +1,80 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/parameter-object-examples.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   paths: {
-    "/user/{username}": {
+    '/user/{username}': {
       parameters: [
         {
-          name: "token",
-          in: "header",
-          description: "token to be passed as a header",
+          name: 'token',
+          in: 'header',
+          description: 'token to be passed as a header',
           required: true,
           explode: false,
           schema: {
-            type: "array",
+            type: 'array',
             items: {
-              type: "integer",
-              format: "int64",
+              type: 'integer',
+              format: 'int64',
             },
           },
-          style: "simple",
+          style: 'simple',
         },
         {
-          name: "usernames",
-          in: "path",
-          description: "usernames to fetch",
+          name: 'usernames',
+          in: 'path',
+          description: 'usernames to fetch',
           required: true,
           explode: false,
           schema: {
-            type: "array",
+            type: 'array',
           },
         },
         {
-          name: "id",
-          in: "query",
-          description: "IDs of the object to fetch",
+          name: 'id',
+          in: 'query',
+          description: 'IDs of the object to fetch',
           required: false,
           schema: {
-            type: "array",
+            type: 'array',
             items: {
-              type: "string",
+              type: 'string',
             },
           },
-          style: "form",
+          style: 'form',
           explode: true,
         },
         {
-          in: "query",
-          name: "freeForm",
+          in: 'query',
+          name: 'freeForm',
           schema: {
-            type: "object",
+            type: 'object',
             additionalProperties: {
-              type: "integer",
+              type: 'integer',
             },
           },
-          style: "form",
+          style: 'form',
         },
         {
-          in: "query",
-          name: "coordinates",
+          in: 'query',
+          name: 'coordinates',
           content: {
-            "application/json": {
+            'application/json': {
               schema: {
-                type: "object",
-                required: ["lat", "long"],
+                type: 'object',
+                required: ['lat', 'long'],
                 properties: {
                   lat: {
-                    type: "number",
+                    type: 'number',
                   },
                   long: {
-                    type: "number",
+                    type: 'number',
                   },
                 },
               },
@@ -83,30 +82,30 @@ export const doc = {
           },
         },
         {
-          in: "cookie",
-          name: "my_cookie1",
-          style: "form",
+          in: 'cookie',
+          name: 'my_cookie1',
+          style: 'form',
           explode: false,
           schema: {},
         },
         {
-          in: "cookie",
-          name: "my_cookie2",
-          style: "cookie",
+          in: 'cookie',
+          name: 'my_cookie2',
+          style: 'cookie',
           explode: true,
           schema: {},
         },
       ],
     },
-    "/user": {
+    '/user': {
       parameters: [
         {
-          in: "querystring",
-          name: "json",
+          in: 'querystring',
+          name: 'json',
           content: {
-            "application/json": {
+            'application/json': {
               schema: {
-                type: "object",
+                type: 'object',
               },
               example: {
                 numbers: [1, 2],
@@ -118,4 +117,4 @@ export const doc = {
       ],
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

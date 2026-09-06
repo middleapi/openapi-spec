@@ -1,245 +1,245 @@
-import type { MediaTypeObject, OpenAPIObject, SchemaObject } from "./v3.2";
+import type { MediaTypeObject, OpenAPIObject, SchemaObject } from './v3.2'
 
 export const streamingApi = {
-  $self: "https://example.com/openapi",
+  $self: 'https://example.com/openapi',
   components: {
     examples: {
       external: {
-        dataValue: { kind: "cat" },
-        externalValue: "https://example.com/examples/cat.bin",
+        dataValue: { kind: 'cat' },
+        externalValue: 'https://example.com/examples/cat.bin',
       },
       serialized: {
-        dataValue: { kind: "cat" },
-        serializedValue: "kind=cat",
-        summary: "A serialized example",
+        dataValue: { kind: 'cat' },
+        serializedValue: 'kind=cat',
+        summary: 'A serialized example',
       },
     },
     mediaTypes: {
       EventStream: {
-        itemSchema: { $ref: "#/components/schemas/Event" },
+        itemSchema: { $ref: '#/components/schemas/Event' },
       },
-      Referenced: { $ref: "#/components/mediaTypes/EventStream" },
+      Referenced: { $ref: '#/components/mediaTypes/EventStream' },
     },
     responses: {
       Uploaded: {
-        description: "The upload was accepted",
-        summary: "Upload accepted",
+        description: 'The upload was accepted',
+        summary: 'Upload accepted',
       },
     },
     schemas: {
-      Cat: { type: "object" },
+      Cat: { type: 'object' },
       Event: {
         properties: {
           animal: {
             discriminator: {
-              defaultMapping: "Cat",
-              mapping: { cat: "Cat" },
-              propertyName: "kind",
+              defaultMapping: 'Cat',
+              mapping: { cat: 'Cat' },
+              propertyName: 'kind',
             },
-            oneOf: [{ $ref: "#/components/schemas/Cat" }, { type: "object" }],
+            oneOf: [{ $ref: '#/components/schemas/Cat' }, { type: 'object' }],
           },
           payload: {
             properties: {
-              body: { type: "string", xml: { nodeType: "cdata" } },
-              id: { type: "string", xml: { nodeType: "attribute" } },
-              legacyAttribute: { type: "string", xml: { attribute: true } },
+              body: { type: 'string', xml: { nodeType: 'cdata' } },
+              id: { type: 'string', xml: { nodeType: 'attribute' } },
+              legacyAttribute: { type: 'string', xml: { attribute: true } },
               legacyWrapped: {
-                items: { type: "string" },
-                type: "array",
+                items: { type: 'string' },
+                type: 'array',
                 xml: { wrapped: true },
               },
-              note: { type: "string", xml: { nodeType: "text" } },
+              note: { type: 'string', xml: { nodeType: 'text' } },
             },
-            type: "object",
+            type: 'object',
             xml: {
-              name: "payload",
-              namespace: "https://example.com/ns",
-              nodeType: "element",
-              prefix: "ex",
+              name: 'payload',
+              namespace: 'https://example.com/ns',
+              nodeType: 'element',
+              prefix: 'ex',
             },
           },
         },
-        type: "object",
+        type: 'object',
       },
-      EventQuery: { type: "object" },
+      EventQuery: { type: 'object' },
     },
     securitySchemes: {
       device: {
         deprecated: false,
         flows: {
           authorizationCode: {
-            authorizationUrl: "https://auth.example.com/authorize",
+            authorizationUrl: 'https://auth.example.com/authorize',
             scopes: {},
-            tokenUrl: "https://auth.example.com/token",
+            tokenUrl: 'https://auth.example.com/token',
           },
           deviceAuthorization: {
-            deviceAuthorizationUrl: "https://auth.example.com/device",
-            scopes: { "read:events": "read events" },
-            tokenUrl: "https://auth.example.com/token",
+            deviceAuthorizationUrl: 'https://auth.example.com/device',
+            scopes: { 'read:events': 'read events' },
+            tokenUrl: 'https://auth.example.com/token',
           },
         },
         oauth2MetadataUrl:
-          "https://auth.example.com/.well-known/oauth-authorization-server",
-        type: "oauth2",
+          'https://auth.example.com/.well-known/oauth-authorization-server',
+        type: 'oauth2',
       },
       legacy: {
         deprecated: true,
-        scheme: "basic",
-        type: "http",
+        scheme: 'basic',
+        type: 'http',
       },
     },
   },
-  info: { title: "Streaming API", version: "2.0.0" },
-  openapi: "3.2.0",
+  info: { title: 'Streaming API', version: '2.0.0' },
+  openapi: '3.2.0',
   paths: {
-    "/events": {
+    '/events': {
       additionalOperations: {
         COPY: {
-          responses: { "204": {} },
-          summary: "Copy the event stream configuration",
+          responses: { 204: {} },
+          summary: 'Copy the event stream configuration',
         },
       },
       get: {
         parameters: [
           {
             content: {
-              "application/x-www-form-urlencoded": {
+              'application/x-www-form-urlencoded': {
                 schema: {
-                  properties: { kind: { type: "string" } },
-                  type: "object",
+                  properties: { kind: { type: 'string' } },
+                  type: 'object',
                 },
               },
             },
-            in: "querystring",
-            name: "filter",
+            in: 'querystring',
+            name: 'filter',
           },
           {
             explode: false,
-            in: "cookie",
-            name: "session",
-            schema: { type: "string" },
-            style: "cookie",
+            in: 'cookie',
+            name: 'session',
+            schema: { type: 'string' },
+            style: 'cookie',
           },
         ],
         responses: {
-          "200": {
+          200: {
             content: {
-              "text/event-stream": {
+              'text/event-stream': {
                 itemSchema: {
                   properties: {
                     data: {
-                      contentMediaType: "application/json",
-                      contentSchema: { $ref: "#/components/schemas/Event" },
-                      type: "string",
+                      contentMediaType: 'application/json',
+                      contentSchema: { $ref: '#/components/schemas/Event' },
+                      type: 'string',
                     },
-                    event: { type: "string" },
-                    retry: { type: "integer" },
+                    event: { type: 'string' },
+                    retry: { type: 'integer' },
                   },
-                  type: "object",
+                  type: 'object',
                 },
               },
             },
-            summary: "Event stream",
+            summary: 'Event stream',
           },
         },
-        summary: "Subscribe to events",
+        summary: 'Subscribe to events',
       },
       query: {
         requestBody: {
           content: {
-            "application/json": {
-              schema: { $ref: "#/components/schemas/EventQuery" },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/EventQuery' },
             },
           },
         },
         responses: {
-          "200": { description: "Query results" },
+          200: { description: 'Query results' },
         },
-        summary: "Complex event query using the QUERY method",
+        summary: 'Complex event query using the QUERY method',
       },
     },
-    "/uploads": {
+    '/uploads': {
       post: {
         requestBody: {
           content: {
-            "application/x-www-form-urlencoded": {
+            'application/x-www-form-urlencoded': {
               encoding: {
                 nested: {
-                  contentType: "application/json",
+                  contentType: 'application/json',
                   encoding: {
-                    inner: { explode: true, style: "form" },
+                    inner: { explode: true, style: 'form' },
                   },
-                  itemEncoding: { contentType: "text/plain" },
-                  prefixEncoding: [{ contentType: "text/plain" }],
+                  itemEncoding: { contentType: 'text/plain' },
+                  prefixEncoding: [{ contentType: 'text/plain' }],
                 },
               },
-              schema: { type: "object" },
+              schema: { type: 'object' },
             },
-            "multipart/form-data": {
+            'multipart/form-data': {
               prefixEncoding: [
-                { contentType: "text/plain" },
+                { contentType: 'text/plain' },
                 {
-                  contentType: "image/png",
+                  contentType: 'image/png',
                   headers: {
-                    "X-Part-Id": { schema: { type: "string" } },
+                    'X-Part-Id': { schema: { type: 'string' } },
                   },
                 },
               ],
               schema: {
                 prefixItems: [
-                  { type: "string" },
-                  { contentEncoding: "base64", type: "string" },
+                  { type: 'string' },
+                  { contentEncoding: 'base64', type: 'string' },
                 ],
-                type: "array",
+                type: 'array',
               },
             },
-            "multipart/mixed": {
-              itemEncoding: { contentType: "application/octet-stream" },
-              itemSchema: { contentEncoding: "base64", type: "string" },
+            'multipart/mixed': {
+              itemEncoding: { contentType: 'application/octet-stream' },
+              itemSchema: { contentEncoding: 'base64', type: 'string' },
             },
           },
         },
         responses: {
-          default: { $ref: "#/components/responses/Uploaded" },
+          default: { $ref: '#/components/responses/Uploaded' },
         },
       },
     },
   },
-  security: [{ "./device": ["read:events"] }],
+  security: [{ './device': ['read:events'] }],
   servers: [
     {
-      description: "Production server",
-      name: "production",
-      url: "https://api.example.com",
+      description: 'Production server',
+      name: 'production',
+      url: 'https://api.example.com',
     },
   ],
   tags: [
-    { kind: "nav", name: "events", summary: "Events" },
-    { kind: "badge", name: "streaming", parent: "events" },
+    { kind: 'nav', name: 'events', summary: 'Events' },
+    { kind: 'badge', name: 'streaming', parent: 'events' },
   ],
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject
 
 export const describedMediaType = {
-  description: "Streaming sequence of JSON event representations",
-  itemSchema: { $ref: "#/components/schemas/Event" },
-} satisfies MediaTypeObject;
+  description: 'Streaming sequence of JSON event representations',
+  itemSchema: { $ref: '#/components/schemas/Event' },
+} satisfies MediaTypeObject
 
 export const wrongVersion = {
-  info: { title: "API", version: "1.0.0" },
+  info: { title: 'API', version: '1.0.0' },
   // @ts-expect-error: The `openapi` version string must be within the 3.2 line.
-  openapi: "3.1.2",
+  openapi: '3.1.2',
   paths: {},
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject
 
 export const typedSchema = {
-  const: "fixed",
-  default: "fixed",
-  examples: ["fixed"],
-  type: "string",
-} satisfies SchemaObject<string>;
+  const: 'fixed',
+  default: 'fixed',
+  examples: ['fixed'],
+  type: 'string',
+} satisfies SchemaObject<string>
 
 export const typedSchemaMismatch = {
   // @ts-expect-error: `const` must match the schema's data type parameter.
   const: 1,
-  type: "string",
-} satisfies SchemaObject<string>;
+  type: 'string',
+} satisfies SchemaObject<string>

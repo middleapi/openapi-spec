@@ -1,80 +1,79 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/path_item_servers_parameters.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   paths: {
-    "/things": {
-      summary: "Lots of things",
+    '/things': {
+      summary: 'Lots of things',
       servers: [
         {
-          url: "https://things.example.com",
+          url: 'https://things.example.com',
         },
       ],
       get: {
-        summary: "Get a list of things",
+        summary: 'Get a list of things',
         externalDocs: {
-          description: "Find more info here",
-          url: "https://example.com",
+          description: 'Find more info here',
+          url: 'https://example.com',
         },
         parameters: [
           {
-            $ref: "#/components/parameters/biscuit",
-            summary: "The maximum number of things to return",
-            description: "The maximum number of things to return",
+            $ref: '#/components/parameters/biscuit',
+            summary: 'The maximum number of things to return',
+            description: 'The maximum number of things to return',
           },
         ],
         responses: {
           default: {
-            description: "A list of things",
+            description: 'A list of things',
           },
         },
         servers: [
           {
-            url: "https://things.example.com",
+            url: 'https://things.example.com',
           },
         ],
       },
       post: {
         deprecated: false,
         requestBody: {
-          $ref: "#/components/requestBodies/ThingRequestBody",
+          $ref: '#/components/requestBodies/ThingRequestBody',
         },
         responses: {
-          "201": {
-            $ref: "#/components/responses/ThingResponse",
+          201: {
+            $ref: '#/components/responses/ThingResponse',
           },
         },
         callbacks: {
           myCallback: {
-            "{$request.query.queryUrl}": {
+            '{$request.query.queryUrl}': {
               post: {
                 requestBody: {
-                  description: "Callback payload",
+                  description: 'Callback payload',
                   content: {
-                    "application/json": {
+                    'application/json': {
                       schema: {
-                        $ref: "#/components/schemas/SomePayload",
+                        $ref: '#/components/schemas/SomePayload',
                       },
                     },
                   },
                 },
                 responses: {
-                  "200": {
-                    description: "callback successfully processed",
+                  200: {
+                    description: 'callback successfully processed',
                   },
                 },
               },
             },
           },
           transactionCallback: {
-            $ref: "#/components/callbacks/transactionCallback",
+            $ref: '#/components/callbacks/transactionCallback',
           },
         },
       },
@@ -88,22 +87,22 @@ export const doc = {
   components: {
     callbacks: {
       transactionCallback: {
-        "http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}":
+        'http://notificationServer.com?transactionId={$request.body#/id}&email={$request.body#/email}':
           {
             post: {
               requestBody: {
-                description: "Callback payload",
+                description: 'Callback payload',
                 content: {
-                  "application/json": {
+                  'application/json': {
                     schema: {
-                      $ref: "#/components/schemas/SomePayload",
+                      $ref: '#/components/schemas/SomePayload',
                     },
                   },
                 },
               },
               responses: {
-                "200": {
-                  description: "callback successfully processed",
+                200: {
+                  description: 'callback successfully processed',
                 },
               },
             },
@@ -112,58 +111,58 @@ export const doc = {
     },
     examples: {
       ThingExample: {
-        summary: "A thing",
-        description: "A thing",
+        summary: 'A thing',
+        description: 'A thing',
         value: {
           id: 1,
-          name: "Thing",
+          name: 'Thing',
         },
       },
     },
     links: {
       ThingLink: {
-        description: "A link to a thing",
-        operationId: "getThing",
+        description: 'A link to a thing',
+        operationId: 'getThing',
         parameters: {
-          thingId: "$response.body#/id",
+          thingId: '$response.body#/id',
         },
         server: {
-          url: "https://things.example.com",
+          url: 'https://things.example.com',
         },
       },
       ThingyLink: {
-        $ref: "#/components/links/ThingLink",
+        $ref: '#/components/links/ThingLink',
       },
     },
     parameters: {
       limit: {
-        name: "limit",
-        in: "query",
+        name: 'limit',
+        in: 'query',
         required: false,
         allowEmptyValue: false,
         allowReserved: false,
         deprecated: true,
-        description: "The maximum number of list items to return",
+        description: 'The maximum number of list items to return',
         schema: {
-          type: "integer",
+          type: 'integer',
           minimum: 0,
         },
       },
       biscuit: {
-        name: "biscuit",
-        in: "cookie",
-        style: "form",
+        name: 'biscuit',
+        in: 'cookie',
+        style: 'form',
         schema: {
-          type: "string",
+          type: 'string',
         },
       },
     },
     requestBodies: {
       ThingRequestBody: {
         content: {
-          "application/json": {
+          'application/json': {
             schema: {
-              type: "object",
+              type: 'object',
             },
           },
         },
@@ -171,11 +170,11 @@ export const doc = {
     },
     responses: {
       ThingResponse: {
-        description: "A thing",
+        description: 'A thing',
         content: {
-          "application/json": {
+          'application/json': {
             schema: {
-              type: "object",
+              type: 'object',
             },
           },
         },
@@ -185,4 +184,4 @@ export const doc = {
       SomePayload: {},
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

@@ -1,13 +1,12 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.1-dev/tests/schema/pass/path-item-object-example.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.1";
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc = {
-  openapi: "3.1.0",
+  openapi: '3.1.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   components: {
     schemas: {
@@ -16,31 +15,31 @@ export const doc = {
     },
   },
   paths: {
-    "/pets/{id}": {
+    '/pets/{id}': {
       get: {
-        description: "Returns pets based on ID",
-        summary: "Find pets by ID",
-        operationId: "getPetsById",
+        description: 'Returns pets based on ID',
+        summary: 'Find pets by ID',
+        operationId: 'getPetsById',
         responses: {
-          "200": {
-            description: "pet response",
+          200: {
+            description: 'pet response',
             content: {
-              "*/*": {
+              '*/*': {
                 schema: {
-                  type: "array",
+                  type: 'array',
                   items: {
-                    $ref: "#/components/schemas/Pet",
+                    $ref: '#/components/schemas/Pet',
                   },
                 },
               },
             },
           },
           default: {
-            description: "error payload",
+            description: 'error payload',
             content: {
-              "text/html": {
+              'text/html': {
                 schema: {
-                  $ref: "#/components/schemas/ErrorModel",
+                  $ref: '#/components/schemas/ErrorModel',
                 },
               },
             },
@@ -49,19 +48,19 @@ export const doc = {
       },
       parameters: [
         {
-          name: "id",
-          in: "path",
-          description: "ID of pet to use",
+          name: 'id',
+          in: 'path',
+          description: 'ID of pet to use',
           required: true,
           schema: {
-            type: "array",
+            type: 'array',
             items: {
-              type: "string",
+              type: 'string',
             },
           },
-          style: "simple",
+          style: 'simple',
         },
       ],
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

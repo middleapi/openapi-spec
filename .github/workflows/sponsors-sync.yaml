@@ -2,7 +2,7 @@ name: Sponsors Sync
 
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 jobs:
@@ -23,6 +23,6 @@ jobs:
         with:
           author_name: GitHub Actions
           author_email: 41898282+github-actions[bot]@users.noreply.github.com
-          message: "chore: sync sponsors"
+          message: 'chore: sync sponsors'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

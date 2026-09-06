@@ -1,35 +1,34 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/tictactoe-3.1.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.1";
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc = {
-  openapi: "3.1.0",
+  openapi: '3.1.0',
   info: {
-    title: "Tic Tac Toe",
+    title: 'Tic Tac Toe',
     description:
-      "This API allows writing down marks on a Tic Tac Toe board\nand requesting the state of the board or of individual squares.\n",
-    version: "1.0.0",
+      'This API allows writing down marks on a Tic Tac Toe board\nand requesting the state of the board or of individual squares.\n',
+    version: '1.0.0',
   },
   tags: [
     {
-      name: "Gameplay",
+      name: 'Gameplay',
     },
   ],
   paths: {
-    "/board": {
+    '/board': {
       get: {
-        summary: "Get the whole board",
-        description: "Retrieves the current state of the board and the winner.",
-        tags: ["Gameplay"],
-        operationId: "get-board",
+        summary: 'Get the whole board',
+        description: 'Retrieves the current state of the board and the winner.',
+        tags: ['Gameplay'],
+        operationId: 'get-board',
         responses: {
-          "200": {
-            description: "OK",
+          200: {
+            description: 'OK',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/status",
+                  $ref: '#/components/schemas/status',
                 },
               },
             },
@@ -40,44 +39,44 @@ export const doc = {
             defaultApiKey: [],
           },
           {
-            app2AppOauth: ["board:read"],
+            app2AppOauth: ['board:read'],
           },
         ],
       },
     },
-    "/board/{row}/{column}": {
+    '/board/{row}/{column}': {
       parameters: [
         {
-          $ref: "#/components/parameters/rowParam",
+          $ref: '#/components/parameters/rowParam',
         },
         {
-          $ref: "#/components/parameters/columnParam",
+          $ref: '#/components/parameters/columnParam',
         },
       ],
       get: {
-        summary: "Get a single board square",
-        description: "Retrieves the requested square.",
-        tags: ["Gameplay"],
-        operationId: "get-square",
+        summary: 'Get a single board square',
+        description: 'Retrieves the requested square.',
+        tags: ['Gameplay'],
+        operationId: 'get-square',
         responses: {
-          "200": {
-            description: "OK",
+          200: {
+            description: 'OK',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/mark",
+                  $ref: '#/components/schemas/mark',
                 },
               },
             },
           },
-          "400": {
-            description: "The provided parameters are incorrect",
+          400: {
+            description: 'The provided parameters are incorrect',
             content: {
-              "text/html": {
+              'text/html': {
                 schema: {
-                  $ref: "#/components/schemas/errorMessage",
+                  $ref: '#/components/schemas/errorMessage',
                 },
-                example: "Illegal coordinates",
+                example: 'Illegal coordinates',
               },
             },
           },
@@ -87,53 +86,53 @@ export const doc = {
             bearerHttpAuthentication: [],
           },
           {
-            user2AppOauth: ["board:read"],
+            user2AppOauth: ['board:read'],
           },
         ],
       },
       put: {
-        summary: "Set a single board square",
+        summary: 'Set a single board square',
         description:
-          "Places a mark on the board and retrieves the whole board and the winner (if any).",
-        tags: ["Gameplay"],
-        operationId: "put-square",
+          'Places a mark on the board and retrieves the whole board and the winner (if any).',
+        tags: ['Gameplay'],
+        operationId: 'put-square',
         requestBody: {
           required: true,
           content: {
-            "application/json": {
+            'application/json': {
               schema: {
-                $ref: "#/components/schemas/mark",
+                $ref: '#/components/schemas/mark',
               },
             },
           },
         },
         responses: {
-          "200": {
-            description: "OK",
+          200: {
+            description: 'OK',
             content: {
-              "application/json": {
+              'application/json': {
                 schema: {
-                  $ref: "#/components/schemas/status",
+                  $ref: '#/components/schemas/status',
                 },
               },
             },
           },
-          "400": {
-            description: "The provided parameters are incorrect",
+          400: {
+            description: 'The provided parameters are incorrect',
             content: {
-              "text/html": {
+              'text/html': {
                 schema: {
-                  $ref: "#/components/schemas/errorMessage",
+                  $ref: '#/components/schemas/errorMessage',
                 },
                 examples: {
                   illegalCoordinates: {
-                    value: "Illegal coordinates.",
+                    value: 'Illegal coordinates.',
                   },
                   notEmpty: {
-                    value: "Square is not empty.",
+                    value: 'Square is not empty.',
                   },
                   invalidMark: {
-                    value: "Invalid Mark (X or O).",
+                    value: 'Invalid Mark (X or O).',
                   },
                 },
               },
@@ -145,7 +144,7 @@ export const doc = {
             bearerHttpAuthentication: [],
           },
           {
-            user2AppOauth: ["board:write"],
+            user2AppOauth: ['board:write'],
           },
         ],
       },
@@ -154,116 +153,116 @@ export const doc = {
   components: {
     parameters: {
       rowParam: {
-        description: "Board row (vertical coordinate)",
-        name: "row",
-        in: "path",
+        description: 'Board row (vertical coordinate)',
+        name: 'row',
+        in: 'path',
         required: true,
         schema: {
-          $ref: "#/components/schemas/coordinate",
+          $ref: '#/components/schemas/coordinate',
         },
       },
       columnParam: {
-        description: "Board column (horizontal coordinate)",
-        name: "column",
-        in: "path",
+        description: 'Board column (horizontal coordinate)',
+        name: 'column',
+        in: 'path',
         required: true,
         schema: {
-          $ref: "#/components/schemas/coordinate",
+          $ref: '#/components/schemas/coordinate',
         },
       },
     },
     schemas: {
       errorMessage: {
-        type: "string",
+        type: 'string',
         maxLength: 256,
-        description: "A text message describing an error",
+        description: 'A text message describing an error',
       },
       coordinate: {
-        type: "integer",
+        type: 'integer',
         minimum: 1,
         maximum: 3,
         example: 1,
       },
       mark: {
-        type: "string",
-        enum: [".", "X", "O"],
+        type: 'string',
+        enum: ['.', 'X', 'O'],
         description:
-          "Possible values for a board square. `.` means empty square.",
-        example: ".",
+          'Possible values for a board square. `.` means empty square.',
+        example: '.',
       },
       board: {
-        type: "array",
+        type: 'array',
         maxItems: 3,
         minItems: 3,
         items: {
-          type: "array",
+          type: 'array',
           maxItems: 3,
           minItems: 3,
           items: {
-            $ref: "#/components/schemas/mark",
+            $ref: '#/components/schemas/mark',
           },
         },
       },
       winner: {
-        type: "string",
-        enum: [".", "X", "O"],
-        description: "Winner of the game. `.` means nobody has won yet.",
-        example: ".",
+        type: 'string',
+        enum: ['.', 'X', 'O'],
+        description: 'Winner of the game. `.` means nobody has won yet.',
+        example: '.',
       },
       status: {
-        type: "object",
+        type: 'object',
         properties: {
           winner: {
-            $ref: "#/components/schemas/winner",
+            $ref: '#/components/schemas/winner',
           },
           board: {
-            $ref: "#/components/schemas/board",
+            $ref: '#/components/schemas/board',
           },
         },
       },
     },
     securitySchemes: {
       defaultApiKey: {
-        description: "API key provided in console",
-        type: "apiKey",
-        name: "api-key",
-        in: "header",
+        description: 'API key provided in console',
+        type: 'apiKey',
+        name: 'api-key',
+        in: 'header',
       },
       basicHttpAuthentication: {
-        description: "Basic HTTP Authentication",
-        type: "http",
-        scheme: "Basic",
+        description: 'Basic HTTP Authentication',
+        type: 'http',
+        scheme: 'Basic',
       },
       bearerHttpAuthentication: {
-        description: "Bearer token using a JWT",
-        type: "http",
-        scheme: "Bearer",
-        bearerFormat: "JWT",
+        description: 'Bearer token using a JWT',
+        type: 'http',
+        scheme: 'Bearer',
+        bearerFormat: 'JWT',
       },
       app2AppOauth: {
-        type: "oauth2",
+        type: 'oauth2',
         flows: {
           clientCredentials: {
-            tokenUrl: "https://learn.openapis.org/oauth/2.0/token",
+            tokenUrl: 'https://learn.openapis.org/oauth/2.0/token',
             scopes: {
-              "board:read": "Read the board",
+              'board:read': 'Read the board',
             },
           },
         },
       },
       user2AppOauth: {
-        type: "oauth2",
+        type: 'oauth2',
         flows: {
           authorizationCode: {
-            authorizationUrl: "https://learn.openapis.org/oauth/2.0/auth",
-            tokenUrl: "https://learn.openapis.org/oauth/2.0/token",
+            authorizationUrl: 'https://learn.openapis.org/oauth/2.0/auth',
+            tokenUrl: 'https://learn.openapis.org/oauth/2.0/token',
             scopes: {
-              "board:read": "Read the board",
-              "board:write": "Write to the board",
+              'board:read': 'Read the board',
+              'board:write': 'Write to the board',
             },
           },
         },
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject

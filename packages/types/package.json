@@ -1,7 +1,19 @@
 {
   "name": "@openapi-spec/types",
+  "type": "module",
   "version": "0.0.0",
   "description": "TypeScript types for the OpenAPI Specification, covering versions 3.0, 3.1, and 3.2 with complete inline documentation",
+  "license": "MIT",
+  "funding": [
+    "https://github.com/sponsors/dinwwwh",
+    "https://opencollective.com/middleapi"
+  ],
+  "homepage": "https://github.com/middleapi/openapi-spec",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/middleapi/openapi-spec.git",
+    "directory": "packages/types"
+  },
   "keywords": [
     "oas",
     "openapi",
@@ -15,21 +27,6 @@
     "types",
     "typescript"
   ],
-  "homepage": "https://github.com/middleapi/openapi-spec",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/middleapi/openapi-spec.git",
-    "directory": "packages/types"
-  },
-  "funding": [
-    "https://github.com/sponsors/dinwwwh",
-    "https://opencollective.com/middleapi"
-  ],
-  "files": [
-    "dist"
-  ],
-  "type": "module",
   "sideEffects": false,
   "exports": {
     "./package.json": "./package.json",
@@ -38,6 +35,9 @@
     "./v3.1": "./src/v3.1.ts",
     "./v3.2": "./src/v3.2.ts"
   },
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "exports": {
       "./package.json": "./package.json",

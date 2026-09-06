@@ -1,17 +1,16 @@
-/* oxlint-disable sort-keys, unicorn/no-thenable */
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/media-type-examples.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from "../../src/v3.2";
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc = {
-  openapi: "3.2.0",
+  openapi: '3.2.0',
   info: {
-    title: "API",
-    version: "1.0.0",
+    title: 'API',
+    version: '1.0.0',
   },
   components: {
     examples: {
-      "frog-example": {},
+      'frog-example': {},
     },
     schemas: {
       Address: {},
@@ -20,222 +19,222 @@ export const doc = {
     mediaTypes: {
       StreamingPets: {
         description:
-          "Streaming sequence of JSON pet representations,\nsuitable for use with any of the streaming JSON\nmedia types.\n",
+          'Streaming sequence of JSON pet representations,\nsuitable for use with any of the streaming JSON\nmedia types.\n',
         itemSchema: {
-          $ref: "#/components/schemas/Pet",
+          $ref: '#/components/schemas/Pet',
         },
       },
     },
   },
   paths: {
-    "/something": {
+    '/something': {
       put: {
         requestBody: {
           content: {
-            "application/json": {
+            'application/json': {
               schema: {
-                $ref: "#/components/schemas/Pet",
+                $ref: '#/components/schemas/Pet',
               },
               examples: {
                 cat: {
-                  summary: "An example of a cat",
+                  summary: 'An example of a cat',
                   value: {
-                    name: "Fluffy",
-                    petType: "Cat",
-                    color: "White",
-                    gender: "male",
-                    breed: "Persian",
+                    name: 'Fluffy',
+                    petType: 'Cat',
+                    color: 'White',
+                    gender: 'male',
+                    breed: 'Persian',
                   },
                 },
                 dog: {
-                  summary: "An example of a dog with a cat's name",
+                  summary: 'An example of a dog with a cat\'s name',
                   value: {
-                    name: "Puma",
-                    petType: "Dog",
-                    color: "Black",
-                    gender: "Female",
-                    breed: "Mixed",
+                    name: 'Puma',
+                    petType: 'Dog',
+                    color: 'Black',
+                    gender: 'Female',
+                    breed: 'Mixed',
                   },
                 },
                 frog: {
-                  $ref: "#/components/examples/frog-example",
+                  $ref: '#/components/examples/frog-example',
                 },
               },
             },
-            "application/jsonl": {
-              $ref: "#/components/mediaTypes/StreamingPets",
+            'application/jsonl': {
+              $ref: '#/components/mediaTypes/StreamingPets',
             },
-            "application/x-ndjson": {
-              $ref: "#/components/mediaTypes/StreamingPets",
+            'application/x-ndjson': {
+              $ref: '#/components/mediaTypes/StreamingPets',
             },
-            "application/xml": {
+            'application/xml': {
               schema: {
-                type: "object",
+                type: 'object',
                 properties: {
                   foo: {
-                    type: "string",
+                    type: 'string',
                     xml: {
-                      namespace: "https://example.com",
-                      prefix: "example",
-                      name: "Foo",
+                      namespace: 'https://example.com',
+                      prefix: 'example',
+                      name: 'Foo',
                     },
                   },
                   bar: {
-                    type: "array",
+                    type: 'array',
                     items: {
-                      type: "number",
+                      type: 'number',
                     },
                     xml: {
                       wrapped: true,
                     },
                   },
                   attr: {
-                    type: "string",
+                    type: 'string',
                     xml: {
                       attribute: true,
                     },
                   },
                   elementNode: {
-                    $ref: "#/components/schemas/Pet",
+                    $ref: '#/components/schemas/Pet',
                     xml: {
-                      nodeType: "element",
+                      nodeType: 'element',
                     },
                   },
                   attributeNode: {
-                    type: "string",
+                    type: 'string',
                     xml: {
-                      nodeType: "attribute",
+                      nodeType: 'attribute',
                     },
                   },
                   textNode: {
-                    type: "string",
+                    type: 'string',
                     xml: {
-                      nodeType: "text",
+                      nodeType: 'text',
                     },
                   },
                   cdataNode: {
-                    type: "string",
+                    type: 'string',
                     xml: {
-                      nodeType: "cdata",
+                      nodeType: 'cdata',
                     },
                   },
                   noneNode: {
-                    type: "object",
+                    type: 'object',
                     xml: {
-                      nodeType: "none",
+                      nodeType: 'none',
                     },
                   },
                 },
               },
             },
-            "application/x-www-form-urlencoded": {
+            'application/x-www-form-urlencoded': {
               schema: {
-                type: "object",
+                type: 'object',
                 properties: {
                   id: {
-                    type: "string",
-                    format: "uuid",
+                    type: 'string',
+                    format: 'uuid',
                   },
                   address: {
-                    type: "object",
+                    type: 'object',
                     properties: {},
                   },
                   icon: {
-                    type: "string",
-                    contentEncoding: "base64url",
+                    type: 'string',
+                    contentEncoding: 'base64url',
                   },
                 },
               },
               encoding: {
                 icon: {
-                  contentType: "image/png, image/jpeg",
+                  contentType: 'image/png, image/jpeg',
                 },
               },
             },
-            "multipart/form-data": {
+            'multipart/form-data': {
               schema: {
-                type: "object",
+                type: 'object',
                 properties: {
                   id: {
-                    type: "string",
-                    format: "uuid",
+                    type: 'string',
+                    format: 'uuid',
                   },
                   addresses: {
-                    description: "addresses in XML format",
-                    type: "array",
+                    description: 'addresses in XML format',
+                    type: 'array',
                     items: {
-                      $ref: "#/components/schemas/Address",
+                      $ref: '#/components/schemas/Address',
                     },
                   },
                   profileImage: {
-                    type: "string",
-                    format: "binary",
+                    type: 'string',
+                    format: 'binary',
                   },
                   forCoverage: {
-                    type: "string",
+                    type: 'string',
                   },
                   forCoverage2: {
-                    type: "string",
+                    type: 'string',
                   },
                   nested1: {
-                    type: "object",
+                    type: 'object',
                   },
                   nested2: {
-                    type: "array",
+                    type: 'array',
                   },
                 },
               },
               encoding: {
                 addresses: {
-                  contentType: "application/xml; charset=utf-8",
+                  contentType: 'application/xml; charset=utf-8',
                 },
                 profileImage: {
-                  contentType: "image/png, image/jpeg",
+                  contentType: 'image/png, image/jpeg',
                   headers: {
-                    "X-Rate-Limit-Limit": {
+                    'X-Rate-Limit-Limit': {
                       description:
-                        "The number of allowed requests in the current period",
+                        'The number of allowed requests in the current period',
                       schema: {
-                        type: "integer",
+                        type: 'integer',
                       },
                     },
                   },
                 },
                 forCoverage: {
-                  style: "form",
+                  style: 'form',
                   explode: false,
                   allowReserved: true,
                 },
                 forCoverage2: {
-                  style: "spaceDelimited",
+                  style: 'spaceDelimited',
                   explode: true,
                 },
                 nested1: {
-                  contentType: "multipart/form-data",
+                  contentType: 'multipart/form-data',
                   encoding: {
                     inner: {},
                   },
                 },
                 nested2: {
-                  contentType: "multipart/mixed",
+                  contentType: 'multipart/mixed',
                   prefixEncoding: [{}],
                   itemEncoding: {},
                 },
               },
             },
-            "multipart/related": {
+            'multipart/related': {
               schema: {
-                type: "array",
+                type: 'array',
               },
               itemEncoding: {
-                contentType: "text/plain",
+                contentType: 'text/plain',
               },
               prefixEncoding: [
                 {
                   headers: {
-                    "Content-Location": {
+                    'Content-Location': {
                       schema: {
-                        type: "string",
+                        type: 'string',
                       },
                     },
                   },
@@ -247,4 +246,4 @@ export const doc = {
       },
     },
   },
-} satisfies OpenAPIObject;
+} satisfies OpenAPIObject
