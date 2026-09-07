@@ -1,4 +1,38 @@
-# OAS
+<h1 align="center">OpenAPI Spec</h1>
+
+<div align="center">
+  <a href="https://codecov.io/gh/middleapi/openapi-spec">
+    <img alt="codecov" src="https://codecov.io/gh/middleapi/openapi-spec/branch/main/graph/badge.svg">
+  </a>
+  <a href="https://www.npmjs.com/package/@openapi-spec/types">
+    <img alt="weekly downloads" src="https://img.shields.io/npm/dw/%40openapi-spec%2Ftypes?logo=npm" />
+  </a>
+  <a href="https://github.com/middleapi/openapi-spec/blob/main/LICENSE">
+    <img alt="MIT License" src="https://img.shields.io/github/license/middleapi/openapi-spec?logo=open-source-initiative" />
+  </a>
+  <a href="https://discord.gg/TXEbwRBvQn">
+    <img alt="Discord" src="https://img.shields.io/discord/1308966753044398161?color=7389D8&label&logo=discord&logoColor=ffffff" />
+  </a>
+  <a href="https://deepwiki.com/middleapi/openapi-spec">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+  </a>
+</div>
+
+TypeScript tooling for the [OpenAPI Specification](https://spec.openapis.org/), maintained by [middleapi](https://github.com/middleapi). It lets you work with OpenAPI 3.0, 3.1, and 3.2 documents from one place: precise types for each version, and converters that move a document from a newer version to an older one without losing anything the older version can still express.
+
+| Package                                                                                                         | Description                                                                                         |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [`@openapi-spec/types`](https://github.com/middleapi/openapi-spec/blob/main/packages/types/README.md)           | TypeScript types for OpenAPI 3.0, 3.1, and 3.2, with the specification text as JSDoc on every field |
+| [`@openapi-spec/downgrader`](https://github.com/middleapi/openapi-spec/blob/main/packages/downgrader/README.md) | Downgrade documents and Schema Objects one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0       |
+
+## Development
+
+```bash
+pnpm install
+pnpm test
+pnpm lint
+pnpm type:check
+```
 
 ## Sponsors
 
@@ -83,3 +117,7 @@ Like what we build over at [middleapi](https://github.com/middleapi)? You can he
 </table>
 
 With thanks to [36 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get openapi-spec here.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](https://github.com/middleapi/openapi-spec/blob/main/LICENSE) for more information.

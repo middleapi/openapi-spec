@@ -1,28 +1,50 @@
-# @openapi-spec/types
+<h1 align="center">OpenAPI Spec</h1>
 
-TypeScript types for the [OpenAPI Specification](https://spec.openapis.org/), covering versions 3.0, 3.1, and 3.2 with complete inline documentation.
+<div align="center">
+  <a href="https://codecov.io/gh/middleapi/openapi-spec">
+    <img alt="codecov" src="https://codecov.io/gh/middleapi/openapi-spec/branch/main/graph/badge.svg">
+  </a>
+  <a href="https://www.npmjs.com/package/@openapi-spec/types">
+    <img alt="weekly downloads" src="https://img.shields.io/npm/dw/%40openapi-spec%2Ftypes?logo=npm" />
+  </a>
+  <a href="https://github.com/middleapi/openapi-spec/blob/main/LICENSE">
+    <img alt="MIT License" src="https://img.shields.io/github/license/middleapi/openapi-spec?logo=open-source-initiative" />
+  </a>
+  <a href="https://discord.gg/TXEbwRBvQn">
+    <img alt="Discord" src="https://img.shields.io/discord/1308966753044398161?color=7389D8&label&logo=discord&logoColor=ffffff" />
+  </a>
+  <a href="https://deepwiki.com/middleapi/openapi-spec">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+  </a>
+</div>
 
-Each version module is authored against the latest patch release of its minor line:
+`@openapi-spec/types` provides TypeScript types for the [OpenAPI Specification](https://spec.openapis.org/), covering versions 3.0, 3.1, and 3.2. Every object and field is modelled after the specification, and every field carries the specification's own description as JSDoc with a link to its section, so the spec is readable from your editor. The package ships types only, no runtime code.
 
-- `@openapi-spec/types/v3.0` — OpenAPI [3.0.4](https://spec.openapis.org/oas/v3.0.4.html)
-- `@openapi-spec/types/v3.1` — OpenAPI [3.1.2](https://spec.openapis.org/oas/v3.1.2.html), reusing 3.0 types where unchanged
-- `@openapi-spec/types/v3.2` — OpenAPI [3.2.0](https://spec.openapis.org/oas/v3.2.0.html), reusing 3.1 types where unchanged
+Each version module targets the latest patch release of its minor line:
+
+| Module                     | Specification                                              | Notes                                            |
+| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------ |
+| `@openapi-spec/types/v3.0` | [OpenAPI 3.0.4](https://spec.openapis.org/oas/v3.0.4.html) |                                                  |
+| `@openapi-spec/types/v3.1` | [OpenAPI 3.1.2](https://spec.openapis.org/oas/v3.1.2.html) | Reuses 3.0 types for objects that did not change |
+| `@openapi-spec/types/v3.2` | [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html) | Reuses 3.1 types for objects that did not change |
 
 ## Usage
 
 ```ts
-// Namespaces via the root export
-import type {
-  OpenAPIV3_0,
-  OpenAPIV3_1,
-  OpenAPIV3_2,
-} from '@openapi-spec/types'
+// Every version as a namespace
+import type { OpenAPIV3_0, OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
 
-// or one version's module directly
+// Or one version directly
 import type { OpenAPIObject, SchemaObject } from '@openapi-spec/types/v3.1'
 
-// SchemaObject accepts an optional data type for its data-carrying fields
-// (`enum`, `default`, `example`, and in 3.1+ `const` and `examples`).
+const doc: OpenAPIObject = {
+  openapi: '3.1.2',
+  info: { title: 'Pet Store', version: '1.0.0' },
+  paths: {},
+}
+
+// SchemaObject takes an optional data type for its data-carrying fields:
+// `enum`, `default`, `example`, and from 3.1 on `const` and `examples`
 const status = {
   type: 'string',
   enum: ['available', 'pending', 'sold'],
@@ -30,7 +52,13 @@ const status = {
 } satisfies SchemaObject<string>
 ```
 
-Type names follow the specification's section names (`InfoObject`, `PathItemObject`, `SchemaObject`, ...), and every field carries its specification description as JSDoc, linked back to the relevant spec section.
+## Conventions
+
+- Type names follow the specification's section names: `InfoObject`, `PathItemObject`, `SchemaObject`, and so on.
+- Fields the specification marks as deprecated carry an `@deprecated` tag.
+- Rules the type system can express are enforced: allowed fields, value shapes, and version-specific literals such as `style` values. Rules it cannot express, like mutually exclusive fields or "at least one of", are stated in the JSDoc instead.
+
+The types are checked against the official example documents and the specification's own schema test corpus. See [tests/README.md](https://github.com/middleapi/openapi-spec/blob/main/packages/types/tests/README.md).
 
 ## Sponsors
 
@@ -115,3 +143,7 @@ Like what we build over at [middleapi](https://github.com/middleapi)? You can he
 </table>
 
 With thanks to [36 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get openapi-spec here.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](https://github.com/middleapi/openapi-spec/blob/main/LICENSE) for more information.
