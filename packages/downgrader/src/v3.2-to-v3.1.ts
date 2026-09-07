@@ -1,19 +1,3 @@
-/**
- * Converts OpenAPI 3.2 documents and schemas to OpenAPI 3.1 (targeting the
- * latest patch release, 3.1.2).
- *
- * The conversion never throws: parts that do not match the expected shape
- * are deep-copied through unchanged, a subtree that cycles back into an
- * ancestor object points at that ancestor's converted form, and existing
- * specification extensions (`x-` keys) as well as unknown keys are always
- * preserved. Constructs 3.1 cannot express are
- * converted where an equivalent exists and removed otherwise — the converter
- * never invents `x-` keys of its own. The README lists every mapping.
- *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html}
- * @see {@link https://spec.openapis.org/oas/v3.1.2.html}
- */
-
 import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
 
 import type { FieldConverter } from './shared'
@@ -41,29 +25,16 @@ interface Context {
   removedParameterRefs: ReadonlySet<string>
 }
 
-/**
- * Converts an OpenAPI 3.2 Schema Object to its OpenAPI 3.1 form: a deep
- * clone, as the 3.2 Schema Object keyword set is identical to 3.1's. The
- * 3.2-only `defaultMapping` and `nodeType` fields are deliberately retained;
- * the README explains the trade-off.
- */
 export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {
-  const converted: unknown = deepClone(schema)
-  // SAFETY: every 3.2 Schema Object is already a structurally valid 3.1 one.
-  return converted as OpenAPIV3_1.SchemaObject<T>
+  return deepClone(schema) as OpenAPIV3_1.SchemaObject<T>
 }
 
-/**
- * References stay references in 3.1 (including their `summary`/`description`
- * overrides); everything else is converted.
- */
-function convertRefOr(value: unknown, context: Context, convert: (item: unknown, innerContext: Context) => unknown): unknown {
+function convertRefOr(value: unknown, context: Context, convert: (item: unknown, context: Context) => unknown): unknown {
   return getRef(value) === undefined ? convert(value, context) : deepClone(value)
 }
 
-function refMap(context: Context, convert: (item: unknown, innerContext: Context) => unknown): FieldConverter {
-  return item =>
-    mapRecord(item, entry => convertRefOr(entry, context, convert))
+function refMap(context: Context, convert: (item: unknown, context: Context) => unknown): FieldConverter {
+  return item => mapRecord(item, entry => convertRefOr(entry, context, convert))
 }
 
 function convertServer(value: unknown): unknown {
@@ -87,24 +58,18 @@ function convertSecurityScheme(value: unknown): unknown {
 }
 
 function convertExample(value: unknown): unknown {
-  return convertRecord(
-    value,
-    { dataValue: DROP, serializedValue: DROP },
-    (out, example) => {
-      // dataValue/serializedValue fill 3.1's `value` slot when it is free
-      // and no externalValue competes.
-      if ('value' in example || 'externalValue' in example) {
-        return out
-      }
-      if ('dataValue' in example) {
-        out.value = deepClone(example.dataValue)
-      }
-      else if ('serializedValue' in example) {
-        out.value = deepClone(example.serializedValue)
-      }
+  return convertRecord(value, { dataValue: DROP, serializedValue: DROP }, (out, example) => {
+    if ('value' in example || 'externalValue' in example) {
       return out
-    },
-  )
+    }
+    if ('dataValue' in example) {
+      out.value = deepClone(example.dataValue)
+    }
+    else if ('serializedValue' in example) {
+      out.value = deepClone(example.serializedValue)
+    }
+    return out
+  })
 }
 
 function isQuerystringParameter(value: unknown): boolean {
@@ -116,48 +81,33 @@ function isRemovedRef(value: unknown, removed: ReadonlySet<string>): boolean {
   return ref !== undefined && removed.has(ref)
 }
 
-/** Parameter Objects and Header Objects share every field this converter touches. */
 function convertParameterOrHeader(value: unknown, context: Context): unknown {
   return convertRecord(
     value,
     {
-      // 3.2 broadened allowReserved beyond query parameters; 3.1 only
-      // defines it there.
-      allowReserved: (item, parameter) =>
-        !('in' in parameter) || parameter.in === 'query'
-          ? deepClone(item)
-          : DROP,
+      allowReserved: (item, parameter) => (!('in' in parameter) || parameter.in === 'query' ? deepClone(item) : DROP),
       content: item => convertContentMap(item, context),
       examples: refMap(context, convertExample),
-      // "cookie" is not a 3.1 style; removing it lets the 3.1 default
-      // (`form`) take over.
       style: item => (item === 'cookie' ? DROP : deepClone(item)),
     },
     (out, parameter) => {
-      const lostContent
-        = isRecord(parameter.content)
-          && Object.keys(parameter.content).length > 0
-          && isRecord(out.content)
-          && Object.keys(out.content).length === 0
-      // 3.1 requires exactly one content entry on parameters and headers, so
-      // one whose entire content could not be inlined is removed.
+      const lostContent = isRecord(parameter.content)
+        && Object.keys(parameter.content).length > 0
+        && isRecord(out.content)
+        && Object.keys(out.content).length === 0
       return lostContent ? DROP : out
     },
   )
 }
 
 function convertParameterEntry(value: unknown, context: Context): unknown {
-  return isQuerystringParameter(value)
-    || isRemovedRef(value, context.removedParameterRefs)
+  return isQuerystringParameter(value) || isRemovedRef(value, context.removedParameterRefs)
     ? DROP
     : convertRefOr(value, context, convertParameterOrHeader)
 }
 
 function convertHeaderMap(value: unknown, context: Context): unknown {
-  return mapRecord(value, item =>
-    isRemovedRef(item, context.removedHeaderRefs)
-      ? DROP
-      : convertRefOr(item, context, convertParameterOrHeader))
+  return mapRecord(value, item => isRemovedRef(item, context.removedHeaderRefs) ? DROP : convertRefOr(item, context, convertParameterOrHeader))
 }
 
 function convertEncoding(value: unknown, context: Context): unknown {
@@ -174,8 +124,7 @@ function convertMediaType(value: unknown, context: Context): unknown {
     value,
     {
       description: DROP,
-      encoding: item =>
-        mapRecord(item, entry => convertEncoding(entry, context)),
+      encoding: item => mapRecord(item, entry => convertEncoding(entry, context)),
       examples: refMap(context, convertExample),
       itemEncoding: DROP,
       itemSchema: DROP,
@@ -183,7 +132,6 @@ function convertMediaType(value: unknown, context: Context): unknown {
     },
     (out, mediaType) => {
       if ('itemSchema' in mediaType && out.schema === undefined) {
-        // The 3.2 sequential media type data model maps streams to arrays.
         out.schema = { items: deepClone(mediaType.itemSchema), type: 'array' }
       }
       return out
@@ -191,12 +139,6 @@ function convertMediaType(value: unknown, context: Context): unknown {
   )
 }
 
-/**
- * Follows a content-map entry's `components.mediaTypes` reference chain to
- * the Media Type Object it names (non-reference entries stand for
- * themselves), or to `DROP` when it cannot be inlined: an external, unknown,
- * or cyclic target.
- */
 function resolveMediaType(value: unknown, mediaTypes: Record<string, unknown> | undefined, seen: Set<string>): unknown {
   const ref = getRef(value)
   if (ref === undefined) {
@@ -206,24 +148,13 @@ function resolveMediaType(value: unknown, mediaTypes: Record<string, unknown> | 
     return DROP
   }
   const name = ref.slice(MEDIA_TYPES_REF_PREFIX.length)
-  if (
-    name === ''
-    || name.includes('/')
-    || mediaTypes === undefined
-    || !Object.hasOwn(mediaTypes, name)
-    || seen.has(name)
-  ) {
+  if (name === '' || name.includes('/') || mediaTypes === undefined || !Object.hasOwn(mediaTypes, name) || seen.has(name)) {
     return DROP
   }
   seen.add(name)
   return resolveMediaType(mediaTypes[name], mediaTypes, seen)
 }
 
-/**
- * Converts a content map, inlining `components.mediaTypes` references (3.1
- * content maps hold Media Type Objects only, never references) and removing
- * entries whose reference cannot be inlined.
- */
 function convertContentMap(value: unknown, context: Context): unknown {
   return mapRecord(value, (item) => {
     const target = resolveMediaType(item, context.mediaTypes, new Set())
@@ -246,9 +177,7 @@ function convertResponse(value: unknown, context: Context): unknown {
     },
     (out, response) => {
       if (out.description === undefined) {
-        // Required in 3.1, optional in 3.2.
-        out.description
-          = typeof response.summary === 'string' ? response.summary : ''
+        out.description = typeof response.summary === 'string' ? response.summary : ''
       }
       return out
     },
@@ -256,17 +185,13 @@ function convertResponse(value: unknown, context: Context): unknown {
 }
 
 function convertResponses(value: unknown, context: Context): unknown {
-  return mapRecord(value, (item, key) =>
-    key.startsWith('x-')
-      ? deepClone(item)
-      : convertRefOr(item, context, convertResponse))
+  return mapRecord(value, (item, key) => key.startsWith('x-') ? deepClone(item) : convertRefOr(item, context, convertResponse))
 }
 
 function convertOperation(value: unknown, context: Context): unknown {
   return convertRecord(value, {
     callbacks: refMap(context, convertCallback),
-    parameters: item =>
-      mapArray(item, entry => convertParameterEntry(entry, context)),
+    parameters: item => mapArray(item, entry => convertParameterEntry(entry, context)),
     requestBody: item => convertRefOr(item, context, convertRequestBody),
     responses: item => convertResponses(item, context),
     servers: item => mapArray(item, convertServer),
@@ -274,24 +199,21 @@ function convertOperation(value: unknown, context: Context): unknown {
 }
 
 function convertCallback(value: unknown, context: Context): unknown {
-  return mapRecord(value, (item, key) =>
-    key.startsWith('x-') ? deepClone(item) : convertPathItem(item, context))
+  return mapRecord(value, (item, key) => key.startsWith('x-') ? deepClone(item) : convertPathItem(item, context))
 }
 
 function convertPathItem(value: unknown, context: Context): unknown {
   return convertRecord(value, {
     ...operationFields(item => convertOperation(item, context)),
     additionalOperations: DROP,
-    parameters: item =>
-      mapArray(item, entry => convertParameterEntry(entry, context)),
+    parameters: item => mapArray(item, entry => convertParameterEntry(entry, context)),
     query: DROP,
     servers: item => mapArray(item, convertServer),
   })
 }
 
 function convertPaths(value: unknown, context: Context): unknown {
-  return mapRecord(value, (item, key) =>
-    key.startsWith('/') ? convertPathItem(item, context) : deepClone(item))
+  return mapRecord(value, (item, key) => key.startsWith('/') ? convertPathItem(item, context) : deepClone(item))
 }
 
 function convertComponents(value: unknown, context: Context): unknown {
@@ -300,12 +222,9 @@ function convertComponents(value: unknown, context: Context): unknown {
     examples: refMap(context, convertExample),
     headers: item => convertHeaderMap(item, context),
     links: refMap(context, convertLink),
-    // Inlined at use sites; 3.1 has no reusable media types.
     mediaTypes: DROP,
-    parameters: item =>
-      mapRecord(item, entry => convertParameterEntry(entry, context)),
-    pathItems: item =>
-      mapRecord(item, entry => convertPathItem(entry, context)),
+    parameters: item => mapRecord(item, entry => convertParameterEntry(entry, context)),
+    pathItems: item => mapRecord(item, entry => convertPathItem(entry, context)),
     requestBodies: refMap(context, convertRequestBody),
     responses: refMap(context, convertResponse),
     securitySchemes: refMap(context, convertSecurityScheme),
@@ -317,20 +236,9 @@ function losesEntireContent(value: unknown, mediaTypes: Record<string, unknown> 
     return false
   }
   const entries = Object.values(value.content)
-  return (
-    entries.length > 0
-    && entries.every(
-      item => resolveMediaType(item, mediaTypes, new Set()) === DROP,
-    )
-  )
+  return entries.length > 0 && entries.every(item => resolveMediaType(item, mediaTypes, new Set()) === DROP)
 }
 
-/**
- * Collects the `$ref` strings of component entries conversion removes
- * (querystring parameters, and parameters or headers losing their entire
- * `content`), iterated to a fixpoint so chains of reference aliases are
- * removed with their targets.
- */
 function indexRemovedComponentRefs(map: unknown, prefix: string, mediaTypes: Record<string, unknown> | undefined, isDirectlyRemoved: (item: unknown) => boolean): Set<string> {
   const removed = new Set<string>()
   if (!isRecord(map)) {
@@ -346,11 +254,7 @@ function indexRemovedComponentRefs(map: unknown, prefix: string, mediaTypes: Rec
         continue
       }
       const target = getRef(item)
-      if (
-        isDirectlyRemoved(item)
-        || losesEntireContent(item, mediaTypes)
-        || (target !== undefined && removed.has(target))
-      ) {
+      if (isDirectlyRemoved(item) || losesEntireContent(item, mediaTypes) || (target !== undefined && removed.has(target))) {
         removed.add(selfRef)
         changed = true
       }
@@ -361,35 +265,19 @@ function indexRemovedComponentRefs(map: unknown, prefix: string, mediaTypes: Rec
 
 function createContext(spec: unknown): Context {
   const components = isRecord(spec) ? spec.components : undefined
-  const mediaTypes
-    = isRecord(components) && isRecord(components.mediaTypes)
-      ? components.mediaTypes
-      : undefined
+  const mediaTypes = isRecord(components) && isRecord(components.mediaTypes) ? components.mediaTypes : undefined
   return {
     mediaTypes,
-    removedHeaderRefs: indexRemovedComponentRefs(
-      isRecord(components) ? components.headers : undefined,
-      HEADERS_REF_PREFIX,
-      mediaTypes,
-      () => false,
-    ),
-    removedParameterRefs: indexRemovedComponentRefs(
-      isRecord(components) ? components.parameters : undefined,
-      PARAMETERS_REF_PREFIX,
-      mediaTypes,
-      isQuerystringParameter,
-    ),
+    removedHeaderRefs: indexRemovedComponentRefs(isRecord(components) ? components.headers : undefined, HEADERS_REF_PREFIX, mediaTypes, () => false),
+    removedParameterRefs: indexRemovedComponentRefs(isRecord(components) ? components.parameters : undefined, PARAMETERS_REF_PREFIX, mediaTypes, isQuerystringParameter),
   }
 }
 
-/** The 3.2 OAS dialect only extends the 3.1 base vocabulary; other dialects pass through. */
 function convertJsonSchemaDialect(value: unknown): unknown {
-  return typeof value === 'string' && value.startsWith(V32_DIALECT_PREFIX)
-    ? V31_DIALECT
-    : deepClone(value)
+  return typeof value === 'string' && value.startsWith(V32_DIALECT_PREFIX) ? V31_DIALECT : deepClone(value)
 }
 
-function convertSpec(spec: unknown): unknown {
+export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
   const context = createContext(spec)
   return convertRecord(
     spec,
@@ -400,23 +288,11 @@ function convertSpec(spec: unknown): unknown {
       paths: item => convertPaths(item, context),
       servers: item => mapArray(item, convertServer),
       tags: item => mapArray(item, convertTag),
-      webhooks: item =>
-        mapRecord(item, entry => convertPathItem(entry, context)),
+      webhooks: item => mapRecord(item, entry => convertPathItem(entry, context)),
     },
     (out) => {
       out.openapi = '3.1.2'
       return out
     },
-  )
-}
-
-/**
- * Converts an OpenAPI 3.2 document to OpenAPI 3.1.2. The input is never
- * mutated, unknown keys and existing specification extensions are preserved,
- * and malformed parts are copied through unchanged instead of throwing.
- */
-export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
-  const converted: unknown = convertSpec(spec)
-  // SAFETY: convertSpec rewrites every 3.2-only construct into its 3.1 form.
-  return converted as OpenAPIV3_1.OpenAPIObject
+  ) as OpenAPIV3_1.OpenAPIObject
 }

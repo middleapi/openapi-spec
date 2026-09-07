@@ -1,7 +1,6 @@
 import { Validator } from '@seriousme/openapi-schema-validator'
 import { expect } from 'vitest'
 
-/** Walks converter output along `path`; the surrounding assertions pin down its shape. */
 export function dig(value: unknown, ...path: string[]): unknown {
   let current: unknown = value
   for (const key of path) {

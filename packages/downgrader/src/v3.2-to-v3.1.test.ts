@@ -20,7 +20,6 @@ function convertComponent(kind: string, value: unknown, components: Record<strin
   )
 }
 
-/** Converts a request body content map, optionally beside `components` to resolve against. */
 function convertContent(content: unknown, components: Record<string, unknown> = {}): unknown {
   return dig(
     convertPathItem(

@@ -129,7 +129,6 @@ export const referenceOverrides = {
   paths: {
     '/pets': {
       get: {
-        // `responses` is no longer REQUIRED in 3.1.
         parameters: [
           {
             $ref: '#/components/parameters/limit',
@@ -149,7 +148,6 @@ export const wrongVersion = {
   paths: {},
 } satisfies OpenAPIObject
 
-// Boolean schemas are valid Schema Objects in OpenAPI 3.1.
 export const booleanSchema = true satisfies SchemaObject
 
 export const numericExclusiveBounds = {

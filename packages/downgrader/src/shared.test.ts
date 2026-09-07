@@ -16,7 +16,6 @@ function identity<T>(value: T): T {
   return value
 }
 
-/** A converter that recurses into `self`, so a self-referencing node re-enters convertRecord. */
 function convertNode(value: unknown): unknown {
   return convertRecord(value, {
     name: () => 'converted',
@@ -277,7 +276,6 @@ describe('mapRecord', () => {
     const calls: [unknown, string][] = []
     const result = mapRecord({ a: 1, b: 2 }, (item, key) => {
       calls.push([item, key])
-      // SAFETY: the test input only contains numbers.
       return (item as number) * 10
     })
     expect(result).toEqual({ a: 10, b: 20 })
@@ -315,12 +313,7 @@ describe('mapRecord', () => {
 
 describe('mapArray', () => {
   it('applies the converter to every element', () => {
-    const result = mapArray(
-      [1, 2, 3],
-      item =>
-        // SAFETY: the test input only contains numbers.
-        (item as number) + 1,
-    )
+    const result = mapArray([1, 2, 3], item => (item as number) + 1)
     expect(result).toEqual([2, 3, 4])
   })
 

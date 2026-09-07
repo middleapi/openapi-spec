@@ -41,8 +41,6 @@ describe('3.1 example documents downgraded to 3.0', () => {
     expect(converted.paths).toMatchObject({
       '/users': { get: { security: [{ bearerAuth: [] }] } },
     })
-    // The source operation has no responses; the synthesized minimal default
-    // response keeps the document valid.
     expect(converted.paths?.['/users']?.get?.responses).toEqual({
       default: { description: '' },
     })
@@ -65,8 +63,6 @@ describe('3.1 example documents downgraded to 3.0', () => {
     expect(converted.components).not.toHaveProperty('pathItems')
     expect(converted.components).not.toHaveProperty('x-pathItems')
     expect(converted.components?.securitySchemes).toEqual({})
-    // The only reference into components.pathItems lived in the removed
-    // webhooks, so no trace of the reusable path items remains.
     expect(JSON.stringify(converted)).not.toContain('#/components/pathItems/')
     await expectValidAs(converted, '3.0')
     expect(converted).toMatchSnapshot()
@@ -130,8 +126,6 @@ describe('3.1 example documents downgraded to 3.0', () => {
     } as any
     const before = structuredClone(doc)
     const converted = downgradeSpecV31ToV30(doc)
-    // defaultMapping is not a schema keyword the 3.0 converter touches, and
-    // the official 3.0 schema allows extra discriminator fields.
     expect(converted).toHaveProperty(
       ['components', 'schemas', 'Pet', 'discriminator'],
       {
@@ -150,8 +144,6 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
     const before = structuredClone(queryExample)
     const v31 = downgradeSpecV32ToV31(queryExample)
     expect(v31.openapi).toBe('3.1.2')
-    // The QUERY operation has no 3.1 equivalent; an empty Path Item Object
-    // is legal in both 3.1 and 3.0.
     expect(v31.paths?.['/flights/search']).toEqual({})
     expect(JSON.stringify(v31)).not.toContain('x-additionalOperations')
     await expectValidAs(v31, '3.1')
@@ -209,8 +201,6 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
       'schema',
       'discriminator',
     ]
-    // Schema Objects pass through unchanged in 3.2 -> 3.1, so the 3.2-only
-    // discriminator defaultMapping survives as an extra JSON Schema keyword.
     expect(v31).toHaveProperty(
       [...megaDiscriminatorPath, 'defaultMapping'],
       'Bar',
@@ -228,8 +218,6 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
 
     const v30 = downgradeSpecV31ToV30(v31)
     expect(v30.openapi).toBe('3.0.4')
-    // The discriminator lives in components.pathItems, which 3.0 cannot
-    // express, so it disappears together with its host in this hop.
     expect(v30.components).not.toHaveProperty('pathItems')
     expect(v30).not.toHaveProperty('webhooks')
     await expectValidAs(v30, '3.0')
@@ -374,8 +362,6 @@ describe('kitchen-sink 3.2 document chained down to 3.0', () => {
     expect(v31.servers).toEqual([{ url: 'https://api.example.com' }])
     expect(v31.components).not.toHaveProperty('mediaTypes')
     expect(JSON.stringify(v31)).not.toContain('#/components/mediaTypes/')
-    // The querystring component is removed outright; the deviceAuthorization
-    // flow, oauth2MetadataUrl, and deprecated have no 3.1 equivalent either.
     expect(v31.components?.parameters).toEqual({
       page: { in: 'query', name: 'page', schema: { type: 'integer' } },
     })
@@ -402,9 +388,6 @@ describe('kitchen-sink 3.2 document chained down to 3.0', () => {
       },
       204: { description: '' },
     })
-    // The querystring parameter is removed from the list; the cookie style
-    // is removed from the remaining parameter, and its examples promote
-    // dataValue/serializedValue into free value slots only.
     expect(v31.paths?.['/search']?.get?.parameters).toEqual([
       {
         examples: {
