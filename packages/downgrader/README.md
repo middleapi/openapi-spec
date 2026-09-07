@@ -2,7 +2,7 @@
 
 Downgrade [OpenAPI Specification](https://spec.openapis.org/) documents one minor version at a time: 3.2 → 3.1 and 3.1 → 3.0. Each converter works on an entire document or on a single Schema Object.
 
-- **Never throws**: malformed parts are deep-copied through unchanged instead of failing the whole conversion, and cyclic object graphs (e.g. the output of a `$ref` dereferencer) don't recurse forever — a subtree that cycles back into an ancestor is deep-copied with its cycle preserved instead of converted. Only pathologically deep nesting (thousands of levels) can still exhaust the call stack.
+- **Never throws**: malformed parts are deep-copied through unchanged instead of failing the whole conversion, and cyclic object graphs (e.g. the output of a `$ref` dereferencer) don't recurse forever — they are converted with their cycles preserved, a subtree that cycles back into an ancestor pointing at that ancestor's converted form. Only pathologically deep nesting (thousands of levels) can still exhaust the call stack.
 - **Never mutates**: the input document is left untouched.
 - **Extension-preserving, never extension-inventing**: existing `x-` keys and unknown keys always survive, while constructs the target version cannot express are converted where an equivalent exists and removed otherwise.
 
@@ -36,6 +36,7 @@ Converted:
 | 3.2 construct                                                                       | 3.1 result                                                                                                                                                                                                                                                                                                             |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `openapi: 3.2.x`                                                                    | `openapi: 3.1.2`                                                                                                                                                                                                                                                                                                       |
+| `jsonSchemaDialect` naming a 3.2 OAS dialect                                        | `https://spec.openapis.org/oas/3.1/dialect/base` (the 3.2 dialect only extends the 3.1 base vocabulary); other dialects pass through                                                                                                                                                                                   |
 | `components.mediaTypes` and content-map `$ref`s to them                             | references inlined, the component map removed; content entries whose reference cannot be inlined (external, unknown, or cyclic targets) are removed, as 3.1 content maps cannot hold references — a parameter or header losing its entire `content` that way is removed with it (3.1 requires exactly one entry there) |
 | Media type `itemSchema` without a sibling `schema`                                  | `schema: { type: "array", items: … }` (the 3.2 sequential media type data model)                                                                                                                                                                                                                                       |
 | Response `summary` when no `description` exists                                     | promoted to `description` (required in 3.1, so `""` is synthesized as a last resort)                                                                                                                                                                                                                                   |
@@ -44,7 +45,7 @@ Converted:
 
 Removed (no 3.1 equivalent): `$self`, server `name`, tag `summary`/`parent`/`kind`, the `query` operation and `additionalOperations` of Path Items, `in: "querystring"` parameters (from parameter lists and `components.parameters`, together with references to the removed component entries, following chains of reference aliases), `allowReserved` on non-query parameters, media type `description`, media type / encoding `prefixEncoding`, `itemEncoding`, and nested `encoding`, a media type `itemSchema` beside an existing `schema`, response `summary` beside an existing `description`, OAuth `deviceAuthorization` flows, and security scheme `oauth2MetadataUrl` and `deprecated`.
 
-Known limitations: security requirements using URI keys and `$self`-relative reference resolution are passed through unchanged.
+Known limitations: security requirements using URI keys and `$self`-relative reference resolution are passed through unchanged, and so is a `$schema` keyword inside a Schema Object that names the 3.2 dialect.
 
 ## 3.1 → 3.0
 
@@ -58,7 +59,7 @@ Converted:
 | Reference `summary` / `description` overrides   | removed (3.0 references stand alone)                                   |
 | Security requirement roles on non-OAuth schemes | emptied (`[]`)                                                         |
 
-Removed (no 3.0 equivalent): `webhooks`, `components.pathItems` (local `$ref`s pointing at it are left untouched and will dangle), `jsonSchemaDialect`, `info.summary`, `license.identifier`, and `mutualTLS` security schemes (reference aliases to them included) — their names are stripped from every security requirement, requirements that referenced only such schemes are removed, and a `security` list emptied that way is removed entirely, since an explicit empty list means "no security required" and would make an operation public.
+Removed (no 3.0 equivalent): `webhooks`, `components.pathItems` (Path Item `$ref`s pointing at it, in `paths` and in callbacks, are inlined instead — following chains of references, with the referencing Path Item's own fields winning over inlined ones where both define a field; a reference that cannot be inlined, such as an unknown or cyclic target, is left untouched and will dangle), `jsonSchemaDialect`, `info.summary`, `license.identifier`, and `mutualTLS` security schemes (reference aliases to them included) — their names are stripped from every security requirement, requirements that referenced only such schemes are removed, and a `security` list emptied that way is removed entirely, since an explicit empty list means "no security required" and would make an operation public.
 
 Schema Objects:
 

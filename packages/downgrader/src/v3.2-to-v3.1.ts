@@ -4,9 +4,9 @@
  *
  * The conversion never throws: parts that do not match the expected shape
  * are deep-copied through unchanged, a subtree that cycles back into an
- * ancestor object is deep-copied with its cycle preserved instead of
- * converted, and existing specification extensions (`x-` keys) as well as
- * unknown keys are always preserved. Constructs 3.1 cannot express are
+ * ancestor object points at that ancestor's converted form, and existing
+ * specification extensions (`x-` keys) as well as unknown keys are always
+ * preserved. Constructs 3.1 cannot express are
  * converted where an equivalent exists and removed otherwise — the converter
  * never invents `x-` keys of its own. The README lists every mapping.
  *
@@ -31,6 +31,9 @@ import {
 const HEADERS_REF_PREFIX = '#/components/headers/'
 const MEDIA_TYPES_REF_PREFIX = '#/components/mediaTypes/'
 const PARAMETERS_REF_PREFIX = '#/components/parameters/'
+
+const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
+const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'
 
 interface Context {
   mediaTypes: Record<string, unknown> | undefined
@@ -245,7 +248,7 @@ function convertResponse(value: unknown, context: Context): unknown {
       if (out.description === undefined) {
         // Required in 3.1, optional in 3.2.
         out.description
-          = 'summary' in response ? deepClone(response.summary) : ''
+          = typeof response.summary === 'string' ? response.summary : ''
       }
       return out
     },
@@ -379,6 +382,13 @@ function createContext(spec: unknown): Context {
   }
 }
 
+/** The 3.2 OAS dialect only extends the 3.1 base vocabulary; other dialects pass through. */
+function convertJsonSchemaDialect(value: unknown): unknown {
+  return typeof value === 'string' && value.startsWith(V32_DIALECT_PREFIX)
+    ? V31_DIALECT
+    : deepClone(value)
+}
+
 function convertSpec(spec: unknown): unknown {
   const context = createContext(spec)
   return convertRecord(
@@ -386,6 +396,7 @@ function convertSpec(spec: unknown): unknown {
     {
       $self: DROP,
       components: item => convertComponents(item, context),
+      jsonSchemaDialect: convertJsonSchemaDialect,
       paths: item => convertPaths(item, context),
       servers: item => mapArray(item, convertServer),
       tags: item => mapArray(item, convertTag),

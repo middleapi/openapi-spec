@@ -123,16 +123,13 @@ describe('downgradeSpecV31ToV30', () => {
       })
     })
 
-    it('leaves a path item $ref field untouched, string or not', () => {
+    it('leaves a path item $ref that points outside components.pathItems untouched, string or not', () => {
       expect(
-        convertPathItem({
-          $ref: '#/components/pathItems/Reusable',
-          summary: 's',
-        }),
-      ).toEqual({
-        $ref: '#/components/pathItems/Reusable',
-        summary: 's',
-      })
+        convertPathItem({ $ref: '#/paths/~1other', summary: 's' }),
+      ).toEqual({ $ref: '#/paths/~1other', summary: 's' })
+      expect(
+        convertPathItem({ $ref: 'https://example.com/paths.json#/a' }),
+      ).toEqual({ $ref: 'https://example.com/paths.json#/a' })
       expect(convertPathItem({ $ref: 42 })).toEqual({ $ref: 42 })
     })
 
@@ -158,6 +155,149 @@ describe('downgradeSpecV31ToV30', () => {
         '/junk': 'junk',
       }
       expect(convertSpec({ paths }).paths).toEqual(paths)
+    })
+  })
+
+  describe('components.pathItems inlining', () => {
+    const reusable = {
+      get: { responses: { 200: { description: 'ok' } } },
+      parameters: [{ in: 'query', name: 'q', schema: { type: ['string', 'null'] } }],
+      summary: 'Reusable',
+    }
+    const inlined = {
+      get: { responses: { 200: { description: 'ok' } } },
+      parameters: [{ in: 'query', name: 'q', schema: { nullable: true, type: 'string' } }],
+      summary: 'Reusable',
+    }
+
+    function convertWithPathItems(paths: unknown, pathItems: unknown, extra: Record<string, unknown> = {}) {
+      return convertSpec({ components: { pathItems, ...extra }, paths })
+    }
+
+    it('inlines the converted entry and lets the referencing fields win', () => {
+      const result = convertWithPathItems(
+        {
+          '/a': { $ref: '#/components/pathItems/Reusable' },
+          '/b': {
+            $ref: '#/components/pathItems/Reusable',
+            description: 'own',
+            summary: 'Own summary',
+          },
+        },
+        { Reusable: reusable },
+      )
+      expect(result.components).toEqual({})
+      expect(result.paths).toEqual({
+        '/a': inlined,
+        '/b': { ...inlined, description: 'own', summary: 'Own summary' },
+      })
+    })
+
+    it('follows chains of path item references', () => {
+      expect(
+        convertWithPathItems(
+          { '/a': { $ref: '#/components/pathItems/Alias', summary: 'Own' } },
+          {
+            Alias: { $ref: '#/components/pathItems/Reusable', description: 'alias' },
+            Reusable: reusable,
+          },
+        ).paths,
+      ).toEqual({ '/a': { ...inlined, description: 'alias', summary: 'Own' } })
+    })
+
+    it('inlines references inside callbacks', () => {
+      expect(
+        convertWithPathItems(
+          {
+            '/a': {
+              post: {
+                callbacks: {
+                  onEvent: { '{$request.body#/url}': { $ref: '#/components/pathItems/Reusable' } },
+                },
+                responses: {},
+              },
+            },
+          },
+          { Reusable: reusable },
+        ).paths,
+      ).toEqual({
+        '/a': {
+          post: {
+            callbacks: { onEvent: { '{$request.body#/url}': inlined } },
+            responses: {},
+          },
+        },
+      })
+    })
+
+    it.each([
+      ['an unknown entry', '#/components/pathItems/Missing', { Reusable: reusable }],
+      ['a nested pointer', '#/components/pathItems/Reusable/get', { Reusable: reusable }],
+      ['an empty name', '#/components/pathItems/', { Reusable: reusable }],
+      ['a malformed entry', '#/components/pathItems/Junk', { Junk: 42 }],
+      ['a prototype member', '#/components/pathItems/hasOwnProperty', {}],
+      ['a malformed pathItems map', '#/components/pathItems/Reusable', 'junk'],
+    ])('leaves a reference to %s untouched', (_name, ref, pathItems) => {
+      expect(
+        convertWithPathItems({ '/a': { $ref: ref, summary: 's' } }, pathItems).paths,
+      ).toEqual({ '/a': { $ref: ref, summary: 's' } })
+    })
+
+    it('leaves a reference untouched when components.pathItems is missing', () => {
+      expect(
+        convertPathItem({ $ref: '#/components/pathItems/Reusable' }),
+      ).toEqual({ $ref: '#/components/pathItems/Reusable' })
+    })
+
+    it('stops at cyclic reference chains, leaving the innermost reference to dangle', () => {
+      expect(
+        convertWithPathItems(
+          { '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } },
+          {
+            Ping: { $ref: '#/components/pathItems/Pong', description: 'ping' },
+            Pong: { $ref: '#/components/pathItems/Ping' },
+          },
+        ).paths,
+      ).toEqual({
+        '/a': {
+          $ref: '#/components/pathItems/Ping',
+          description: 'ping',
+          summary: 'Own',
+        },
+      })
+    })
+
+    it('stops when a path item reaches itself through its callbacks', () => {
+      const result = convertWithPathItems(
+        { '/a': { $ref: '#/components/pathItems/Self' } },
+        {
+          Self: {
+            post: {
+              callbacks: { loop: { expr: { $ref: '#/components/pathItems/Self' } } },
+              responses: {},
+            },
+          },
+        },
+      )
+      expect(result.paths).toEqual({
+        '/a': {
+          post: {
+            callbacks: { loop: { expr: { $ref: '#/components/pathItems/Self' } } },
+            responses: {},
+          },
+        },
+      })
+    })
+
+    it('applies mutualTLS removal inside inlined path items', () => {
+      const result = convertWithPathItems(
+        { '/a': { $ref: '#/components/pathItems/Secured' } },
+        { Secured: { get: { responses: {}, security: [{ mtls: [] }, { api: ['r'] }] } } },
+        { securitySchemes: { api: { in: 'header', name: 'k', type: 'apiKey' }, mtls: { type: 'mutualTLS' } } },
+      )
+      expect(result.paths).toEqual({
+        '/a': { get: { responses: {}, security: [{ api: [] }] } },
+      })
     })
   })
 
@@ -619,13 +759,15 @@ describe('downgradeSpecV31ToV30', () => {
       expect(input).toEqual(before)
     })
 
-    it('converts a path item that cycles through its callbacks without throwing', () => {
+    it('converts a path item that cycles through its callbacks, pointing the cycle at the converted path item', () => {
       const callback: Record<string, unknown> = {}
       const pathItem: Record<string, unknown> = {
-        get: { callbacks: { cb: callback }, responses: {} },
+        get: { callbacks: { cb: callback } },
       }
       callback.expr = pathItem
-      expect(() => convertPathItem(pathItem)).not.toThrow()
+      const result = convertPathItem(pathItem)
+      expect(dig(result, 'get', 'responses')).toEqual({ default: { description: '' } })
+      expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
     })
   })
 })
@@ -1209,14 +1351,20 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(() => downgradeSchemaV31ToV30(deep)).not.toThrow()
     })
 
-    it('converts a schema whose subtree cycles back to itself without throwing', () => {
+    it('converts a dereferenced cyclic schema, pointing the cycle at the converted ancestor', () => {
       const properties: Record<string, unknown> = {}
-      const node: Record<string, unknown> = { properties, type: 'object' }
+      const node: Record<string, unknown> = {
+        properties,
+        type: ['object', 'null'],
+      }
       properties.self = node
-      expect(convertSchema(node)).toHaveProperty(
-        ['properties', 'self', 'type'],
-        'object',
-      )
+      properties.children = { items: node, type: 'array' }
+      const result = convertSchema(node) as Record<string, unknown>
+      expect(result.type).toBe('object')
+      expect(result.nullable).toBe(true)
+      expect(dig(result, 'properties', 'self')).toBe(result)
+      expect(dig(result, 'properties', 'children', 'items')).toBe(result)
+      expect(node.type).toEqual(['object', 'null'])
     })
   })
 })

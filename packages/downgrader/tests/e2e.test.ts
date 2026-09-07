@@ -73,29 +73,35 @@ describe('3.1 example documents downgraded to 3.0', () => {
     expect(mega31).toEqual(before)
   })
 
-  it('leaves $refs into the removed components.pathItems untouched, letting them dangle', () => {
+  it('inlines $refs into the removed components.pathItems so nothing dangles', async () => {
     const doc: OpenAPIV3_1.OpenAPIObject = {
       components: {
         pathItems: {
           shared: {
             get: { responses: { 200: { description: 'ok' } } },
+            summary: 'Shared',
           },
         },
       },
-      info: { title: 'Dangling', version: '1.0.0' },
+      info: { title: 'Inlined', version: '1.0.0' },
       openapi: '3.1.0',
       paths: {
-        '/shared': { $ref: '#/components/pathItems/shared' },
+        '/shared': {
+          $ref: '#/components/pathItems/shared',
+          description: 'Overriding description',
+        },
       },
     }
     const before = structuredClone(doc)
     const converted = downgradeSpecV31ToV30(doc)
     expect(converted.components).not.toHaveProperty('pathItems')
-    // Documented limitation: the reference is passed through untouched and
-    // now dangles, so the (reference-resolving) validator is not consulted.
     expect(converted.paths?.['/shared']).toEqual({
-      $ref: '#/components/pathItems/shared',
+      description: 'Overriding description',
+      get: { responses: { 200: { description: 'ok' } } },
+      summary: 'Shared',
     })
+    expect(JSON.stringify(converted)).not.toContain('#/components/pathItems/')
+    await expectValidAs(converted, '3.0')
     expect(doc).toEqual(before)
   })
 
