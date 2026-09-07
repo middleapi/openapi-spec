@@ -53,11 +53,17 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Sets a key on the output record with define-property semantics, so hostile
- * key names like `__proto__` become plain own properties.
+ * Sets a key as an own data property. Keys the prototype chain already knows
+ * (an accessor such as `__proto__`, or a read-only member once the
+ * intrinsics are frozen) are defined instead of assigned.
  */
-export function setKey(target: Record<string, unknown>, key: string, value: unknown): void {
-  Object.defineProperty(target, key, {
+export function setOwn(object: object, key: PropertyKey, value: unknown): void {
+  if (Object.hasOwn(object, key) || !(key in object)) {
+    // SAFETY: only widens the index signature.
+    (object as Record<PropertyKey, unknown>)[key] = value
+    return
+  }
+  Object.defineProperty(object, key, {
     configurable: true,
     enumerable: true,
     value,
@@ -84,7 +90,7 @@ function cloneValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   for (const [key, item] of Object.entries(value)) {
-    setKey(out, key, cloneValue(item, seen))
+    setOwn(out, key, cloneValue(item, seen))
   }
   return out
 }
@@ -104,25 +110,29 @@ export function deepClone<T>(value: T): T {
   return cloneValue(value, new WeakMap()) as T
 }
 
-/** Objects currently being converted somewhere up the call stack. */
-const converting = new WeakSet<object>()
+/** Objects being converted up the call stack, mapped to their output records. */
+const converting = new WeakMap<object, Record<string, unknown>>()
 
 /**
  * Rebuilds a plain object field by field: each key goes through its entry in
  * `fields` (or is deep-cloned when it has none), entries mapped to or
  * returning `DROP` are left out, and `finish` receives the result together
  * with the source for fix-ups that depend on several fields. Non-object input
- * is deep-cloned unchanged, and so is an object already being converted
- * higher up the call stack: a cyclic reference, which would otherwise recurse
- * forever.
+ * is deep-cloned unchanged, and a cyclic reference back to an object still
+ * being converted yields that object's output record, so `finish` should
+ * mutate and return `out` rather than replace it.
  */
 export function convertRecord(value: unknown, fields: FieldTable, finish?: (out: Record<string, unknown>, source: Record<string, unknown>) => unknown): unknown {
-  if (!isRecord(value) || converting.has(value)) {
+  if (!isRecord(value)) {
     return deepClone(value)
   }
-  converting.add(value)
+  const inProgress = converting.get(value)
+  if (inProgress !== undefined) {
+    return inProgress
+  }
+  const out: Record<string, unknown> = {}
+  converting.set(value, out)
   try {
-    const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
       if (convert === DROP) {
@@ -131,7 +141,7 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: (out:
       const converted
         = convert === undefined ? deepClone(item) : convert(item, value)
       if (converted !== DROP) {
-        setKey(out, key, converted)
+        setOwn(out, key, converted)
       }
     }
     return finish === undefined ? out : finish(out, value)
@@ -149,7 +159,7 @@ export function mapRecord(value: unknown, convert: (item: unknown, key: string) 
   for (const [key, item] of Object.entries(value)) {
     const converted = convert(item, key)
     if (converted !== DROP) {
-      setKey(out, key, converted)
+      setOwn(out, key, converted)
     }
   }
   return out

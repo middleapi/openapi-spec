@@ -57,6 +57,35 @@ describe('downgradeSpecV32ToV31', () => {
       })
     })
 
+    it.each([
+      [
+        'rewrites the dated 3.2 OAS dialect to the 3.1 base dialect',
+        'https://spec.openapis.org/oas/3.2/dialect/2025-09-17',
+        'https://spec.openapis.org/oas/3.1/dialect/base',
+      ],
+      [
+        'rewrites a draft 3.2 OAS dialect to the 3.1 base dialect',
+        'https://spec.openapis.org/oas/3.2/dialect/WORK-IN-PROGRESS',
+        'https://spec.openapis.org/oas/3.1/dialect/base',
+      ],
+      [
+        'keeps a 3.1 OAS dialect',
+        'https://spec.openapis.org/oas/3.1/dialect/base',
+        'https://spec.openapis.org/oas/3.1/dialect/base',
+      ],
+      [
+        'keeps a custom dialect',
+        'https://example.com/my-dialect',
+        'https://example.com/my-dialect',
+      ],
+      ['clones a malformed dialect through', { junk: true }, { junk: true }],
+    ])('%s', (_name, dialect, expected) => {
+      expect(convertSpec({ jsonSchemaDialect: dialect })).toEqual({
+        jsonSchemaDialect: expected,
+        openapi: '3.1.2',
+      })
+    })
+
     it('returns non-object input unchanged', () => {
       expect(downgradeSpecV32ToV31(null as any)).toBeNull()
       expect(downgradeSpecV32ToV31('junk' as any)).toBe('junk')
@@ -819,6 +848,11 @@ describe('downgradeSpecV32ToV31', () => {
         { description: '' },
       ],
       [
+        'synthesizes an empty description instead of promoting a malformed summary',
+        { summary: 42 },
+        { description: '' },
+      ],
+      [
         'clones a non-object headers value through',
         { description: 'ok', headers: 'junk' },
         { description: 'ok', headers: 'junk' },
@@ -1211,13 +1245,17 @@ describe('downgradeSpecV32ToV31', () => {
       expect(spec).toEqual(before)
     })
 
-    it('converts a path item that cycles through its callbacks without throwing', () => {
+    it('converts a path item that cycles through its callbacks, pointing the cycle at the converted path item', () => {
       const callback: Record<string, unknown> = {}
       const pathItem: Record<string, unknown> = {
-        get: { callbacks: { cb: callback }, responses: {} },
+        get: { callbacks: { cb: callback }, responses: { 200: { summary: 'ok' } } },
+        query: { description: 'q' },
       }
       callback.expr = pathItem
-      expect(() => convertPathItem(pathItem)).not.toThrow()
+      const result = convertPathItem(pathItem)
+      expect(result).not.toHaveProperty('query')
+      expect(dig(result, 'get', 'responses', '200')).toEqual({ description: 'ok' })
+      expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
     })
   })
 })

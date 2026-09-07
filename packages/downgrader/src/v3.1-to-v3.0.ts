@@ -4,9 +4,9 @@
  *
  * The conversion never throws: parts that do not match the expected shape
  * are deep-copied through unchanged, a subtree that cycles back into an
- * ancestor object is deep-copied with its cycle preserved instead of
- * converted, and existing specification extensions (`x-` keys) as well as
- * unknown keys are always preserved. Constructs 3.0 cannot express are
+ * ancestor object points at that ancestor's converted form, and existing
+ * specification extensions (`x-` keys) as well as unknown keys are always
+ * preserved. Constructs 3.0 cannot express are
  * converted where an equivalent exists and removed otherwise — the converter
  * never invents `x-` keys of its own. The README lists every mapping.
  *
@@ -26,7 +26,7 @@ import {
   mapArray,
   mapRecord,
   operationFields,
-  setKey,
+  setOwn,
 } from './shared'
 
 /**
@@ -130,13 +130,13 @@ function convertType(schema: Record<string, unknown>, out: Record<string, unknow
     const types = [...new Set(type.filter(item => typeof item === 'string'))]
     if (types.length === 0 && type.length > 0) {
       // Only malformed entries: pass the array through unchanged.
-      setKey(out, 'type', deepClone(type))
+      setOwn(out, 'type', deepClone(type))
       return
     }
     applyTypes(types, schema, out)
     return
   }
-  setKey(out, 'type', deepClone(type))
+  setOwn(out, 'type', deepClone(type))
 }
 
 function convertConst(schema: Record<string, unknown>, out: Record<string, unknown>): void {
@@ -245,7 +245,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     }
     else {
       // A malformed allOf passes through, so the reference stays in place.
-      setKey(out, '$ref', ref)
+      setOwn(out, '$ref', ref)
     }
   }
   return out
@@ -363,11 +363,15 @@ export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaO
   return converted as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }
 
+const PATH_ITEMS_REF_PREFIX = '#/components/pathItems/'
 const SECURITY_SCHEMES_REF_PREFIX = '#/components/securitySchemes/'
 
-interface SecuritySchemeIndex {
-  mutualTls: Set<string>
-  types: Map<string, string>
+interface Context {
+  /** `components.pathItems` entries being inlined up the call stack. */
+  inlining: Set<string>
+  mutualTls: ReadonlySet<string>
+  pathItems: Record<string, unknown> | undefined
+  schemeTypes: ReadonlyMap<string, string>
 }
 
 /**
@@ -396,33 +400,39 @@ function resolveSchemeType(name: string, schemes: Record<string, unknown>, seen:
   return undefined
 }
 
-function indexSecuritySchemes(spec: unknown): SecuritySchemeIndex {
-  const index: SecuritySchemeIndex = { mutualTls: new Set(), types: new Map() }
+function createContext(spec: unknown): Context {
   const components = isRecord(spec) ? spec.components : undefined
+  const pathItems = isRecord(components) ? components.pathItems : undefined
   const schemes = isRecord(components) ? components.securitySchemes : undefined
-  if (!isRecord(schemes)) {
-    return index
-  }
-  for (const name of Object.keys(schemes)) {
-    const type = resolveSchemeType(name, schemes, new Set())
-    if (type !== undefined) {
-      index.types.set(name, type)
-      if (type === 'mutualTLS') {
-        // Reference aliases of mutualTLS schemes are removed as well, so no
-        // dangling references survive.
-        index.mutualTls.add(name)
+  const mutualTls = new Set<string>()
+  const schemeTypes = new Map<string, string>()
+  if (isRecord(schemes)) {
+    for (const name of Object.keys(schemes)) {
+      const type = resolveSchemeType(name, schemes, new Set())
+      if (type !== undefined) {
+        schemeTypes.set(name, type)
+        if (type === 'mutualTLS') {
+          // Reference aliases of mutualTLS schemes are removed as well, so
+          // no dangling references survive.
+          mutualTls.add(name)
+        }
       }
     }
   }
-  return index
+  return {
+    inlining: new Set(),
+    mutualTls,
+    pathItems: isRecord(pathItems) ? pathItems : undefined,
+    schemeTypes,
+  }
 }
 
-function convertRequirement(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertRequirement(value: unknown, context: Context): unknown {
   if (!isRecord(value)) {
     return deepClone(value)
   }
   const entries = Object.entries(value)
-  const kept = entries.filter(([name]) => !index.mutualTls.has(name))
+  const kept = entries.filter(([name]) => !context.mutualTls.has(name))
   if (kept.length === 0 && entries.length > 0) {
     // A requirement that only referenced mutualTLS schemes disappears; an
     // originally empty `{}` (optional security) is kept.
@@ -432,7 +442,7 @@ function convertRequirement(value: unknown, index: SecuritySchemeIndex): unknown
     kept.map(([name, scopes]) => {
       // 3.0 allows roles only on OAuth-family schemes; roles on unknown
       // schemes are left alone.
-      const type = index.types.get(name)
+      const type = context.schemeTypes.get(name)
       const scoped
         = type === undefined || type === 'oauth2' || type === 'openIdConnect'
       return [name, Array.isArray(scopes) && !scoped ? [] : deepClone(scopes)]
@@ -446,12 +456,12 @@ function convertRequirement(value: unknown, index: SecuritySchemeIndex): unknown
  * array means "no security required" and, on an operation, would override
  * the root declaration and silently make the operation public.
  */
-function convertSecurity(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertSecurity(value: unknown, context: Context): unknown {
   if (!Array.isArray(value)) {
     return deepClone(value)
   }
   const out = value
-    .map(item => convertRequirement(item, index))
+    .map(item => convertRequirement(item, context))
     .filter(item => item !== DROP)
   return value.length > 0 && out.length === 0 ? DROP : out
 }
@@ -518,15 +528,15 @@ function convertResponses(item: unknown): unknown {
       : convertRefOr(entry, convertResponse))
 }
 
-function convertOperation(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertOperation(value: unknown, context: Context): unknown {
   return convertRecord(
     value,
     {
-      callbacks: refMap(item => convertCallback(item, index)),
+      callbacks: refMap(item => convertCallback(item, context)),
       parameters: refList(convertParameterOrHeader),
       requestBody: item => convertRefOr(item, convertRequestBody),
       responses: convertResponses,
-      security: item => convertSecurity(item, index),
+      security: item => convertSecurity(item, context),
     },
     (out) => {
       if (out.responses === undefined) {
@@ -539,26 +549,72 @@ function convertOperation(value: unknown, index: SecuritySchemeIndex): unknown {
   )
 }
 
-function convertCallback(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertCallback(value: unknown, context: Context): unknown {
   return mapRecord(value, (item, key) =>
-    key.startsWith('x-') ? deepClone(item) : convertPathItem(item, index))
+    key.startsWith('x-') ? deepClone(item) : convertPathItem(item, context))
 }
 
-function convertPathItem(value: unknown, index: SecuritySchemeIndex): unknown {
-  return convertRecord(value, {
-    ...operationFields(item => convertOperation(item, index)),
+/**
+ * The `components.pathItems` entry a Path Item's `$ref` names, unless it is
+ * unknown, malformed, or already being inlined.
+ */
+function resolvePathItemRef(value: Record<string, unknown>, context: Context): [name: string, target: Record<string, unknown>] | undefined {
+  const ref = getRef(value)
+  if (ref === undefined || !ref.startsWith(PATH_ITEMS_REF_PREFIX)) {
+    return undefined
+  }
+  const name = ref.slice(PATH_ITEMS_REF_PREFIX.length)
+  if (
+    name === ''
+    || name.includes('/')
+    || context.inlining.has(name)
+    || context.pathItems === undefined
+    || !Object.hasOwn(context.pathItems, name)
+  ) {
+    return undefined
+  }
+  const target = context.pathItems[name]
+  return isRecord(target) ? [name, target] : undefined
+}
+
+/**
+ * 3.0 has no `components.pathItems`, so a reference into it is inlined, the
+ * referencing object's own fields winning over the referenced ones.
+ */
+function convertPathItem(value: unknown, context: Context): unknown {
+  if (!isRecord(value)) {
+    return deepClone(value)
+  }
+  const fields: FieldTable = {
+    ...operationFields(item => convertOperation(item, context)),
     parameters: refList(convertParameterOrHeader),
-  })
+  }
+  const resolved = resolvePathItemRef(value, context)
+  if (resolved === undefined) {
+    return convertRecord(value, fields)
+  }
+  const [name, target] = resolved
+  context.inlining.add(name)
+  try {
+    // SAFETY: both convert a plain object into a plain object.
+    const inlined = convertPathItem(target, context) as Record<string, unknown>
+    const own = convertRecord(value, { ...fields, $ref: DROP }) as Record<string, unknown>
+    // Spread, unlike Object.assign, defines own properties without running setters.
+    return { ...inlined, ...own }
+  }
+  finally {
+    context.inlining.delete(name)
+  }
 }
 
-function convertPaths(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertPaths(value: unknown, context: Context): unknown {
   return mapRecord(value, (item, key) =>
-    key.startsWith('/') ? convertPathItem(item, index) : deepClone(item))
+    key.startsWith('/') ? convertPathItem(item, context) : deepClone(item))
 }
 
-function convertComponents(value: unknown, index: SecuritySchemeIndex): unknown {
+function convertComponents(value: unknown, context: Context): unknown {
   return convertRecord(value, {
-    callbacks: refMap(item => convertCallback(item, index)),
+    callbacks: refMap(item => convertCallback(item, context)),
     examples: refMap(deepClone),
     headers: refMap(convertParameterOrHeader),
     links: refMap(deepClone),
@@ -569,20 +625,20 @@ function convertComponents(value: unknown, index: SecuritySchemeIndex): unknown 
     schemas: item => mapRecord(item, convertSchema),
     securitySchemes: item =>
       mapRecord(item, (scheme, name) =>
-        index.mutualTls.has(name) ? DROP : convertRefOr(scheme, deepClone)),
+        context.mutualTls.has(name) ? DROP : convertRefOr(scheme, deepClone)),
   })
 }
 
 function convertSpec(spec: unknown): unknown {
-  const index = indexSecuritySchemes(spec)
+  const context = createContext(spec)
   return convertRecord(
     spec,
     {
-      components: item => convertComponents(item, index),
+      components: item => convertComponents(item, context),
       info: convertInfo,
       jsonSchemaDialect: DROP,
-      paths: item => convertPaths(item, index),
-      security: item => convertSecurity(item, index),
+      paths: item => convertPaths(item, context),
+      security: item => convertSecurity(item, context),
       webhooks: DROP,
     },
     (out) => {

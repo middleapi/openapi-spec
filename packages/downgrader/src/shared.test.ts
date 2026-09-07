@@ -9,7 +9,7 @@ import {
   mapArray,
   mapRecord,
   operationFields,
-  setKey,
+  setOwn,
 } from './shared'
 
 function identity<T>(value: T): T {
@@ -205,15 +205,36 @@ describe('convertRecord', () => {
     expect('polluted' in {}).toBe(false)
   })
 
-  it('falls back to a cycle-preserving clone when re-entered for the same object', () => {
+  it('points a cyclic reference at the converted ancestor when re-entered for the same object', () => {
     const node: Record<string, unknown> = { name: 'root' }
     node.self = node
     const result = convertNode(node) as Record<string, unknown>
     expect(result.name).toBe('converted')
-    const inner = result.self as Record<string, unknown>
-    expect(inner).not.toBe(node)
-    expect(inner.name).toBe('root')
-    expect(inner.self).toBe(inner)
+    expect(result.self).toBe(result)
+    expect(node.self).toBe(node)
+  })
+
+  it('converts a cycle that closes several levels down', () => {
+    const grandchild: Record<string, unknown> = { name: 'grandchild' }
+    const child: Record<string, unknown> = { name: 'child', self: grandchild }
+    const root: Record<string, unknown> = { name: 'root', self: child }
+    grandchild.self = child
+    const result = convertNode(root) as Record<string, unknown>
+    const convertedChild = result.self as Record<string, unknown>
+    const convertedGrandchild = convertedChild.self as Record<string, unknown>
+    expect(convertedChild.name).toBe('converted')
+    expect(convertedGrandchild.name).toBe('converted')
+    expect(convertedGrandchild.self).toBe(convertedChild)
+    expect(child.self).toBe(grandchild)
+  })
+
+  it('releases the cycle guard once a conversion finishes', () => {
+    const node: Record<string, unknown> = { name: 'root' }
+    node.self = node
+    const first = convertNode(node) as Record<string, unknown>
+    const second = convertNode(node) as Record<string, unknown>
+    expect(second).not.toBe(first)
+    expect(second.self).toBe(second)
   })
 
   it('converts shared acyclic references at every occurrence', () => {
@@ -343,10 +364,10 @@ describe('getRef', () => {
   })
 })
 
-describe('setKey', () => {
+describe('setOwn', () => {
   it('defines an enumerable, writable, configurable own property', () => {
     const target: Record<string, unknown> = {}
-    setKey(target, 'name', 'value')
+    setOwn(target, 'name', 'value')
     expect(Object.getOwnPropertyDescriptor(target, 'name')).toEqual({
       configurable: true,
       enumerable: true,
@@ -355,9 +376,58 @@ describe('setKey', () => {
     })
   })
 
+  it('shadows Object.prototype members with own data properties', () => {
+    const target: Record<string, unknown> = {}
+    setOwn(target, 'constructor', 1)
+    setOwn(target, 'hasOwnProperty', 2)
+    expect(Object.getOwnPropertyDescriptor(target, 'constructor')?.value).toBe(1)
+    expect(Object.getOwnPropertyDescriptor(target, 'hasOwnProperty')?.value).toBe(2)
+    expect(Object.getPrototypeOf(target)).toBe(Object.prototype)
+  })
+
+  it('defines own properties for keys an accessor or read-only member on the prototype chain would intercept', () => {
+    let setterCalls = 0
+    // eslint-disable-next-line no-extend-native
+    Object.defineProperty(Object.prototype, 'trapped', {
+      configurable: true,
+      get: () => 'inherited',
+      set: () => {
+        setterCalls += 1
+      },
+    })
+    // eslint-disable-next-line no-extend-native
+    Object.defineProperty(Object.prototype, 'locked', {
+      configurable: true,
+      value: 'inherited',
+      writable: false,
+    })
+    try {
+      const target: Record<string, unknown> = {}
+      setOwn(target, 'trapped', 1)
+      setOwn(target, 'locked', 2)
+      expect(setterCalls).toBe(0)
+      expect(Object.getOwnPropertyDescriptor(target, 'trapped')?.value).toBe(1)
+      expect(Object.getOwnPropertyDescriptor(target, 'locked')?.value).toBe(2)
+      expect(deepClone({ locked: 3, trapped: 4 })).toEqual({ locked: 3, trapped: 4 })
+      expect(convertRecord({ locked: 5, trapped: 6 }, {})).toEqual({ locked: 5, trapped: 6 })
+      expect(mapRecord({ locked: 7, trapped: 8 }, identity)).toEqual({ locked: 7, trapped: 8 })
+    }
+    finally {
+      delete (Object.prototype as Record<string, unknown>).trapped
+      delete (Object.prototype as Record<string, unknown>).locked
+    }
+  })
+
+  it('redefines a key already present on the target', () => {
+    const target: Record<string, unknown> = {}
+    setOwn(target, 'name', 'first')
+    setOwn(target, 'name', 'second')
+    expect(target).toEqual({ name: 'second' })
+  })
+
   it('sets a __proto__ key as a plain own property without prototype pollution', () => {
     const target: Record<string, unknown> = {}
-    setKey(target, '__proto__', { polluted: true })
+    setOwn(target, '__proto__', { polluted: true })
     const descriptor = Object.getOwnPropertyDescriptor(target, '__proto__')
     expect(descriptor?.value).toEqual({ polluted: true })
     expect(descriptor?.enumerable).toBe(true)
