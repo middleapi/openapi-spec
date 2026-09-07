@@ -1,18 +1,3 @@
-/**
- * TypeScript types for the OpenAPI Specification v3.2, authored against
- * release 3.2.0.
- *
- * Types that are structurally identical to OpenAPI 3.1 (including everything
- * they reference) are re-exported from `./v3.1`; every other type is
- * redefined here. Highlights of 3.2: the `$self` document URI, tag hierarchy
- * (`parent`/`kind`), the QUERY HTTP method and `additionalOperations`, the
- * `querystring` parameter location, streaming media types (`itemSchema`,
- * `itemEncoding`, `prefixEncoding`), reusable media types in components, the
- * OAuth2 Device Authorization flow, and the XML `nodeType` model.
- *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html}
- */
-
 import type {
   AuthorizationCodeOAuthFlowObject,
   ClientCredentialsOAuthFlowObject,
@@ -1133,8 +1118,6 @@ export interface SchemaObjectFields<T = unknown> {
    */
   [keyword: string]: unknown
 
-  // JSON Schema Core vocabulary
-
   /**
    * The URI of the dialect (meta-schema) this schema conforms to. MAY be
    * present in any schema resource root, and if present MUST be used to
@@ -1188,8 +1171,6 @@ export interface SchemaObjectFields<T = unknown> {
    * A comment for schema maintainers, carrying no validation semantics.
    */
   $comment?: string
-
-  // JSON Schema Applicator vocabulary
 
   /**
    * An instance is valid against this keyword if it is valid against all
@@ -1267,8 +1248,6 @@ export interface SchemaObjectFields<T = unknown> {
    */
   propertyNames?: SchemaObject
 
-  // JSON Schema Unevaluated vocabulary
-
   /**
    * A subschema applied to array items not successfully evaluated by any
    * `prefixItems`, `items`, or `contains` in this schema or its subschemas.
@@ -1280,8 +1259,6 @@ export interface SchemaObjectFields<T = unknown> {
    * schema or its subschemas.
    */
   unevaluatedProperties?: SchemaObject
-
-  // JSON Schema Validation vocabulary
 
   /**
    * The data type of the schema: a string or an array of unique strings.
@@ -1396,8 +1373,6 @@ export interface SchemaObjectFields<T = unknown> {
    */
   dependentRequired?: Record<string, string[]>
 
-  // JSON Schema Meta-Data vocabulary
-
   /**
    * A short title for the schema.
    */
@@ -1443,8 +1418,6 @@ export interface SchemaObjectFields<T = unknown> {
    */
   examples?: T[]
 
-  // JSON Schema Format-Annotation vocabulary
-
   /**
    * The format of the data type. While relying on JSON Schema's defined
    * formats, the OAS offers a few additional predefined formats: `"int32"`,
@@ -1455,8 +1428,6 @@ export interface SchemaObjectFields<T = unknown> {
    * format registered in the OpenAPI Format Registry is strictly OPTIONAL.
    */
   format?: string
-
-  // JSON Schema Content vocabulary
 
   /**
    * The encoding (`base64`, `base64url`, or another encoding) used to
@@ -1480,8 +1451,6 @@ export interface SchemaObjectFields<T = unknown> {
    * annotation rather than validated directly.
    */
   contentSchema?: SchemaObject
-
-  // OAS base vocabulary
 
   /**
    * Provides a hint about which of a set of schemas a payload is expected to

@@ -77,18 +77,8 @@ import { doc as webhookExampleV32 } from '../../types/tests/schema-tests-3.2/web
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '../src/index'
 import { expectValidAs } from './helpers'
 
-/**
- * Excluded 3.1 fixtures:
- *
- * - `security-scheme-object-examples`: contains a `$ref` to an external URL,
- *   which the validator cannot resolve ("only internal refs are supported") —
- *   a validator limitation, not a conversion defect.
- * - `style-defaults`: it carries `x-comment` inside an Encoding Object,
- *   which the converter rightly preserves but the official 3.0 schema
- *   rejects — its Encoding definition is `additionalProperties: false`
- *   with no `^x-` carve-out, an upstream schema strictness (the 3.0 prose
- *   declares the Encoding Object extensible).
- */
+// Excluded: security-scheme-object-examples (external $ref the validator cannot resolve)
+// and style-defaults (x-comment in an Encoding Object, rejected by the official 3.0 schema).
 const corpus31: readonly (readonly [
   name: string,
   doc: OpenAPIV3_1.OpenAPIObject,
@@ -137,13 +127,7 @@ const corpus31: readonly (readonly [
   ['webhook-example', webhookExampleV31],
 ]
 
-/**
- * Excluded 3.2 fixtures:
- *
- * - `security-scheme-object-examples`: contains a `$ref` to an external URL,
- *   which the validator cannot resolve ("only internal refs are supported") —
- *   a validator limitation, not a conversion defect.
- */
+// Excluded: security-scheme-object-examples (external $ref the validator cannot resolve).
 const corpus32: readonly (readonly [
   name: string,
   doc: OpenAPIV3_2.OpenAPIObject,

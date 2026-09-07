@@ -1,14 +1,4 @@
 /**
- * TypeScript types for the OpenAPI Specification v3.0, authored against the
- * latest patch release 3.0.4.
- *
- * Type names follow the specification's section names, and every field
- * carries its specification description as JSDoc.
- *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html}
- */
-
-/**
  * While the OpenAPI Specification tries to accommodate most use cases,
  * additional data can be added to extend the specification at certain points.
  * The extension fields are implemented as patterned fields that are always

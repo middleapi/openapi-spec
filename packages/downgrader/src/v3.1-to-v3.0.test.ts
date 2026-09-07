@@ -5,7 +5,6 @@ import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from './v3.1-to-v3.0'
 
 const info = { title: 't', version: '1' }
 
-/** The smallest valid 3.1 document and its 3.0 counterpart. */
 const base = { info, openapi: '3.1.0', paths: {} }
 const converted = { info, openapi: '3.0.4', paths: {} }
 
@@ -110,8 +109,6 @@ describe('downgradeSpecV31ToV30', () => {
         convertSpec({
           paths: {
             '/a': { get: { summary: 's' } },
-            // Path-item-shaped on purpose: cloning must NOT convert it, so
-            // no responses may be synthesized inside.
             'x-note': { get: { summary: 's' } },
           },
         }).paths,
