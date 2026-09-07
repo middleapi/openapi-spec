@@ -1,4 +1,12 @@
-import type { OpenAPIObject, PathItemObject, SchemaObject } from './v3.1'
+import type {
+  ExampleObject,
+  MediaTypeObject,
+  OpenAPIObject,
+  ParameterObject,
+  PathItemObject,
+  ResponseObject,
+  SchemaObject,
+} from './v3.1'
 
 export const webhooksOnly = {
   components: {
@@ -172,3 +180,134 @@ export const typedSchemaMismatch = {
   examples: [1],
   type: 'string',
 } satisfies SchemaObject<string>
+
+export const noResponseSummary = {
+  description: 'OK',
+  // @ts-expect-error: The Response Object's `summary` field was added in OpenAPI 3.2.
+  summary: 'Success',
+} satisfies ResponseObject
+
+export const noQuerystringLocation = {
+  content: {
+    'application/x-www-form-urlencoded': { schema: { type: 'object' } },
+  },
+  // @ts-expect-error: The `querystring` parameter location was added in OpenAPI 3.2.
+  in: 'querystring',
+  name: 'filter',
+} satisfies ParameterObject
+
+export const noCookieStyle = {
+  in: 'cookie',
+  name: 'session',
+  schema: { type: 'string' },
+  // @ts-expect-error: The `cookie` parameter style was added in OpenAPI 3.2.
+  style: 'cookie',
+} satisfies ParameterObject
+
+export const noSelfUri = {
+  // @ts-expect-error: The `$self` field was added in OpenAPI 3.2.
+  $self: 'https://example.com/openapi',
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+  paths: {},
+} satisfies OpenAPIObject
+
+export const noMediaTypesComponent = {
+  components: {
+    // @ts-expect-error: The Components Object's `mediaTypes` field was added in OpenAPI 3.2.
+    mediaTypes: {},
+  },
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+} satisfies OpenAPIObject
+
+export const noServerName = {
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+  paths: {},
+  servers: [
+    {
+      // @ts-expect-error: The Server Object's `name` field was added in OpenAPI 3.2.
+      name: 'production',
+      url: 'https://api.example.com',
+    },
+  ],
+} satisfies OpenAPIObject
+
+export const noTagHierarchy = {
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+  paths: {},
+  tags: [
+    {
+      // @ts-expect-error: The Tag Object's `kind` field was added in OpenAPI 3.2.
+      kind: 'nav',
+      name: 'animals',
+    },
+    {
+      name: 'pets',
+      // @ts-expect-error: The Tag Object's `parent` field was added in OpenAPI 3.2.
+      parent: 'animals',
+    },
+  ],
+} satisfies OpenAPIObject
+
+export const noItemSchema = {
+  // @ts-expect-error: The Media Type Object's `itemSchema` field was added in OpenAPI 3.2.
+  itemSchema: { type: 'object' },
+} satisfies MediaTypeObject
+
+export const noDataValue = {
+  // @ts-expect-error: The Example Object's `dataValue` field was added in OpenAPI 3.2.
+  dataValue: { id: 1 },
+} satisfies ExampleObject
+
+export const noDefaultMapping = {
+  discriminator: {
+    // @ts-expect-error: The Discriminator Object's `defaultMapping` field was added in OpenAPI 3.2.
+    defaultMapping: 'Cat',
+    propertyName: 'kind',
+  },
+  oneOf: [{ type: 'object' }],
+} satisfies SchemaObject
+
+export const noXmlNodeType = {
+  type: 'string',
+  // @ts-expect-error: The XML Object's `nodeType` field was added in OpenAPI 3.2.
+  xml: { nodeType: 'attribute' },
+} satisfies SchemaObject
+
+export const noDeprecatedSecurityScheme = {
+  components: {
+    securitySchemes: {
+      basic: {
+        // @ts-expect-error: The Security Scheme Object's `deprecated` field was added in OpenAPI 3.2.
+        deprecated: true,
+        scheme: 'basic',
+        type: 'http',
+      },
+    },
+  },
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+} satisfies OpenAPIObject
+
+export const noDeviceAuthorizationFlow = {
+  components: {
+    securitySchemes: {
+      oauth: {
+        flows: {
+          // @ts-expect-error: The OAuth Device Authorization flow was added in OpenAPI 3.2.
+          deviceAuthorization: {
+            deviceAuthorizationUrl: 'https://auth.example.com/device',
+            scopes: {},
+            tokenUrl: 'https://auth.example.com/token',
+          },
+        },
+        type: 'oauth2',
+      },
+    },
+  },
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.1.2',
+} satisfies OpenAPIObject

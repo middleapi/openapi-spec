@@ -1,4 +1,11 @@
-import type { MediaTypeObject, OpenAPIObject, SchemaObject } from './v3.2'
+import type {
+  HeaderObject,
+  MediaTypeObject,
+  OpenAPIObject,
+  RequestBodyObject,
+  ResponseObject,
+  SchemaObject,
+} from './v3.2'
 
 export const streamingApi = {
   $self: 'https://example.com/openapi',
@@ -243,3 +250,28 @@ export const typedSchemaMismatch = {
   const: 1,
   type: 'string',
 } satisfies SchemaObject<string>
+
+export const referencedRequestContent = {
+  content: {
+    'text/event-stream': { $ref: '#/components/mediaTypes/EventStream' },
+  },
+} satisfies RequestBodyObject
+
+export const referencedResponseContent = {
+  content: {
+    'text/event-stream': { $ref: '#/components/mediaTypes/EventStream' },
+  },
+  headers: {
+    'X-Trace-Id': {
+      content: {
+        'text/plain': { $ref: '#/components/mediaTypes/TraceId' },
+      },
+    },
+  },
+} satisfies ResponseObject
+
+export const referencedHeaderContent = {
+  content: {
+    'text/plain': { $ref: '#/components/mediaTypes/TraceId' },
+  },
+} satisfies HeaderObject

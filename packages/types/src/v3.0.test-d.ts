@@ -1,4 +1,5 @@
 import type {
+  HeaderObject,
   OpenAPIObject,
   ReferenceObject,
   ResponsesObject,
@@ -427,3 +428,63 @@ export const typedSchemaMismatch = {
   default: 1,
   type: 'string',
 } satisfies SchemaObject<string>
+
+export const noInfoSummary = {
+  info: {
+    // @ts-expect-error: The Info Object's `summary` field was added in OpenAPI 3.1.
+    summary: 'A short summary',
+    title: 'API',
+    version: '1.0.0',
+  },
+  openapi: '3.0.4',
+  paths: {},
+} satisfies OpenAPIObject
+
+export const noLicenseIdentifier = {
+  info: {
+    license: {
+      // @ts-expect-error: The License Object's `identifier` field was added in OpenAPI 3.1.
+      identifier: 'MIT',
+      name: 'MIT',
+    },
+    title: 'API',
+    version: '1.0.0',
+  },
+  openapi: '3.0.4',
+  paths: {},
+} satisfies OpenAPIObject
+
+export const noJsonSchemaDialect = {
+  info: { title: 'API', version: '1.0.0' },
+  // @ts-expect-error: The `jsonSchemaDialect` field was added in OpenAPI 3.1.
+  jsonSchemaDialect: 'https://spec.openapis.org/oas/3.1/dialect/base',
+  openapi: '3.0.4',
+  paths: {},
+} satisfies OpenAPIObject
+
+export const noPathItemsComponent = {
+  components: {
+    // @ts-expect-error: The Components Object's `pathItems` field was added in OpenAPI 3.1.
+    pathItems: {},
+  },
+  info: { title: 'API', version: '1.0.0' },
+  openapi: '3.0.4',
+  paths: {},
+} satisfies OpenAPIObject
+
+export const noNullType = {
+  // @ts-expect-error: `"null"` is not a valid `type` in OpenAPI 3.0; use `nullable` instead.
+  type: 'null',
+} satisfies SchemaObject
+
+export const noConstKeyword = {
+  // @ts-expect-error: The JSON Schema `const` keyword is not part of the OpenAPI 3.0 Schema Object.
+  const: 'fixed',
+  type: 'string',
+} satisfies SchemaObject
+
+export const headerStyleMustBeSimple = {
+  schema: { type: 'string' },
+  // @ts-expect-error: Header Objects only allow the `simple` style.
+  style: 'form',
+} satisfies HeaderObject
