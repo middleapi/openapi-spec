@@ -385,39 +385,6 @@ describe('setOwn', () => {
     expect(Object.getPrototypeOf(target)).toBe(Object.prototype)
   })
 
-  it('defines own properties for keys an accessor or read-only member on the prototype chain would intercept', () => {
-    let setterCalls = 0
-    // eslint-disable-next-line no-extend-native
-    Object.defineProperty(Object.prototype, 'trapped', {
-      configurable: true,
-      get: () => 'inherited',
-      set: () => {
-        setterCalls += 1
-      },
-    })
-    // eslint-disable-next-line no-extend-native
-    Object.defineProperty(Object.prototype, 'locked', {
-      configurable: true,
-      value: 'inherited',
-      writable: false,
-    })
-    try {
-      const target: Record<string, unknown> = {}
-      setOwn(target, 'trapped', 1)
-      setOwn(target, 'locked', 2)
-      expect(setterCalls).toBe(0)
-      expect(Object.getOwnPropertyDescriptor(target, 'trapped')?.value).toBe(1)
-      expect(Object.getOwnPropertyDescriptor(target, 'locked')?.value).toBe(2)
-      expect(deepClone({ locked: 3, trapped: 4 })).toEqual({ locked: 3, trapped: 4 })
-      expect(convertRecord({ locked: 5, trapped: 6 }, {})).toEqual({ locked: 5, trapped: 6 })
-      expect(mapRecord({ locked: 7, trapped: 8 }, identity)).toEqual({ locked: 7, trapped: 8 })
-    }
-    finally {
-      delete (Object.prototype as Record<string, unknown>).trapped
-      delete (Object.prototype as Record<string, unknown>).locked
-    }
-  })
-
   it('redefines a key already present on the target', () => {
     const target: Record<string, unknown> = {}
     setOwn(target, 'name', 'first')

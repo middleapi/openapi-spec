@@ -53,22 +53,22 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Sets a key as an own data property. Keys the prototype chain already knows
- * (an accessor such as `__proto__`, or a read-only member once the
- * intrinsics are frozen) are defined instead of assigned.
+ * Sets a key as an own data property. `__proto__` is defined rather than
+ * assigned, so it becomes a plain property instead of replacing the prototype.
  */
 export function setOwn(object: object, key: PropertyKey, value: unknown): void {
-  if (Object.hasOwn(object, key) || !(key in object)) {
+  if (key === '__proto__') {
+    Object.defineProperty(object, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    })
+  }
+  else {
     // SAFETY: only widens the index signature.
     (object as Record<PropertyKey, unknown>)[key] = value
-    return
   }
-  Object.defineProperty(object, key, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  })
 }
 
 function cloneValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
