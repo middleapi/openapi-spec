@@ -1,7 +1,7 @@
 {
   "name": "@openapi-spec/downgrader",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Downgrade OpenAPI specifications one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0, for whole documents or individual schemas",
   "license": "MIT",
   "funding": [
