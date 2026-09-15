@@ -7,6 +7,7 @@ export default antfu({
     'pnpm/json-enforce-catalog': 'off',
     'pnpm/yaml-enforce-settings': 'off',
     'ts/method-signature-style': 'off',
+    'guard-for-in': 'error',
   },
 }, {
   files: ['**/*.test.ts', '**/*.test-d.ts'],
