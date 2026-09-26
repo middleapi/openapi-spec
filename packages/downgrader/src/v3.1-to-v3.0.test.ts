@@ -1,4 +1,4 @@
-import type { OpenAPIV3_1 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import { dig } from '../tests/helpers'
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from './v3.1-to-v3.0'
