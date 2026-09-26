@@ -1,4 +1,5 @@
-import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { doc as exampleQueryV32 } from '../../types/tests/examples/3-2-query-example'
 import { doc as exampleTagsV32 } from '../../types/tests/examples/3-2-tags-example'
