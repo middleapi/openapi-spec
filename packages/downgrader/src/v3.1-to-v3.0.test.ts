@@ -1402,5 +1402,15 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(dig(result, 'properties', 'children', 'items')).toBe(result)
       expect(node.type).toEqual(['object', 'null'])
     })
+
+    it('points the array variant of a cyclic multi-type schema at the converted schema', () => {
+      const node: Record<string, unknown> = { type: ['array', 'object'] }
+      node.items = node
+      const result = convertSchema(node) as Record<string, unknown>
+      expect(result).not.toHaveProperty('items')
+      expect(dig(result, 'anyOf', '0', 'items')).toBe(result)
+      expect(dig(result, 'anyOf', '1')).toEqual({ type: 'object' })
+      expect(node.items).toBe(node)
+    })
   })
 })
