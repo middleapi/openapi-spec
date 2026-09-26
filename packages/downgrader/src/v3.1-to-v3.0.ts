@@ -58,10 +58,14 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
     }
     return
   }
+  if (out.anyOf !== undefined && out.allOf !== undefined && !Array.isArray(out.allOf)) {
+    return
+  }
   const variants = rest.map((item) => {
     const variant: Record<string, unknown> = { type: item }
     if (item === 'array') {
-      variant.items = out.items === undefined ? {} : deepClone(out.items)
+      variant.items = out.items === undefined ? {} : out.items
+      delete out.items
     }
     if (nullable) {
       variant.nullable = true
@@ -71,7 +75,7 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
   if (out.anyOf === undefined) {
     out.anyOf = variants
   }
-  else if (out.allOf === undefined || Array.isArray(out.allOf)) {
+  else {
     out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
   }
 }

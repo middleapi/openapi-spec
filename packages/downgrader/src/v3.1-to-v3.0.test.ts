@@ -893,13 +893,20 @@ describe('downgradeSchemaV31ToV30', () => {
         { anyOf: [{ items: {}, type: 'array' }, { type: 'string' }] },
       ],
       [
-        'copies existing items into the synthesized array variant',
+        'moves existing items into the synthesized array variant',
         { items: { type: 'integer' }, type: ['array', 'string', 'null'] },
         {
           anyOf: [
             { items: { type: 'integer' }, nullable: true, type: 'array' },
             { nullable: true, type: 'string' },
           ],
+        },
+      ],
+      [
+        'keeps items in place when the type union has no array variant',
+        { items: { type: 'integer' }, type: ['object', 'string'] },
+        {
+          anyOf: [{ type: 'object' }, { type: 'string' }],
           items: { type: 'integer' },
         },
       ],
@@ -931,9 +938,10 @@ describe('downgradeSchemaV31ToV30', () => {
         {
           allOf: 'junk',
           anyOf: [{ type: 'string' }],
-          type: ['integer', 'string'],
+          items: { type: 'integer' },
+          type: ['array', 'string'],
         },
-        { allOf: 'junk', anyOf: [{ type: 'string' }] },
+        { allOf: 'junk', anyOf: [{ type: 'string' }], items: { type: 'integer' } },
       ],
       [
         'deduplicates type array entries',
@@ -1346,6 +1354,16 @@ describe('downgradeSchemaV31ToV30', () => {
         deep = { items: deep, type: 'array' }
       }
       expect(() => downgradeSchemaV31ToV30(deep)).not.toThrow()
+    })
+
+    it('keeps nested multi-type arrays linear instead of doubling per level', () => {
+      let input: OpenAPIV3_1.SchemaObject = { type: 'string' }
+      let expected: unknown = { type: 'string' }
+      for (let index = 0; index < 10; index += 1) {
+        input = { items: input, type: ['array', 'object'] }
+        expected = { anyOf: [{ items: expected, type: 'array' }, { type: 'object' }] }
+      }
+      expect(convertSchema(input)).toEqual(expected)
     })
 
     it('converts a dereferenced cyclic schema, pointing the cycle at the converted ancestor', () => {
