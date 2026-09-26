@@ -1,4 +1,4 @@
-import type { OpenAPIV3_1 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import { dig } from '../tests/helpers'
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from './v3.1-to-v3.0'
@@ -838,39 +838,44 @@ describe('downgradeSchemaV31ToV30', () => {
         { nullable: true, type: 'string' },
       ],
       [
-        'converts a null-only type array into nullable plus a null enum',
+        'converts a null-only type array into a null enum',
         { type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
-        'converts a null-only type string into nullable plus a null enum',
+        'converts a null-only type string into a null enum',
         { type: 'null' },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'intersects an existing enum with a null-only type',
         { enum: ['a', null], type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'matches nothing when the enum of a null-only type excludes null',
         { enum: ['a'], type: ['null'] },
-        { enum: ['a'], not: {}, nullable: true },
+        { enum: ['a'], not: {} },
       ],
       [
         'clones a malformed enum of a null-only type through',
         { enum: 'junk', type: ['null'] },
-        { enum: 'junk', nullable: true },
+        { enum: 'junk' },
       ],
       [
         'keeps a null const as the enum of a null-only type',
         { const: null, type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'matches nothing when a non-null const contradicts a null-only type',
         { const: 7, type: ['null'] },
-        { enum: [7], not: {}, nullable: true },
+        { enum: [7], not: {} },
+      ],
+      [
+        'converts a null-only anyOf branch into a null enum',
+        { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        { anyOf: [{ type: 'string' }, { enum: [null] }] },
       ],
       [
         'converts multiple non-null types into anyOf variants',
@@ -991,9 +996,25 @@ describe('downgradeSchemaV31ToV30', () => {
       ['converts a false const', { const: false }, { enum: [false] }],
       ['converts an empty-string const', { const: '' }, { enum: [''] }],
       [
-        'converts a null const and marks the schema nullable',
+        'converts a null const into a null enum',
         { const: null },
-        { enum: [null], nullable: true },
+        { enum: [null] },
+      ],
+      [
+        'keeps the nullable variants of a multi-type null const',
+        { const: null, type: ['string', 'integer', 'null'] },
+        {
+          anyOf: [
+            { nullable: true, type: 'string' },
+            { nullable: true, type: 'integer' },
+          ],
+          enum: [null],
+        },
+      ],
+      [
+        'matches nothing when a null const contradicts a non-null type',
+        { const: null, type: 'string' },
+        { enum: [null], type: 'string' },
       ],
       [
         'replaces an existing enum with the const value',

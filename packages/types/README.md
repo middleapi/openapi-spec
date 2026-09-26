@@ -31,10 +31,10 @@ Each version module targets the latest patch release of its minor line:
 ## Usage
 
 ```ts
-// Every version as a namespace
-import type { OpenAPIV3_0, OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
+// A whole version as a namespace, handy when mixing versions in one file
+import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 
-// Or one version directly
+// Or the types of one version directly
 import type { OpenAPIObject, SchemaObject } from '@openapi-spec/types/v3.1'
 
 const doc: OpenAPIObject = {
