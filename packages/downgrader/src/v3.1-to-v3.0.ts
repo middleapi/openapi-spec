@@ -39,7 +39,6 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
     if (!nullable) {
       return
     }
-    out.nullable = true
     if ('const' in schema) {
       if (schema.const !== null) {
         out.not = {}
@@ -96,12 +95,8 @@ function convertType(schema: Record<string, unknown>, out: Record<string, unknow
 }
 
 function convertConst(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (!('const' in schema)) {
-    return
-  }
-  out.enum = [deepClone(schema.const)]
-  if (schema.const === null) {
-    out.nullable = true
+  if ('const' in schema) {
+    out.enum = [deepClone(schema.const)]
   }
 }
 
