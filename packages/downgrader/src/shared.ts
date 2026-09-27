@@ -44,6 +44,8 @@ export function setOwn(object: object, key: PropertyKey, value: unknown): void {
 type Finish = (out: Record<string, unknown>, source: Record<string, unknown>) => unknown
 
 interface Conversion {
+  cutAt: number
+  depth: number
   done: boolean
   fields: FieldTable
   finish: Finish | undefined
@@ -52,6 +54,8 @@ interface Conversion {
 
 const conversions = new Map<object, Conversion>()
 const clones = new Map<object, unknown>()
+const active: Conversion[] = []
+let depth = 0
 
 function cloneValue(value: unknown, seen: Map<object, unknown>): unknown {
   if (!(Array.isArray(value) || isRecord(value))) {
@@ -89,13 +93,25 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
     return deepClone(value)
   }
   const known = conversions.get(value)
-  if (known !== undefined && (!known.done || (known.fields === fields && known.finish === finish))) {
+  if (known !== undefined && !known.done) {
+    if (known.depth === depth) {
+      return known.result
+    }
+    for (const conversion of active) {
+      if (conversion.depth > known.depth) {
+        conversion.cutAt = Math.max(conversion.cutAt, known.depth)
+      }
+    }
+    return DROP
+  }
+  if (known !== undefined && known.fields === fields && known.finish === finish && depth > known.cutAt) {
     return known.result
   }
   const out: Record<string, unknown> = {}
-  const conversion: Conversion = { done: false, fields, finish, result: out }
+  const conversion: Conversion = { cutAt: -1, depth, done: false, fields, finish, result: out }
   const outermost = conversions.size === 0
   conversions.set(value, conversion)
+  active.push(conversion)
   try {
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
@@ -112,10 +128,21 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
     return conversion.result
   }
   finally {
+    active.pop()
     if (outermost) {
       conversions.clear()
       clones.clear()
     }
+  }
+}
+
+export function convertInlined<T>(convert: () => T): T {
+  depth += 1
+  try {
+    return convert()
+  }
+  finally {
+    depth -= 1
   }
 }
 

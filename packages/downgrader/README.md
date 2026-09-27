@@ -23,7 +23,7 @@
 Every converter follows the same contract:
 
 - **Never throws.** Malformed parts are deep-copied through unchanged instead of failing the whole conversion. Cyclic object graphs, such as the output of a `$ref` dereferencer, convert with their cycles preserved. Only pathologically deep nesting (thousands of levels) can still exhaust the call stack.
-- **Never mutates.** The input is left untouched and the result is a new object. Objects shared within the input, such as a dereferenced schema used in several places, may stay shared within the result.
+- **Never mutates.** The input is left untouched and the result is a new object. Objects shared within the input, such as a dereferenced schema used in several places, may stay shared within the result, and so may a target inlined at several references.
 - **Preserves extensions, never invents them.** `x-` keys and unknown keys survive. Constructs the target version cannot express are converted where an equivalent exists and removed otherwise.
 
 ## Usage
@@ -93,21 +93,25 @@ Known limitations: security requirements keyed by URI, `$self`-relative referenc
 
 Converted:
 
-| 3.1 construct                                              | 3.0 result                                                             |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                       |
-| missing `paths`                                            | `{}` (required in 3.0)                                                 |
-| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0) |
-| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                    |
-| Reference Object `summary` / `description`                 | removed (3.0 references carry no overrides)                            |
-| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                        |
+| 3.1 construct                                              | 3.0 result                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                                                             |
+| missing `paths`                                            | `{}` (required in 3.0)                                                                                       |
+| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0)                                       |
+| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                                                          |
+| Reference Object `summary` / `description`                 | applied to an inlined target whose type has the field, removed otherwise (3.0 references carry no overrides) |
+| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                                                              |
 
 Removed, with no 3.0 equivalent:
 
-- `webhooks`
+- `webhooks` and `components.pathItems`, after same-document references into them are resolved:
+  - Reference Objects, Path Item `$ref`s, and Schema `$ref`s are replaced by their target in converted form, following reference chains. A chain that reaches a `$ref` outside them ends at that `$ref`, and a Path Item's own fields win over inlined ones.
+  - A target referenced from several places is converted once and shared. Anything reached again while it is still being converted, through a reference or an object shared within the input, is cut: a Schema Object becomes `{}`, a Path Item reference keeps only its own fields, and anything else is removed. A recursive schema keeps one level, and where a cycle is cut can depend on document order.
+  - A Link `operationRef` into them becomes the target operation's `operationId` when an operation with that `operationId` remains, such as one inlined into `paths`. Otherwise the link is removed, together with Link references that lead to it.
+  - `discriminator.mapping` entries pointing into them are removed.
+  - A reference whose target is missing, is not an object (a boolean Schema target converts as usual), or forms a reference loop is left as written, and so is a Path Item `$ref` with a hop that is not a `webhooks` or `components.pathItems` entry or a callback expression.
 - `jsonSchemaDialect`
 - `info.summary` and `license.identifier`
-- `components.pathItems`. Path Item `$ref`s to it, in `paths` and in callbacks, are inlined first, following reference chains, with the referencing Path Item's own fields winning over inlined ones. A reference that cannot be inlined (unknown or cyclic target) is left as is and will dangle.
 - `mutualTLS` security schemes, reference aliases included. Their names are stripped from every security requirement, a requirement left empty is removed, and a `security` list left empty is removed entirely, since an explicit empty list means "no security required" and would make the operation public.
 
 Schema Objects:
@@ -133,7 +137,8 @@ Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamic
 
 Known limitations:
 
-- `$ref`s into dropped keywords (`#/…/$defs/…` pointers, `$anchor` targets, `$id`-based bases) will dangle. Hoist reusable subschemas into `components.schemas` before downgrading.
+- `$ref`s into dropped keywords outside `webhooks` and `components.pathItems` (`#/…/$defs/…` pointers, `$anchor` targets, `$id`-based bases) will dangle. Hoist reusable subschemas into `components.schemas` before downgrading.
+- A pointer into `webhooks` or `components.pathItems` that passes through another `$ref` is not followed: a `$ref` keeps it and dangles, while a Link `operationRef` or `discriminator.mapping` entry of that shape is removed. A Link naming a removed operation only by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s, which 3.0 requires to be unique.
 - Non-standard schema keywords are preserved per the extension contract, even though the official 3.0 schema forbids unknown Schema Object fields.
 - Dropping keywords inside `not`, where loosening the operand tightens the whole, or inside `oneOf` branches, where loosening one branch can break exclusivity, can change what validates.
 
