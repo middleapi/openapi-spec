@@ -47,6 +47,9 @@ function convertRefOr(value: unknown, context: Context, convert: (item: unknown,
   if (ref === undefined) {
     return convert(value, context)
   }
+  if (resolveRefChain(value, context) === DROP) {
+    return DROP
+  }
   return context.dangles(ref) ? inlineRef(ref, context, item => convertRefOr(item, context, convert)) : deepClone(value)
 }
 
@@ -156,7 +159,7 @@ function resolveRefChain(value: unknown, context: Context): unknown {
   let ref = getRef(target)
   while (ref !== undefined) {
     if (seen.has(ref)) {
-      return undefined
+      return DROP
     }
     seen.add(ref)
     target = context.resolve(ref)
@@ -222,10 +225,15 @@ function convertMediaType(value: unknown, context: Context): unknown {
   )
 }
 
+function resolveMediaType(value: unknown, context: Context): unknown {
+  const target = resolveRefChain(value, context)
+  return target === undefined ? DROP : target
+}
+
 function convertContentMap(value: unknown, context: Context): unknown {
   return mapRecord(value, (item) => {
-    const target = resolveRefChain(item, context)
-    return target === undefined ? DROP : convertMediaType(target, context)
+    const target = resolveMediaType(item, context)
+    return target === DROP ? DROP : convertMediaType(target, context)
   })
 }
 
@@ -304,7 +312,7 @@ function losesEntireContent(value: unknown, context: Context): boolean {
     return false
   }
   const entries = Object.values(value.content)
-  return entries.length > 0 && entries.every(item => resolveRefChain(item, context) === undefined)
+  return entries.length > 0 && entries.every(item => resolveMediaType(item, context) === DROP)
 }
 
 function convertJsonSchemaDialect(value: unknown): unknown {

@@ -1472,21 +1472,22 @@ describe('downgradeSpecV32ToV31', () => {
       expect(result.paths).toEqual({ '/a': {}, '/b': {} })
     })
 
-    it('removes a Reference Object whose inlining cycles', () => {
-      expect(
-        convertSpec({
-          components: {
-            responses: {
-              Keep: { description: 'k' },
-              Loop: { $ref: '#/paths/~1a/query/responses/200' },
-            },
+    it('removes a Reference Object whose inlining cycles, together with references to it', () => {
+      const result = convertSpec({
+        components: {
+          responses: {
+            Keep: { description: 'k' },
+            Loop: { $ref: '#/paths/~1a/query/responses/200' },
           },
-          paths: {
-            '/a': { query: { responses: { 200: { $ref: '#/paths/~1b/query/responses/200' } } } },
-            '/b': { query: { responses: { 200: { $ref: '#/paths/~1a/query/responses/200' } } } },
-          },
-        }).components,
-      ).toEqual({ responses: { Keep: { description: 'k' } } })
+        },
+        paths: {
+          '/a': { query: { responses: { 200: { $ref: '#/paths/~1b/query/responses/200' } } } },
+          '/b': { query: { responses: { 200: { $ref: '#/paths/~1a/query/responses/200' } } } },
+          '/c': { get: { responses: { 200: { $ref: '#/components/responses/Loop' } } } },
+        },
+      })
+      expect(result.components).toEqual({ responses: { Keep: { description: 'k' } } })
+      expect(result.paths).toEqual({ '/a': {}, '/b': {}, '/c': { get: { responses: {} } } })
     })
 
     it('cuts a recursive schema at its first repeat by removing only the $ref keyword', () => {
@@ -1634,14 +1635,35 @@ describe('downgradeSpecV32ToV31', () => {
       ).toEqual({ headers: {}, parameters: {} })
     })
 
-    it('keeps parameter references whose alias chain cycles', () => {
-      const parameters = {
-        A: { $ref: '#/components/parameters/B' },
-        B: { $ref: '#/components/parameters/A' },
-      }
-      expect(convertSpec({ components: { parameters } }).components).toEqual({
-        parameters,
+    it('removes references whose alias chain cycles, since they can never resolve', () => {
+      expect(
+        convertSpec({
+          components: {
+            parameters: {
+              A: { $ref: '#/components/parameters/B' },
+              B: { $ref: '#/components/parameters/A' },
+            },
+          },
+        }).components,
+      ).toEqual({ parameters: {} })
+    })
+
+    it('removes a looping reference in both passes, so later parameter indices stay correct', () => {
+      const result = convertSpec({
+        components: { parameters: { P: { $ref: '#/paths/~1a/get/parameters/1' } } },
+        paths: {
+          '/a': {
+            get: {
+              parameters: [{ $ref: '#/paths/~1b/query/parameters/0' }, { in: 'query', name: 'b' }],
+              responses: {},
+            },
+          },
+          '/b': { query: { parameters: [{ $ref: '#/paths/~1c/query/parameters/0' }] } },
+          '/c': { query: { parameters: [{ $ref: '#/paths/~1b/query/parameters/0' }] } },
+        },
       })
+      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([{ in: 'query', name: 'b' }])
+      expect(result.components).toEqual({ parameters: { P: { in: 'query', name: 'b' } } })
     })
 
     it('leaves external, anchor, root, unparseable, and already dangling references untouched', () => {
