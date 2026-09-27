@@ -1256,6 +1256,18 @@ describe('downgradeSpecV32ToV31', () => {
       expect(dig(result, 'get', 'responses', '200')).toEqual({ description: 'ok' })
       expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
     })
+
+    it('copies a dereferenced schema shared across the document once', () => {
+      const pet = { properties: { name: { type: 'string' } }, type: 'object' }
+      const result = convertSpec({
+        components: { schemas: { Pet: pet } },
+        paths: { '/pets': { get: { responses: { 200: { content: { 'application/json': { schema: pet } }, description: 'ok' } } } } },
+      })
+      const schema = dig(result, 'components', 'schemas', 'Pet')
+      expect(schema).toEqual(pet)
+      expect(schema).not.toBe(pet)
+      expect(dig(result, 'paths', '/pets', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toBe(schema)
+    })
   })
 })
 
@@ -1316,6 +1328,11 @@ describe('downgradeSchemaV32ToV31', () => {
       allOf: 'junk',
       properties: 5,
     })
+  })
+
+  it('returns a fresh copy on every call', () => {
+    const schema: OpenAPIV3_2.SchemaObject = { properties: { a: { type: 'string' } }, type: 'object' }
+    expect(downgradeSchemaV32ToV31(schema)).not.toBe(downgradeSchemaV32ToV31(schema))
   })
 
   it('never mutates the input schema', () => {
