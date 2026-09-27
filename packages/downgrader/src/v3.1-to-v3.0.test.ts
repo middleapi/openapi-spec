@@ -871,6 +871,247 @@ describe('downgradeSpecV31ToV30', () => {
       expect(dig(converted, 'properties', 'self')).toBe(converted)
       expect(dig(converted, 'properties', 'hook')).toEqual({ properties: { name: { type: 'string' } }, type: 'object' })
     })
+
+    it('inlines references in operation, path item, media type, parameter, and encoding positions', () => {
+      const pointer = (path: string) => `#/webhooks/full/post/${path}`
+      const result = convertSpec({
+        paths: {
+          '/a': {
+            get: {
+              parameters: [{
+                examples: { e: { $ref: pointer('x-example') } },
+                in: 'query',
+                name: 'q',
+              }],
+              requestBody: { $ref: pointer('requestBody') },
+              responses: {
+                200: {
+                  content: {
+                    'application/json': {
+                      encoding: { f: { headers: { H: { $ref: pointer('x-header') } } } },
+                      examples: { e: { $ref: pointer('x-example') } },
+                    },
+                  },
+                  description: 'ok',
+                },
+              },
+            },
+            parameters: [{ $ref: pointer('x-parameter') }],
+          },
+        },
+        webhooks: {
+          full: {
+            post: {
+              'requestBody': { content: { 'text/plain': { schema: { const: 'x' } } } },
+              'x-example': { value: 1 },
+              'x-header': { schema: { type: ['string', 'null'] } },
+              'x-parameter': { in: 'path', name: 'id' },
+            },
+          },
+        },
+      })
+      expect(result.paths).toEqual({
+        '/a': {
+          get: {
+            parameters: [{ examples: { e: { value: 1 } }, in: 'query', name: 'q' }],
+            requestBody: { content: { 'text/plain': { schema: { enum: ['x'] } } } },
+            responses: {
+              200: {
+                content: {
+                  'application/json': {
+                    encoding: { f: { headers: { H: { schema: { nullable: true, type: 'string' } } } } },
+                    examples: { e: { value: 1 } },
+                  },
+                },
+                description: 'ok',
+              },
+            },
+          },
+          parameters: [{ in: 'path', name: 'id', required: true }],
+        },
+      })
+    })
+
+    it('cuts callbacks that reach back into an enclosing callback, keeping the output acyclic', () => {
+      const responses = { 200: { description: 'ok' } }
+      const result = convertSpec({
+        components: {
+          pathItems: {
+            Item: {
+              post: {
+                callbacks: {
+                  A: { '{$url}': { post: { callbacks: { toB: { $ref: '#/components/pathItems/Item/post/callbacks/B' } }, responses } } },
+                  B: { '{$url}': { post: { callbacks: { toA: { $ref: '#/components/pathItems/Item/post/callbacks/A' } }, responses } } },
+                },
+                responses,
+              },
+            },
+          },
+        },
+        paths: {
+          '/item': { $ref: '#/components/pathItems/Item' },
+          '/self': { $ref: '#/webhooks/w' },
+        },
+        webhooks: {
+          w: {
+            post: {
+              callbacks: { cb: { '{$url}': { post: { callbacks: { again: { $ref: '#/webhooks/w/post/callbacks/cb' } }, responses } } } },
+              responses,
+            },
+          },
+        },
+      })
+      expect(dig(result, 'paths', '/self', 'post', 'callbacks', 'cb', '{$url}', 'post', 'callbacks')).toEqual({ again: {} })
+      expect(dig(result, 'paths', '/item', 'post', 'callbacks', 'A', '{$url}', 'post', 'callbacks', 'toB', '{$url}', 'post', 'callbacks')).toEqual({ toA: {} })
+      expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+    })
+
+    it('cuts own fields that lead back into a path item still being converted', () => {
+      const responses = { 200: { description: 'ok' } }
+      const loop = {
+        $ref: '#/components/pathItems/T',
+        get: { callbacks: { d: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses },
+      }
+      const result = convertSpec({
+        components: {
+          callbacks: { C: { '{$url}': { $ref: '#/components/pathItems/A/post/callbacks/c/{$url}' } } },
+          pathItems: {
+            A: { post: { callbacks: { c: { '{$url}': loop } }, responses } },
+            T: { summary: 't' },
+          },
+        },
+      })
+      expect(dig(result, 'components', 'callbacks', 'C', '{$url}', 'get', 'callbacks', 'd', '{$url}', 'post', 'callbacks')).toEqual({
+        c: { '{$url}': { summary: 't' } },
+      })
+      expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+    })
+
+    it('cuts a reference that comes back to an object shared within the input', () => {
+      const shared: Record<string, unknown> = { properties: { a: { $ref: schemaPointer } }, type: 'object' }
+      const result = convertSpec({
+        components: { schemas: { S: shared } },
+        webhooks: {
+          newPet: { post: { requestBody: { content: { 'application/json': { schema: { properties: { b: shared }, type: 'object' } } } } } },
+        },
+      })
+      expect(dig(result, 'components', 'schemas', 'S')).toEqual({
+        properties: { a: { properties: { b: {} }, type: 'object' } },
+        type: 'object',
+      })
+    })
+
+    it('expands an enclosing path item once before cutting the reference back into it', () => {
+      const result = convertSpec({
+        components: { callbacks: { C: { $ref: '#/webhooks/ping/post/callbacks/self' } } },
+        webhooks: {
+          ping: { post: { callbacks: { self: { expr: { $ref: '#/webhooks/ping' } } }, responses: {} } },
+        },
+      })
+      expect(dig(result, 'components', 'callbacks', 'C')).toEqual({
+        expr: { post: { callbacks: { self: { expr: {} } }, responses: {} } },
+      })
+    })
+
+    it('keeps the fields of every hop when it cuts a recursive path item', () => {
+      const result = convertSpec({
+        paths: { '/a': { $ref: '#/webhooks/a' } },
+        webhooks: {
+          a: { post: { callbacks: { cb: { expr: { $ref: '#/webhooks/alias', summary: 'outer' } } }, responses: {} } },
+          alias: { $ref: '#/webhooks/a', description: 'alias' },
+        },
+      })
+      expect(dig(result, 'paths', '/a', 'post', 'callbacks', 'cb', 'expr')).toEqual({ description: 'alias', summary: 'outer' })
+    })
+
+    it('converts path items and headers reached through many references once', () => {
+      const webhooks: Record<string, unknown> = { w30: { 'get': { responses: {} }, 'x-header': { schema: { type: 'string' } } } }
+      for (let index = 0; index < 30; index++) {
+        const next = { $ref: `#/webhooks/w${index + 1}` }
+        const header = { $ref: `#/webhooks/w${index + 1}/x-header` }
+        webhooks[`w${index}`] = {
+          'get': { callbacks: { a: { expr: next }, b: { expr: next } }, responses: {} },
+          'x-header': { content: { 'text/plain': { encoding: { e: { headers: { a: header, b: header } } } } } },
+        }
+      }
+      const result = convertSpec({
+        components: { headers: { H: { $ref: '#/webhooks/w0/x-header' } } },
+        paths: { '/a': { $ref: '#/webhooks/w0' } },
+        webhooks,
+      })
+      let pathItem = dig(result, 'paths', '/a')
+      let header = dig(result, 'components', 'headers', 'H')
+      for (let index = 0; index < 30; index++) {
+        expect(dig(pathItem, 'get', 'callbacks', 'a', 'expr')).toBe(dig(pathItem, 'get', 'callbacks', 'b', 'expr'))
+        pathItem = dig(pathItem, 'get', 'callbacks', 'a', 'expr')
+        const headers = dig(header, 'content', 'text/plain', 'encoding', 'e', 'headers')
+        expect(dig(headers, 'a')).toBe(dig(headers, 'b'))
+        header = dig(headers, 'a')
+      }
+      expect(pathItem).toEqual({ 'get': { responses: {} }, 'x-header': { schema: { type: 'string' } } })
+      expect(header).toEqual({ schema: { type: 'string' } })
+    })
+
+    it.each([
+      ['a schema property named callbacks', '#/webhooks/w/post/requestBody/content/a~1b/schema/properties/callbacks/properties/x'],
+      ['a webhook named callbacks', '#/webhooks/callbacks/get/responses'],
+      ['a callback extension', '#/webhooks/w/post/callbacks/c/x-note'],
+    ])('leaves a Path Item $ref to %s as written', (_name, ref) => {
+      expect(
+        convertSpec({
+          paths: { '/a': { $ref: ref } },
+          webhooks: {
+            callbacks: { get: { responses: { 200: { description: 'ok' } } } },
+            w: {
+              post: {
+                callbacks: { c: { 'x-note': { get: {} } } },
+                requestBody: {
+                  content: { 'a/b': { schema: { properties: { callbacks: { properties: { x: { get: 'prop', type: 'string' } } } } } } },
+                },
+              },
+            },
+          },
+        }).paths,
+      ).toEqual({ '/a': { $ref: ref } })
+    })
+
+    it('inlines a Path Item $ref to a callback nested in another callback', () => {
+      expect(
+        convertSpec({
+          paths: { '/a': { $ref: '#/webhooks/w/post/callbacks/c/{$url}/get/callbacks/d/{$url}' } },
+          webhooks: {
+            w: { post: { callbacks: { c: { '{$url}': { get: { callbacks: { d: { '{$url}': { summary: 'nested' } } } } } } } } },
+          },
+        }).paths,
+      ).toEqual({ '/a': { summary: 'nested' } })
+    })
+
+    it('removes security schemes aliased into the removed parts by type', () => {
+      const result = convertSpec({
+        components: {
+          securitySchemes: {
+            'Escaped': { $ref: '#/components/securitySchemes/m~1tls' },
+            'Http': { $ref: '#/webhooks/w/x-http' },
+            'm/tls': { type: 'mutualTLS' },
+            'Tls': { $ref: '#/webhooks/w/x-tls' },
+          },
+        },
+        paths: { '/a': { get: { responses: {}, security: [{ Tls: [] }, { Escaped: [] }, { Http: ['read'] }] } } },
+        security: [{ Tls: [] }],
+        webhooks: { w: { 'x-http': { scheme: 'bearer', type: 'http' }, 'x-tls': { type: 'mutualTLS' } } },
+      })
+      expect(result.components).toEqual({ securitySchemes: { Http: { scheme: 'bearer', type: 'http' } } })
+      expect(result.security).toBeUndefined()
+      expect(dig(result, 'paths', '/a', 'get', 'security')).toEqual([{ Http: [] }])
+    })
+
+    it('leaves references and mapping entries in a standalone schema untouched', () => {
+      const schema = {
+        discriminator: { mapping: { a: schemaPointer }, propertyName: 'kind' },
+        properties: { a: { $ref: schemaPointer } },
+      }
+      expect(downgradeSchemaV31ToV30(schema as any)).toEqual(schema)
+    })
   })
 
   describe('reference objects', () => {
@@ -1126,7 +1367,7 @@ describe('downgradeSpecV31ToV30', () => {
       expect(result.components).not.toHaveProperty('x-pathItems')
     })
 
-    it('leaves references into components.pathItems intact apart from override stripping', () => {
+    it('strips overrides from a callback reference to a missing path item', () => {
       expect(
         convertComponent('callbacks', {
           $ref: '#/components/pathItems/Reusable',

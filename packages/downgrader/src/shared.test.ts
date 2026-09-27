@@ -2,6 +2,7 @@ import type { FieldTable } from './shared'
 
 import { dig } from '../tests/helpers'
 import {
+  convertInlined,
   convertRecord,
   deepClone,
   DROP,
@@ -418,6 +419,19 @@ describe('getRef', () => {
     expect(getRef({ $ref: 42 })).toBeUndefined()
     expect(getRef({ $ref: { nested: true } })).toBeUndefined()
     expect(getRef({ $ref: null })).toBeUndefined()
+  })
+})
+
+describe('convertInlined', () => {
+  it('drops a conversion still in progress outside the inline and keeps cycles inside it', () => {
+    const node: Record<string, unknown> = { name: 'root' }
+    node.self = node
+    const source = { child: 'x' }
+    const result = convertRecord(source, {
+      child: () => convertInlined(() => ({ back: convertRecord(source, {}), node: convertNode(node) })),
+    })
+    expect(dig(result, 'child', 'back')).toBe(DROP)
+    expect(dig(result, 'child', 'node', 'self')).toBe(dig(result, 'child', 'node'))
   })
 })
 
