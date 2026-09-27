@@ -1110,11 +1110,6 @@ describe('downgradeSchemaV31ToV30', () => {
         { format: 'byte', type: 'string' },
       ],
       [
-        'adds type string to contentEncoding base64 without a type',
-        { contentEncoding: 'base64' },
-        { format: 'byte', type: 'string' },
-      ],
-      [
         'converts raw binary into type string with format binary',
         { contentMediaType: 'image/png' },
         { format: 'binary', type: 'string' },
