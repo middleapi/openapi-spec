@@ -1,4 +1,4 @@
-import type { OpenAPIV3_1 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import { dig } from '../tests/helpers'
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from './v3.1-to-v3.0'
@@ -1338,6 +1338,20 @@ describe('downgradeSpecV31ToV30', () => {
       expect(dig(result, 'get', 'responses')).toEqual({ default: { description: '' } })
       expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
     })
+
+    it('converts a dereferenced schema shared across the document once', () => {
+      const pet = { properties: { name: { type: ['string', 'null'] } }, type: 'object' }
+      const result = convertSpec({
+        components: { schemas: { Pet: pet } },
+        paths: { '/pets': { get: { responses: { 200: { content: { 'application/json': { schema: pet } }, description: 'ok' } } } } },
+      })
+      const schema = dig(result, 'components', 'schemas', 'Pet')
+      expect(schema).toEqual({
+        properties: { name: { nullable: true, type: 'string' } },
+        type: 'object',
+      })
+      expect(dig(result, 'paths', '/pets', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toBe(schema)
+    })
   })
 })
 
@@ -1410,39 +1424,44 @@ describe('downgradeSchemaV31ToV30', () => {
         { nullable: true, type: 'string' },
       ],
       [
-        'converts a null-only type array into nullable plus a null enum',
+        'converts a null-only type array into a null enum',
         { type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
-        'converts a null-only type string into nullable plus a null enum',
+        'converts a null-only type string into a null enum',
         { type: 'null' },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'intersects an existing enum with a null-only type',
         { enum: ['a', null], type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'matches nothing when the enum of a null-only type excludes null',
         { enum: ['a'], type: ['null'] },
-        { enum: ['a'], not: {}, nullable: true },
+        { enum: ['a'], not: {} },
       ],
       [
         'clones a malformed enum of a null-only type through',
         { enum: 'junk', type: ['null'] },
-        { enum: 'junk', nullable: true },
+        { enum: 'junk' },
       ],
       [
         'keeps a null const as the enum of a null-only type',
         { const: null, type: ['null'] },
-        { enum: [null], nullable: true },
+        { enum: [null] },
       ],
       [
         'matches nothing when a non-null const contradicts a null-only type',
         { const: 7, type: ['null'] },
-        { enum: [7], not: {}, nullable: true },
+        { enum: [7], not: {} },
+      ],
+      [
+        'converts a null-only anyOf branch into a null enum',
+        { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        { anyOf: [{ type: 'string' }, { enum: [null] }] },
       ],
       [
         'converts multiple non-null types into anyOf variants',
@@ -1465,13 +1484,20 @@ describe('downgradeSchemaV31ToV30', () => {
         { anyOf: [{ items: {}, type: 'array' }, { type: 'string' }] },
       ],
       [
-        'copies existing items into the synthesized array variant',
+        'moves existing items into the synthesized array variant',
         { items: { type: 'integer' }, type: ['array', 'string', 'null'] },
         {
           anyOf: [
             { items: { type: 'integer' }, nullable: true, type: 'array' },
             { nullable: true, type: 'string' },
           ],
+        },
+      ],
+      [
+        'keeps items in place when the type union has no array variant',
+        { items: { type: 'integer' }, type: ['object', 'string'] },
+        {
+          anyOf: [{ type: 'object' }, { type: 'string' }],
           items: { type: 'integer' },
         },
       ],
@@ -1503,9 +1529,10 @@ describe('downgradeSchemaV31ToV30', () => {
         {
           allOf: 'junk',
           anyOf: [{ type: 'string' }],
-          type: ['integer', 'string'],
+          items: { type: 'integer' },
+          type: ['array', 'string'],
         },
-        { allOf: 'junk', anyOf: [{ type: 'string' }] },
+        { allOf: 'junk', anyOf: [{ type: 'string' }], items: { type: 'integer' } },
       ],
       [
         'deduplicates type array entries',
@@ -1555,9 +1582,25 @@ describe('downgradeSchemaV31ToV30', () => {
       ['converts a false const', { const: false }, { enum: [false] }],
       ['converts an empty-string const', { const: '' }, { enum: [''] }],
       [
-        'converts a null const and marks the schema nullable',
+        'converts a null const into a null enum',
         { const: null },
-        { enum: [null], nullable: true },
+        { enum: [null] },
+      ],
+      [
+        'keeps the nullable variants of a multi-type null const',
+        { const: null, type: ['string', 'integer', 'null'] },
+        {
+          anyOf: [
+            { nullable: true, type: 'string' },
+            { nullable: true, type: 'integer' },
+          ],
+          enum: [null],
+        },
+      ],
+      [
+        'matches nothing when a null const contradicts a non-null type',
+        { const: null, type: 'string' },
+        { enum: [null], type: 'string' },
       ],
       [
         'replaces an existing enum with the const value',
@@ -1648,32 +1691,43 @@ describe('downgradeSchemaV31ToV30', () => {
   describe('content keywords', () => {
     it.each([
       [
-        'converts contentEncoding base64 into format byte',
-        { contentEncoding: 'base64' },
-        { format: 'byte' },
+        'converts encoded binary into type string with format byte',
+        { contentEncoding: 'base64', contentMediaType: 'image/png', type: 'string' },
+        { format: 'byte', type: 'string' },
+      ],
+      [
+        'converts raw binary into type string with format binary',
+        { contentMediaType: 'image/png' },
+        { format: 'binary', type: 'string' },
+      ],
+      [
+        'keeps nullable on binary strings',
+        { contentMediaType: 'image/png', type: ['string', 'null'] },
+        { format: 'binary', nullable: true, type: 'string' },
+      ],
+      [
+        'keeps format beside a multi-type anyOf that includes string',
+        { contentMediaType: 'image/png', type: ['string', 'integer'] },
+        { anyOf: [{ type: 'string' }, { type: 'integer' }], format: 'binary' },
       ],
       [
         'keeps an existing format over contentEncoding',
         { contentEncoding: 'base64', format: 'custom' },
-        { format: 'custom' },
-      ],
-      ['drops other content encodings', { contentEncoding: 'gzip' }, {}],
-      [
-        'converts contentMediaType application/octet-stream into format binary',
-        { contentMediaType: 'application/octet-stream' },
-        { format: 'binary' },
+        { format: 'custom', type: 'string' },
       ],
       [
-        'does not emit format binary when a contentEncoding is present',
-        {
-          contentEncoding: 'gzip',
-          contentMediaType: 'application/octet-stream',
-        },
-        {},
+        'drops content keywords on non-string types',
+        { contentMediaType: 'image/png', type: 'object' },
+        { type: 'object' },
       ],
       [
-        'drops other content media types',
-        { contentMediaType: 'image/png' },
+        'drops base64url, which format byte does not accept',
+        { contentEncoding: 'base64url', contentMediaType: 'image/png', type: 'string' },
+        { type: 'string' },
+      ],
+      [
+        'drops non-string content media types',
+        { contentMediaType: 42 },
         {},
       ],
       ['drops contentSchema', { contentSchema: { type: 'string' } }, {}],
@@ -1920,6 +1974,16 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(() => downgradeSchemaV31ToV30(deep)).not.toThrow()
     })
 
+    it('keeps nested multi-type arrays linear instead of doubling per level', () => {
+      let input: OpenAPIV3_1.SchemaObject = { type: 'string' }
+      let expected: unknown = { type: 'string' }
+      for (let index = 0; index < 10; index += 1) {
+        input = { items: input, type: ['array', 'object'] }
+        expected = { anyOf: [{ items: expected, type: 'array' }, { type: 'object' }] }
+      }
+      expect(convertSchema(input)).toEqual(expected)
+    })
+
     it('converts a dereferenced cyclic schema, pointing the cycle at the converted ancestor', () => {
       const properties: Record<string, unknown> = {}
       const node: Record<string, unknown> = {
@@ -1934,6 +1998,30 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(dig(result, 'properties', 'self')).toBe(result)
       expect(dig(result, 'properties', 'children', 'items')).toBe(result)
       expect(node.type).toEqual(['object', 'null'])
+    })
+
+    it('converts a dereferenced schema reached along many paths once', () => {
+      let node: OpenAPIV3_1.SchemaObject = { type: ['string', 'null'] }
+      for (let index = 0; index < 64; index += 1) {
+        node = { properties: { left: node, right: node }, type: 'object' }
+      }
+      const result = convertSchema(node)
+      expect(dig(result, 'properties', 'left')).toBe(dig(result, 'properties', 'right'))
+      let leaf = result
+      for (let index = 0; index < 64; index += 1) {
+        leaf = dig(leaf, 'properties', 'left')
+      }
+      expect(leaf).toEqual({ nullable: true, type: 'string' })
+    })
+
+    it('points the array variant of a cyclic multi-type schema at the converted schema', () => {
+      const node: Record<string, unknown> = { type: ['array', 'object'] }
+      node.items = node
+      const result = convertSchema(node) as Record<string, unknown>
+      expect(result).not.toHaveProperty('items')
+      expect(dig(result, 'anyOf', '0', 'items')).toBe(result)
+      expect(dig(result, 'anyOf', '1')).toEqual({ type: 'object' })
+      expect(node.items).toBe(node)
     })
   })
 })

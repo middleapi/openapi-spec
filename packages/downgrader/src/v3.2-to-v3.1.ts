@@ -1,40 +1,107 @@
-import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import type { FieldConverter } from './shared'
+import type { FieldConverter, FieldTable } from './shared'
 import {
   convertRecord,
   deepClone,
   DROP,
+  getChild,
   getRef,
+  isConverting,
   isRecord,
   mapArray,
   mapRecord,
   operationFields,
+  parseLocalRef,
+  resolveLocalRef,
 } from './shared'
-
-const HEADERS_REF_PREFIX = '#/components/headers/'
-const MEDIA_TYPES_REF_PREFIX = '#/components/mediaTypes/'
-const PARAMETERS_REF_PREFIX = '#/components/parameters/'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
 const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'
 
 interface Context {
-  mediaTypes: Record<string, unknown> | undefined
-  removedHeaderRefs: ReadonlySet<string>
-  removedParameterRefs: ReadonlySet<string>
+  convertSchema: (value: unknown) => unknown
+  dangles: (ref: string) => boolean
+  inlining: Set<string>
+  resolve: (ref: string) => unknown
 }
 
 export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {
   return deepClone(schema) as OpenAPIV3_1.SchemaObject<T>
 }
 
+function inlineRef(ref: string, context: Context, convert: (item: unknown) => unknown): unknown {
+  const target = context.resolve(ref)
+  if (isConverting(target) || [...context.inlining].some(inlined => inlined === ref || inlined.startsWith(`${ref}/`))) {
+    return DROP
+  }
+  context.inlining.add(ref)
+  const result = convert(target)
+  context.inlining.delete(ref)
+  return result
+}
+
 function convertRefOr(value: unknown, context: Context, convert: (item: unknown, context: Context) => unknown): unknown {
-  return getRef(value) === undefined ? convert(value, context) : deepClone(value)
+  const ref = getRef(value)
+  if (ref === undefined) {
+    return convert(value, context)
+  }
+  if (resolveRefChain(value, context) === DROP) {
+    return DROP
+  }
+  return context.dangles(ref) ? inlineRef(ref, context, item => convertRefOr(item, context, convert)) : deepClone(value)
 }
 
 function refMap(context: Context, convert: (item: unknown, context: Context) => unknown): FieldConverter {
   return item => mapRecord(item, entry => convertRefOr(entry, context, convert))
+}
+
+function createSchemaFields(schema: (item: unknown) => unknown, dangles: (ref: string) => boolean): FieldTable {
+  const list = (item: unknown): unknown => mapArray(item, schema)
+  const map = (item: unknown): unknown => mapRecord(item, schema)
+  return {
+    $defs: map,
+    $ref: item => (typeof item === 'string' && dangles(item) ? DROP : deepClone(item)),
+    additionalProperties: schema,
+    allOf: list,
+    anyOf: list,
+    contains: schema,
+    contentSchema: schema,
+    dependentSchemas: map,
+    else: schema,
+    if: schema,
+    items: schema,
+    not: schema,
+    oneOf: list,
+    patternProperties: map,
+    prefixItems: list,
+    properties: map,
+    propertyNames: schema,
+    then: schema,
+    unevaluatedItems: schema,
+    unevaluatedProperties: schema,
+  }
+}
+
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, context: Context): unknown {
+  const ref = getRef(schema)
+  if (ref === undefined || '$ref' in out) {
+    return out
+  }
+  const target = inlineRef(ref, context, context.convertSchema)
+  if (target === DROP) {
+    return out
+  }
+  if (Object.keys(out).length === 0) {
+    return target
+  }
+  const allOf = out.allOf ?? []
+  if (!Array.isArray(allOf)) {
+    return { allOf: [out, target] }
+  }
+  out.allOf = [...allOf, target]
+  return out
 }
 
 function convertServer(value: unknown): unknown {
@@ -76,38 +143,56 @@ function isQuerystringParameter(value: unknown): boolean {
   return isRecord(value) && value.in === 'querystring'
 }
 
-function isRemovedRef(value: unknown, removed: ReadonlySet<string>): boolean {
-  const ref = getRef(value)
-  return ref !== undefined && removed.has(ref)
+function memoize<T>(compute: (ref: string) => T): (ref: string) => T {
+  const cache = new Map<string, T>()
+  return (ref) => {
+    if (!cache.has(ref)) {
+      cache.set(ref, compute(ref))
+    }
+    return cache.get(ref) as T
+  }
+}
+
+function resolveRefChain(value: unknown, context: Context): unknown {
+  const seen = new Set<string>()
+  let target = value
+  let ref = getRef(target)
+  while (ref !== undefined) {
+    if (seen.has(ref)) {
+      return DROP
+    }
+    seen.add(ref)
+    target = context.resolve(ref)
+    ref = getRef(target)
+  }
+  return target
+}
+
+function isRemovedHeader(value: unknown, context: Context): boolean {
+  return losesEntireContent(resolveRefChain(value, context), context)
+}
+
+function isRemovedParameter(value: unknown, context: Context): boolean {
+  const target = resolveRefChain(value, context)
+  return isQuerystringParameter(target) || losesEntireContent(target, context)
 }
 
 function convertParameterOrHeader(value: unknown, context: Context): unknown {
-  return convertRecord(
-    value,
-    {
-      allowReserved: (item, parameter) => (!('in' in parameter) || parameter.in === 'query' ? deepClone(item) : DROP),
-      content: item => convertContentMap(item, context),
-      examples: refMap(context, convertExample),
-      style: item => (item === 'cookie' ? DROP : deepClone(item)),
-    },
-    (out, parameter) => {
-      const lostContent = isRecord(parameter.content)
-        && Object.keys(parameter.content).length > 0
-        && isRecord(out.content)
-        && Object.keys(out.content).length === 0
-      return lostContent ? DROP : out
-    },
-  )
+  return convertRecord(value, {
+    allowReserved: (item, parameter) => (!('in' in parameter) || parameter.in === 'query' ? deepClone(item) : DROP),
+    content: item => convertContentMap(item, context),
+    examples: refMap(context, convertExample),
+    schema: context.convertSchema,
+    style: item => (item === 'cookie' ? DROP : deepClone(item)),
+  })
 }
 
 function convertParameterEntry(value: unknown, context: Context): unknown {
-  return isQuerystringParameter(value) || isRemovedRef(value, context.removedParameterRefs)
-    ? DROP
-    : convertRefOr(value, context, convertParameterOrHeader)
+  return isRemovedParameter(value, context) ? DROP : convertRefOr(value, context, convertParameterOrHeader)
 }
 
 function convertHeaderMap(value: unknown, context: Context): unknown {
-  return mapRecord(value, item => isRemovedRef(item, context.removedHeaderRefs) ? DROP : convertRefOr(item, context, convertParameterOrHeader))
+  return mapRecord(value, item => isRemovedHeader(item, context) ? DROP : convertRefOr(item, context, convertParameterOrHeader))
 }
 
 function convertEncoding(value: unknown, context: Context): unknown {
@@ -129,35 +214,25 @@ function convertMediaType(value: unknown, context: Context): unknown {
       itemEncoding: DROP,
       itemSchema: DROP,
       prefixEncoding: DROP,
+      schema: context.convertSchema,
     },
     (out, mediaType) => {
       if ('itemSchema' in mediaType && out.schema === undefined) {
-        out.schema = { items: deepClone(mediaType.itemSchema), type: 'array' }
+        out.schema = { items: context.convertSchema(mediaType.itemSchema), type: 'array' }
       }
       return out
     },
   )
 }
 
-function resolveMediaType(value: unknown, mediaTypes: Record<string, unknown> | undefined, seen: Set<string>): unknown {
-  const ref = getRef(value)
-  if (ref === undefined) {
-    return value
-  }
-  if (!ref.startsWith(MEDIA_TYPES_REF_PREFIX)) {
-    return DROP
-  }
-  const name = ref.slice(MEDIA_TYPES_REF_PREFIX.length)
-  if (name === '' || name.includes('/') || mediaTypes === undefined || !Object.hasOwn(mediaTypes, name) || seen.has(name)) {
-    return DROP
-  }
-  seen.add(name)
-  return resolveMediaType(mediaTypes[name], mediaTypes, seen)
+function resolveMediaType(value: unknown, context: Context): unknown {
+  const target = resolveRefChain(value, context)
+  return target === undefined ? DROP : target
 }
 
 function convertContentMap(value: unknown, context: Context): unknown {
   return mapRecord(value, (item) => {
-    const target = resolveMediaType(item, context.mediaTypes, new Set())
+    const target = resolveMediaType(item, context)
     return target === DROP ? DROP : convertMediaType(target, context)
   })
 }
@@ -227,58 +302,24 @@ function convertComponents(value: unknown, context: Context): unknown {
     pathItems: item => mapRecord(item, entry => convertPathItem(entry, context)),
     requestBodies: refMap(context, convertRequestBody),
     responses: refMap(context, convertResponse),
+    schemas: item => mapRecord(item, context.convertSchema),
     securitySchemes: refMap(context, convertSecurityScheme),
   })
 }
 
-function losesEntireContent(value: unknown, mediaTypes: Record<string, unknown> | undefined): boolean {
+function losesEntireContent(value: unknown, context: Context): boolean {
   if (!(isRecord(value) && isRecord(value.content))) {
     return false
   }
   const entries = Object.values(value.content)
-  return entries.length > 0 && entries.every(item => resolveMediaType(item, mediaTypes, new Set()) === DROP)
-}
-
-function indexRemovedComponentRefs(map: unknown, prefix: string, mediaTypes: Record<string, unknown> | undefined, isDirectlyRemoved: (item: unknown) => boolean): Set<string> {
-  const removed = new Set<string>()
-  if (!isRecord(map)) {
-    return removed
-  }
-  const entries = Object.entries(map)
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const [name, item] of entries) {
-      const selfRef = prefix + name
-      if (removed.has(selfRef)) {
-        continue
-      }
-      const target = getRef(item)
-      if (isDirectlyRemoved(item) || losesEntireContent(item, mediaTypes) || (target !== undefined && removed.has(target))) {
-        removed.add(selfRef)
-        changed = true
-      }
-    }
-  }
-  return removed
-}
-
-function createContext(spec: unknown): Context {
-  const components = isRecord(spec) ? spec.components : undefined
-  const mediaTypes = isRecord(components) && isRecord(components.mediaTypes) ? components.mediaTypes : undefined
-  return {
-    mediaTypes,
-    removedHeaderRefs: indexRemovedComponentRefs(isRecord(components) ? components.headers : undefined, HEADERS_REF_PREFIX, mediaTypes, () => false),
-    removedParameterRefs: indexRemovedComponentRefs(isRecord(components) ? components.parameters : undefined, PARAMETERS_REF_PREFIX, mediaTypes, isQuerystringParameter),
-  }
+  return entries.length > 0 && entries.every(item => resolveMediaType(item, context) === DROP)
 }
 
 function convertJsonSchemaDialect(value: unknown): unknown {
   return typeof value === 'string' && value.startsWith(V32_DIALECT_PREFIX) ? V31_DIALECT : deepClone(value)
 }
 
-export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
-  const context = createContext(spec)
+function convertSpec(spec: unknown, context: Context): unknown {
   return convertRecord(
     spec,
     {
@@ -294,5 +335,46 @@ export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV
       out.openapi = '3.1.2'
       return out
     },
-  ) as OpenAPIV3_1.OpenAPIObject
+  )
+}
+
+function createContext(resolve: (ref: string) => unknown, dangles: (ref: string) => boolean): Context {
+  const context: Context = { convertSchema, dangles, inlining: new Set(), resolve }
+  const fields = createSchemaFields(convertSchema, dangles)
+  const finish = (out: Record<string, unknown>, schema: Record<string, unknown>): unknown => finishSchema(out, schema, context)
+  function convertSchema(value: unknown): unknown {
+    return convertRecord(value, fields, finish)
+  }
+  return context
+}
+
+function danglesIn(output: unknown, source: unknown, ref: string): boolean {
+  const tokens = parseLocalRef(ref)
+  if (tokens === undefined) {
+    return false
+  }
+  let from = source
+  let to = output
+  for (const token of tokens) {
+    if (Array.isArray(from) && !(Array.isArray(to) && to.length === from.length)) {
+      to = undefined
+    }
+    from = getChild(from, token)
+    to = getChild(to, token)
+    if (from === undefined) {
+      return false
+    }
+  }
+  return to === undefined
+}
+
+export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
+  const resolve = memoize(ref => resolveLocalRef(spec, ref))
+  const refs = new Set<string>()
+  const draft = convertSpec(spec, createContext(resolve, (ref) => {
+    refs.add(ref)
+    return false
+  }))
+  const dangles = memoize(ref => danglesIn(draft, spec, ref))
+  return ([...refs].some(dangles) ? convertSpec(spec, createContext(resolve, dangles)) : draft) as OpenAPIV3_1.OpenAPIObject
 }
