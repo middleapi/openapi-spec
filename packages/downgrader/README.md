@@ -23,7 +23,7 @@
 Every converter follows the same contract:
 
 - **Never throws.** Malformed parts are deep-copied through unchanged instead of failing the whole conversion. Cyclic object graphs, such as the output of a `$ref` dereferencer, convert with their cycles preserved. Only pathologically deep nesting (thousands of levels) can still exhaust the call stack.
-- **Never mutates.** The input is left untouched and the result is a new object.
+- **Never mutates.** The input is left untouched and the result is a new object. Objects shared within the input, such as a dereferenced schema used in several places, may stay shared within the result.
 - **Preserves extensions, never invents them.** `x-` keys and unknown keys survive. Constructs the target version cannot express are converted where an equivalent exists and removed otherwise.
 
 ## Usage

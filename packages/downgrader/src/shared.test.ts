@@ -1,3 +1,5 @@
+import type { FieldTable } from './shared'
+
 import { dig } from '../tests/helpers'
 import {
   convertRecord,
@@ -236,16 +238,46 @@ describe('convertRecord', () => {
     expect(second.self).toBe(second)
   })
 
-  it('converts shared acyclic references at every occurrence', () => {
+  it('converts a shared reference once per call and reuses the result', () => {
     const shared = { name: 'x' }
+    const fields: FieldTable = { name: () => 'converted' }
+    const convert = (item: unknown) => convertRecord(item, fields)
+    const result = convertRecord({ a: shared, b: shared }, { a: convert, b: convert })
+    expect(result).toEqual({ a: { name: 'converted' }, b: { name: 'converted' } })
+    expect(dig(result, 'b')).toBe(dig(result, 'a'))
+  })
+
+  it('clones a shared reference once per call', () => {
+    const shared = { deep: true }
+    const result = convertRecord({ a: shared, b: [shared] }, {})
+    expect(result).toEqual({ a: { deep: true }, b: [{ deep: true }] })
+    expect(dig(result, 'b', '0')).toBe(dig(result, 'a'))
+    expect(dig(result, 'a')).not.toBe(shared)
+  })
+
+  it('converts a shared reference separately for each field table and finish', () => {
+    const shared = { name: 'x' }
+    const fields: FieldTable = { name: () => 'a' }
     const result = convertRecord(
-      { a: shared, b: shared },
+      { a: shared, b: shared, c: shared },
       {
-        a: item => convertRecord(item, { name: () => 'a' }),
+        a: item => convertRecord(item, fields),
         b: item => convertRecord(item, { name: () => 'b' }),
+        c: item => convertRecord(item, fields, out => ({ ...out, finished: true })),
       },
     )
-    expect(result).toEqual({ a: { name: 'a' }, b: { name: 'b' } })
+    expect(result).toEqual({
+      a: { name: 'a' },
+      b: { name: 'b' },
+      c: { finished: true, name: 'a' },
+    })
+  })
+
+  it('returns fresh results on every call', () => {
+    const shared = { name: 'x' }
+    const fields: FieldTable = { name: () => 'converted' }
+    expect(convertRecord(shared, fields)).not.toBe(convertRecord(shared, fields))
+    expect(dig(convertRecord({ a: shared }, {}), 'a')).not.toBe(dig(convertRecord({ a: shared }, {}), 'a'))
   })
 
   it('releases the cycle guard when a converter throws', () => {
@@ -258,6 +290,22 @@ describe('convertRecord', () => {
       }),
     ).toThrow('boom')
     expect(convertRecord(value, { a: () => 2 })).toEqual({ a: 2 })
+  })
+
+  it('forgets reused results when a converter throws', () => {
+    const shared = { name: 'x' }
+    const convert = vi.fn(() => 'converted')
+    const fields: FieldTable = { name: convert }
+    expect(() =>
+      convertRecord({ a: shared }, {
+        a: (item) => {
+          convertRecord(item, fields)
+          throw new Error('boom')
+        },
+      }),
+    ).toThrow('boom')
+    convertRecord(shared, fields)
+    expect(convert).toHaveBeenCalledTimes(2)
   })
 })
 

@@ -41,7 +41,20 @@ export function setOwn(object: object, key: PropertyKey, value: unknown): void {
   }
 }
 
-function cloneValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
+type Finish = (out: Record<string, unknown>, source: Record<string, unknown>) => unknown
+
+interface Conversion {
+  done: boolean
+  fields: FieldTable
+  finish: Finish | undefined
+  result: unknown
+}
+
+const conversions = new Map<object, Conversion>()
+const clones = new Map<object, unknown>()
+let depth = 0
+
+function cloneValue(value: unknown, seen: Map<object, unknown>): unknown {
   if (!(Array.isArray(value) || isRecord(value))) {
     return value
   }
@@ -69,21 +82,21 @@ export function deepClone<T>(value: T): T {
   if (!(Array.isArray(value) || isRecord(value))) {
     return value
   }
-  return cloneValue(value, new WeakMap()) as T
+  return cloneValue(value, depth > 0 ? clones : new Map()) as T
 }
 
-const converting = new WeakMap<object, Record<string, unknown>>()
-
-export function convertRecord(value: unknown, fields: FieldTable, finish?: (out: Record<string, unknown>, source: Record<string, unknown>) => unknown): unknown {
+export function convertRecord(value: unknown, fields: FieldTable, finish?: Finish): unknown {
   if (!isRecord(value)) {
     return deepClone(value)
   }
-  const inProgress = converting.get(value)
-  if (inProgress !== undefined) {
-    return inProgress
+  const known = conversions.get(value)
+  if (known !== undefined && (!known.done || (known.fields === fields && known.finish === finish))) {
+    return known.result
   }
   const out: Record<string, unknown> = {}
-  converting.set(value, out)
+  const conversion: Conversion = { done: false, fields, finish, result: out }
+  conversions.set(value, conversion)
+  depth += 1
   try {
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
@@ -95,10 +108,16 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: (out:
         setOwn(out, key, converted)
       }
     }
-    return finish === undefined ? out : finish(out, value)
+    conversion.result = finish === undefined ? out : finish(out, value)
+    conversion.done = true
+    return conversion.result
   }
   finally {
-    converting.delete(value)
+    depth -= 1
+    if (depth === 0) {
+      conversions.clear()
+      clones.clear()
+    }
   }
 }
 

@@ -766,6 +766,20 @@ describe('downgradeSpecV31ToV30', () => {
       expect(dig(result, 'get', 'responses')).toEqual({ default: { description: '' } })
       expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
     })
+
+    it('converts a dereferenced schema shared across the document once', () => {
+      const pet = { properties: { name: { type: ['string', 'null'] } }, type: 'object' }
+      const result = convertSpec({
+        components: { schemas: { Pet: pet } },
+        paths: { '/pets': { get: { responses: { 200: { content: { 'application/json': { schema: pet } }, description: 'ok' } } } } },
+      })
+      const schema = dig(result, 'components', 'schemas', 'Pet')
+      expect(schema).toEqual({
+        properties: { name: { nullable: true, type: 'string' } },
+        type: 'object',
+      })
+      expect(dig(result, 'paths', '/pets', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toBe(schema)
+    })
   })
 })
 
@@ -1362,6 +1376,20 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(dig(result, 'properties', 'self')).toBe(result)
       expect(dig(result, 'properties', 'children', 'items')).toBe(result)
       expect(node.type).toEqual(['object', 'null'])
+    })
+
+    it('converts a dereferenced schema reached along many paths once', () => {
+      let node: OpenAPIV3_1.SchemaObject = { type: ['string', 'null'] }
+      for (let index = 0; index < 64; index += 1) {
+        node = { properties: { left: node, right: node }, type: 'object' }
+      }
+      const result = convertSchema(node)
+      expect(dig(result, 'properties', 'left')).toBe(dig(result, 'properties', 'right'))
+      let leaf = result
+      for (let index = 0; index < 64; index += 1) {
+        leaf = dig(leaf, 'properties', 'left')
+      }
+      expect(leaf).toEqual({ nullable: true, type: 'string' })
     })
   })
 })
