@@ -119,6 +119,10 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
   }
 }
 
+export function isConverting(value: unknown): boolean {
+  return isRecord(value) && conversions.get(value)?.done === false
+}
+
 export function mapRecord(value: unknown, convert: (item: unknown, key: string) => unknown): unknown {
   if (!isRecord(value)) {
     return deepClone(value)

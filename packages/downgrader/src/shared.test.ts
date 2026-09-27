@@ -8,6 +8,7 @@ import {
   getChild,
   getRef,
   HTTP_METHODS_UP_TO_V31,
+  isConverting,
   isRecord,
   mapArray,
   mapRecord,
@@ -417,6 +418,23 @@ describe('getRef', () => {
     expect(getRef({ $ref: 42 })).toBeUndefined()
     expect(getRef({ $ref: { nested: true } })).toBeUndefined()
     expect(getRef({ $ref: null })).toBeUndefined()
+  })
+})
+
+describe('isConverting', () => {
+  it('reports only source records whose conversion is still in progress', () => {
+    const child = { a: 1 }
+    const source = { child }
+    const seen: boolean[] = []
+    convertRecord(source, {
+      child: (item) => {
+        seen.push(isConverting(source), isConverting(item))
+        return item
+      },
+    })
+    expect(seen).toEqual([true, false])
+    expect(isConverting(source)).toBe(false)
+    expect(isConverting('text')).toBe(false)
   })
 })
 

@@ -1513,6 +1513,63 @@ describe('downgradeSpecV32ToV31', () => {
       })
     })
 
+    it('cuts a recursive schema reached through a content map instead of emitting a circular object', () => {
+      const result = convertSpec({
+        paths: {
+          '/a': {
+            get: {
+              responses: {
+                200: {
+                  content: { 'application/json': { $ref: '#/components/mediaTypes/Tree' } },
+                  description: 'ok',
+                },
+              },
+            },
+          },
+        },
+        components: {
+          mediaTypes: {
+            Tree: {
+              schema: {
+                properties: {
+                  children: {
+                    items: { $ref: '#/components/mediaTypes/Tree/schema' },
+                    type: 'array',
+                  },
+                },
+                type: 'object',
+              },
+            },
+          },
+        },
+      })
+      expect(() => JSON.stringify(result)).not.toThrow()
+      expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toEqual({
+        properties: { children: { items: {}, type: 'array' } },
+        type: 'object',
+      })
+    })
+
+    it('cuts a cycle entered through a pointer into a recursive schema', () => {
+      const result = convertComponent('schemas', { $ref: '#/components/mediaTypes/Tree/schema/properties/children' }, {
+        mediaTypes: {
+          Tree: {
+            schema: {
+              properties: {
+                children: {
+                  items: { $ref: '#/components/mediaTypes/Tree/schema' },
+                  type: 'array',
+                },
+              },
+              type: 'object',
+            },
+          },
+        },
+      })
+      expect(() => JSON.stringify(result)).not.toThrow()
+      expect(result).toEqual({ items: {}, type: 'array' })
+    })
+
     it('inlines references into a parameter list that lost entries, since its indices shift', () => {
       const result = convertSpec({
         components: {
@@ -1726,6 +1783,21 @@ describe('downgradeSpecV32ToV31', () => {
       expect(result).not.toHaveProperty('query')
       expect(dig(result, 'get', 'responses', '200')).toEqual({ description: 'ok' })
       expect(dig(result, 'get', 'callbacks', 'cb', 'expr')).toBe(result)
+    })
+
+    it('converts a deep shared schema diamond once in both passes', () => {
+      let schema: Record<string, unknown> = { type: 'string' }
+      for (let depth = 0; depth < 40; depth++) {
+        schema = { properties: { a: schema, b: schema }, type: 'object' }
+      }
+      const result = convertSpec({
+        components: {
+          mediaTypes: { Gone: { schema: {} } },
+          schemas: { Dangling: { $ref: '#/components/mediaTypes/Gone/schema' }, Root: schema },
+        },
+      })
+      const root = dig(result, 'components', 'schemas', 'Root')
+      expect(dig(root, 'properties', 'a')).toBe(dig(root, 'properties', 'b'))
     })
 
     it('copies a dereferenced schema shared across the document once', () => {

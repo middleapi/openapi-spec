@@ -8,6 +8,7 @@ import {
   DROP,
   getChild,
   getRef,
+  isConverting,
   isRecord,
   mapArray,
   mapRecord,
@@ -20,11 +21,10 @@ const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
 const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'
 
 interface Context {
+  convertSchema: (value: unknown) => unknown
   dangles: (ref: string) => boolean
   inlining: Set<string>
-  schemaFields: FieldTable
-  spec: unknown
-  targets: Map<string, unknown>
+  resolve: (ref: string) => unknown
 }
 
 export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {
@@ -32,16 +32,14 @@ export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaO
 }
 
 function inlineRef(ref: string, context: Context, convert: (item: unknown) => unknown): unknown {
-  if (context.inlining.has(ref)) {
+  const target = context.resolve(ref)
+  if (isConverting(target) || [...context.inlining].some(inlined => inlined === ref || inlined.startsWith(`${ref}/`))) {
     return DROP
   }
   context.inlining.add(ref)
-  try {
-    return convert(resolveRef(ref, context))
-  }
-  finally {
-    context.inlining.delete(ref)
-  }
+  const result = convert(target)
+  context.inlining.delete(ref)
+  return result
 }
 
 function convertRefOr(value: unknown, context: Context, convert: (item: unknown, context: Context) => unknown): unknown {
@@ -83,25 +81,24 @@ function createSchemaFields(schema: (item: unknown) => unknown, dangles: (ref: s
   }
 }
 
-function convertSchema(value: unknown, context: Context): unknown {
-  return convertRecord(value, context.schemaFields, (out, schema) => {
-    if (typeof schema.$ref !== 'string' || '$ref' in out) {
-      return out
-    }
-    const target = inlineRef(schema.$ref, context, item => convertSchema(item, context))
-    if (target === DROP) {
-      return out
-    }
-    if (Object.keys(out).length === 0) {
-      return target
-    }
-    const allOf = out.allOf ?? []
-    if (!Array.isArray(allOf)) {
-      return { allOf: [out, target] }
-    }
-    out.allOf = [...allOf, target]
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, context: Context): unknown {
+  const ref = getRef(schema)
+  if (ref === undefined || '$ref' in out) {
     return out
-  })
+  }
+  const target = inlineRef(ref, context, context.convertSchema)
+  if (target === DROP) {
+    return out
+  }
+  if (Object.keys(out).length === 0) {
+    return target
+  }
+  const allOf = out.allOf ?? []
+  if (!Array.isArray(allOf)) {
+    return { allOf: [out, target] }
+  }
+  out.allOf = [...allOf, target]
+  return out
 }
 
 function convertServer(value: unknown): unknown {
@@ -143,11 +140,14 @@ function isQuerystringParameter(value: unknown): boolean {
   return isRecord(value) && value.in === 'querystring'
 }
 
-function resolveRef(ref: string, context: Context): unknown {
-  if (!context.targets.has(ref)) {
-    context.targets.set(ref, resolveLocalRef(context.spec, ref))
+function memoize<T>(compute: (ref: string) => T): (ref: string) => T {
+  const cache = new Map<string, T>()
+  return (ref) => {
+    if (!cache.has(ref)) {
+      cache.set(ref, compute(ref))
+    }
+    return cache.get(ref) as T
   }
-  return context.targets.get(ref)
 }
 
 function resolveRefChain(value: unknown, context: Context): unknown {
@@ -159,7 +159,7 @@ function resolveRefChain(value: unknown, context: Context): unknown {
       return undefined
     }
     seen.add(ref)
-    target = resolveRef(ref, context)
+    target = context.resolve(ref)
     ref = getRef(target)
   }
   return target
@@ -179,7 +179,7 @@ function convertParameterOrHeader(value: unknown, context: Context): unknown {
     allowReserved: (item, parameter) => (!('in' in parameter) || parameter.in === 'query' ? deepClone(item) : DROP),
     content: item => convertContentMap(item, context),
     examples: refMap(context, convertExample),
-    schema: item => convertSchema(item, context),
+    schema: context.convertSchema,
     style: item => (item === 'cookie' ? DROP : deepClone(item)),
   })
 }
@@ -211,11 +211,11 @@ function convertMediaType(value: unknown, context: Context): unknown {
       itemEncoding: DROP,
       itemSchema: DROP,
       prefixEncoding: DROP,
-      schema: item => convertSchema(item, context),
+      schema: context.convertSchema,
     },
     (out, mediaType) => {
       if ('itemSchema' in mediaType && out.schema === undefined) {
-        out.schema = { items: convertSchema(mediaType.itemSchema, context), type: 'array' }
+        out.schema = { items: context.convertSchema(mediaType.itemSchema), type: 'array' }
       }
       return out
     },
@@ -294,7 +294,7 @@ function convertComponents(value: unknown, context: Context): unknown {
     pathItems: item => mapRecord(item, entry => convertPathItem(entry, context)),
     requestBodies: refMap(context, convertRequestBody),
     responses: refMap(context, convertResponse),
-    schemas: item => mapRecord(item, entry => convertSchema(entry, context)),
+    schemas: item => mapRecord(item, context.convertSchema),
     securitySchemes: refMap(context, convertSecurityScheme),
   })
 }
@@ -330,13 +330,12 @@ function convertSpec(spec: unknown, context: Context): unknown {
   )
 }
 
-function createContext(spec: unknown, dangles: (ref: string) => boolean): Context {
-  const context: Context = {
-    dangles,
-    inlining: new Set(),
-    schemaFields: createSchemaFields(item => convertSchema(item, context), dangles),
-    spec,
-    targets: new Map(),
+function createContext(resolve: (ref: string) => unknown, dangles: (ref: string) => boolean): Context {
+  const context: Context = { convertSchema, dangles, inlining: new Set(), resolve }
+  const fields = createSchemaFields(convertSchema, dangles)
+  const finish = (out: Record<string, unknown>, schema: Record<string, unknown>): unknown => finishSchema(out, schema, context)
+  function convertSchema(value: unknown): unknown {
+    return convertRecord(value, fields, finish)
   }
   return context
 }
@@ -362,19 +361,12 @@ function danglesIn(output: unknown, source: unknown, ref: string): boolean {
 }
 
 export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
+  const resolve = memoize(ref => resolveLocalRef(spec, ref))
   const refs = new Set<string>()
-  const draft = convertSpec(spec, createContext(spec, (ref) => {
+  const draft = convertSpec(spec, createContext(resolve, (ref) => {
     refs.add(ref)
     return false
   }))
-  if (![...refs].some(ref => danglesIn(draft, spec, ref))) {
-    return draft as OpenAPIV3_1.OpenAPIObject
-  }
-  const dangling = new Map<string, boolean>()
-  return convertSpec(spec, createContext(spec, (ref) => {
-    if (!dangling.has(ref)) {
-      dangling.set(ref, danglesIn(draft, spec, ref))
-    }
-    return dangling.get(ref) === true
-  })) as OpenAPIV3_1.OpenAPIObject
+  const dangles = memoize(ref => danglesIn(draft, spec, ref))
+  return ([...refs].some(dangles) ? convertSpec(spec, createContext(resolve, dangles)) : draft) as OpenAPIV3_1.OpenAPIObject
 }
