@@ -137,13 +137,18 @@ function getContentFormat(schema: Record<string, unknown>): string | undefined {
   return undefined
 }
 
+function hasNonStringValue(schema: Record<string, unknown>): boolean {
+  return ('const' in schema && typeof schema.const !== 'string')
+    || (Array.isArray(schema.enum) && schema.enum.some(item => typeof item !== 'string'))
+}
+
 function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const format = getContentFormat(schema)
   const { type } = schema
   if (format === undefined || (type !== undefined && !hasType(type, 'string'))) {
     return
   }
-  if (type === undefined) {
+  if (type === undefined && !hasNonStringValue(schema)) {
     out.type = 'string'
   }
   if (out.format === undefined) {
