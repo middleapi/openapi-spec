@@ -7,25 +7,25 @@ import {
   deepClone,
   DROP,
   getRef,
+  isConverting,
   isRecord,
   mapArray,
   mapRecord,
   operationFields,
+  parseLocalRef,
+  resolveLocalRef,
 } from './shared'
 
-const INLINE_LIMIT = 100_000
-const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/
 const DESCRIPTION = ['description']
 const SUMMARY_AND_DESCRIPTION = ['summary', 'description']
 const SECURITY_SCHEMES_REF_PREFIX = '#/components/securitySchemes/'
 
 interface Context {
+  convertSchema: (value: unknown) => unknown
   document: Record<string, unknown> | undefined
-  inlined: number
-  inlining: Set<unknown>
+  inlining: string[][]
   linkChecks: [links: Record<string, unknown>, name: string, operationId: string | typeof DROP][]
   operationIds: Set<string>
-  schemaFields: FieldTable
   schemeTypes: ReadonlyMap<string, string>
 }
 
@@ -34,45 +34,13 @@ type Convert = (item: unknown, context: Context) => unknown
 interface Chain {
   fields: Record<string, unknown>
   target: unknown
+  tokens: string[]
 }
 
-function decodeFragment(ref: string): string | undefined {
-  try {
-    return decodeURIComponent(ref.slice(1))
-  }
-  catch {
-    return undefined
-  }
-}
-
-function parsePointer(ref: string): string[] | undefined {
-  const pointer = ref.startsWith('#') ? decodeFragment(ref) : undefined
-  if (!pointer?.startsWith('/')) {
-    return undefined
-  }
-  return pointer.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
-}
-
-function parseRemovedPointer(ref: string, context: Context): string[] | undefined {
-  const tokens = context.document === undefined ? undefined : parsePointer(ref)
+function parseRemovedRef(ref: string, context: Context): string[] | undefined {
+  const tokens = context.document === undefined ? undefined : parseLocalRef(ref)
   const removed = tokens?.[0] === 'webhooks' || (tokens?.[0] === 'components' && tokens[1] === 'pathItems')
   return removed ? tokens : undefined
-}
-
-function resolvePointer(tokens: readonly string[], document: unknown): unknown {
-  let current = document
-  for (const token of tokens) {
-    if (isRecord(current) && Object.hasOwn(current, token)) {
-      current = current[token]
-    }
-    else if (Array.isArray(current) && ARRAY_INDEX.test(token) && Number(token) < current.length) {
-      current = current[Number(token)]
-    }
-    else {
-      return undefined
-    }
-  }
-  return current
 }
 
 function isPureRef(value: unknown): value is { $ref: string } {
@@ -92,33 +60,34 @@ function followRefs(
   const seen = new Set<unknown>()
   let fields: Record<string, unknown> = {}
   let target: unknown = value
+  let tokens: string[] | undefined
   while (isRecord(target) && typeof target.$ref === 'string' && isHop(target)) {
-    const tokens = parseRemovedPointer(target.$ref, context)
-    if (tokens === undefined) {
+    const next = parseRemovedRef(target.$ref, context)
+    if (next === undefined) {
       break
     }
-    if (seen.has(target) || !isLocation(tokens)) {
+    if (seen.has(target) || !isLocation(next)) {
       return undefined
     }
     seen.add(target)
-    const { $ref: _, ...own } = target
+    const { $ref: ref, ...own } = target
     fields = { ...own, ...fields }
-    target = resolvePointer(tokens, context.document)
+    tokens = next
+    target = resolveLocalRef(context.document, ref)
   }
-  return target === undefined ? undefined : { fields, target }
+  return tokens === undefined || target === undefined ? undefined : { fields, target, tokens }
 }
 
-function inline(target: Record<string, unknown>, fields: Record<string, unknown>, context: Context, convert: (copy: Record<string, unknown>) => unknown): unknown {
-  if (context.inlining.has(target) || context.inlined >= INLINE_LIMIT) {
+function inline(target: unknown, tokens: string[], context: Context, convert: () => unknown): unknown {
+  if (isConverting(target) || context.inlining.some(inlined => tokens.every((token, index) => inlined[index] === token))) {
     return DROP
   }
-  context.inlined += 1
-  context.inlining.add(target)
+  context.inlining.push(tokens)
   try {
-    return convert(deepClone({ ...target, ...fields }))
+    return convert()
   }
   finally {
-    context.inlining.delete(target)
+    context.inlining.pop()
   }
 }
 
@@ -134,11 +103,12 @@ function convertRefOr(value: unknown, context: Context, convert: Convert, overri
   if (chain === undefined || !isRecord(chain.target)) {
     return { $ref: value.$ref }
   }
-  const ref = getRef(chain.target)
+  const { fields, target, tokens } = chain
+  const ref = getRef(target)
   if (ref !== undefined) {
     return { $ref: ref }
   }
-  return inline(chain.target, pickFields(chain.fields, overrides), context, copy => convert(copy, context))
+  return inline(target, tokens, context, () => convert({ ...target, ...pickFields(fields, overrides) }, context))
 }
 
 function refMap(context: Context, convert: Convert, overrides?: readonly string[]): FieldConverter {
@@ -307,7 +277,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
 }
 
 function createSchemaFields(context: Context): FieldTable {
-  const convert = (item: unknown): unknown => convertSchema(item, context)
+  const convert = (item: unknown): unknown => context.convertSchema(item)
   const convertSubschemas = (item: unknown): unknown => mapArray(item, convert)
   return {
     $anchor: DROP,
@@ -335,7 +305,7 @@ function createSchemaFields(context: Context): FieldTable {
     dependentRequired: DROP,
     dependentSchemas: DROP,
     discriminator: item => convertRecord(item, {
-      mapping: mapping => mapRecord(mapping, value => (typeof value === 'string' && parseRemovedPointer(value, context) !== undefined ? DROP : deepClone(value))),
+      mapping: mapping => mapRecord(mapping, value => (typeof value === 'string' && parseRemovedRef(value, context) !== undefined ? DROP : deepClone(value))),
     }),
     else: DROP,
     enum: item => (Array.isArray(item) && item.length === 0 ? DROP : deepClone(item)),
@@ -367,35 +337,23 @@ function createSchemaFields(context: Context): FieldTable {
 }
 
 function convertSchemaRef(value: { $ref: string }, context: Context): unknown {
-  const target = followRefs(value, context, isPureRef)?.target
-  if (typeof target === 'boolean') {
-    return convertSchema(target, context)
+  const chain = followRefs(value, context, isPureRef)
+  if (chain === undefined) {
+    return { $ref: value.$ref }
   }
+  const { target, tokens } = chain
   if (isPureRef(target)) {
     return { $ref: target.$ref }
   }
-  if (!isRecord(target)) {
+  if (!isRecord(target) && typeof target !== 'boolean') {
     return { $ref: value.$ref }
   }
-  const inlined = inline(target, {}, context, copy => convertSchema(copy, context))
+  const inlined = inline(target, tokens, context, () => context.convertSchema(target))
   return inlined === DROP ? {} : inlined
 }
 
-function convertSchema(schema: unknown, context: Context): unknown {
-  if (schema === true) {
-    return {}
-  }
-  if (schema === false) {
-    return { not: {} }
-  }
-  if (isPureRef(schema)) {
-    return convertSchemaRef(schema, context)
-  }
-  return convertRecord(schema, context.schemaFields, (out, source) => finishSchema(out, source, context))
-}
-
 export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return convertSchema(schema, createContext(undefined)) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
+  return createContext(undefined).convertSchema(schema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }
 
 function resolveSchemeType(name: string, schemes: Record<string, unknown>, seen: Set<string>): string | undefined {
@@ -434,15 +392,27 @@ function createContext(spec: unknown): Context {
     }
   }
   const context: Context = {
+    convertSchema,
     document,
-    inlined: 0,
-    inlining: new Set(),
+    inlining: [],
     linkChecks: [],
     operationIds: new Set(),
-    schemaFields: {},
     schemeTypes,
   }
-  context.schemaFields = createSchemaFields(context)
+  const fields = createSchemaFields(context)
+  const finish = (out: Record<string, unknown>, schema: Record<string, unknown>): unknown => finishSchema(out, schema, context)
+  function convertSchema(value: unknown): unknown {
+    if (value === true) {
+      return {}
+    }
+    if (value === false) {
+      return { not: {} }
+    }
+    if (isPureRef(value)) {
+      return convertSchemaRef(value, context)
+    }
+    return convertRecord(value, fields, finish)
+  }
   return context
 }
 
@@ -487,7 +457,7 @@ function convertParameterOrHeader(value: unknown, context: Context): unknown {
     {
       content: item => convertContent(item, context),
       examples: refMap(context, deepClone, SUMMARY_AND_DESCRIPTION),
-      schema: item => convertSchema(item, context),
+      schema: context.convertSchema,
     },
     (out, parameter) => {
       if (parameter.in === 'path') {
@@ -506,7 +476,7 @@ function convertMediaType(value: unknown, context: Context): unknown {
   return convertRecord(value, {
     encoding: item => mapRecord(item, entry => convertEncoding(entry, context)),
     examples: refMap(context, deepClone, SUMMARY_AND_DESCRIPTION),
-    schema: item => convertSchema(item, context),
+    schema: context.convertSchema,
   })
 }
 
@@ -523,14 +493,13 @@ function linkedOperationId(link: unknown, context: Context): string | typeof DRO
   let target = link
   while (isRecord(target) && typeof target.$ref === 'string' && !seen.has(target)) {
     seen.add(target)
-    const tokens = parsePointer(target.$ref)
-    target = tokens === undefined ? undefined : resolvePointer(tokens, context.document)
+    target = resolveLocalRef(context.document, target.$ref)
   }
-  const tokens = isRecord(target) && typeof target.operationRef === 'string' ? parseRemovedPointer(target.operationRef, context) : undefined
-  if (tokens === undefined) {
+  const operationRef = isRecord(target) ? target.operationRef : undefined
+  if (typeof operationRef !== 'string' || parseRemovedRef(operationRef, context) === undefined) {
     return undefined
   }
-  const operation = resolvePointer(tokens, context.document)
+  const operation = resolveLocalRef(context.document, operationRef)
   return isRecord(operation) && typeof operation.operationId === 'string' ? operation.operationId : DROP
 }
 
@@ -547,11 +516,11 @@ function convertLink(value: unknown, context: Context): unknown {
 
 function convertLinks(value: unknown, context: Context): unknown {
   const out = mapRecord(value, item => convertRefOr(item, context, convertLink))
-  if (isRecord(value) && isRecord(out)) {
+  if (isRecord(value)) {
     for (const [name, item] of Object.entries(value)) {
       const operationId = linkedOperationId(item, context)
       if (operationId !== undefined) {
-        context.linkChecks.push([out, name, operationId])
+        context.linkChecks.push([out as Record<string, unknown>, name, operationId])
       }
     }
   }
@@ -604,16 +573,17 @@ function convertPathItemFields(value: unknown, context: Context): unknown {
 }
 
 function convertPathItem(value: unknown, context: Context): unknown {
-  if (!isRecord(value) || typeof value.$ref !== 'string') {
+  const chain = isRecord(value) ? followRefs(value, context, undefined, isPathItemLocation) : undefined
+  if (!isRecord(value) || chain === undefined || !isRecord(chain.target)) {
     return convertPathItemFields(value, context)
   }
-  const chain = followRefs(value, context, undefined, isPathItemLocation)
-  if (chain === undefined || !isRecord(chain.target) || chain.target === value) {
-    return convertPathItemFields(value, context)
+  const { fields, target, tokens } = chain
+  const inlined = inline(target, tokens, context, () => convertPathItem({ ...target, ...fields }, context))
+  if (inlined !== DROP) {
+    return inlined
   }
   const { $ref: _, ...own } = value
-  const inlined = inline(chain.target, chain.fields, context, copy => convertPathItem(copy, context))
-  return inlined === DROP ? convertPathItemFields(own, context) : inlined
+  return convertPathItemFields(own, context)
 }
 
 function convertPaths(value: unknown, context: Context): unknown {
@@ -630,7 +600,7 @@ function convertComponents(value: unknown, context: Context): unknown {
     pathItems: DROP,
     requestBodies: refMap(context, convertRequestBody),
     responses: refMap(context, convertResponse),
-    schemas: item => mapRecord(item, entry => convertSchema(entry, context)),
+    schemas: item => mapRecord(item, context.convertSchema),
     securitySchemes: item => mapRecord(item, (scheme, name) => isMutualTls(name, context) ? DROP : convertRefOr(scheme, context, deepClone)),
   })
 }

@@ -134,7 +134,7 @@ describe('downgradeSpecV31ToV30', () => {
       expect(convertSpec({ paths: 'junk' }).paths).toBe('junk')
       const paths = {
         '/a': {
-          get: { requestBody: 42, responses: { 200: 'junk' } },
+          get: { requestBody: 42, responses: { 200: 'junk', 201: { description: 'ok', links: 'junk' } } },
           parameters: [42],
         },
         '/b': {
@@ -663,11 +663,12 @@ describe('downgradeSpecV31ToV30', () => {
           },
         },
       })
-      const leaf = { properties: { children: { items: {}, type: 'array' } }, type: 'object' }
-      expect(result.components).toEqual({ schemas: { Tree: leaf } })
+      expect(result.components).toEqual({
+        schemas: { Tree: { properties: { children: { items: {}, type: 'array' } }, type: 'object' } },
+      })
       expect(
         dig(result, 'paths', '/tree', 'post', 'requestBody', 'content', 'application/json', 'schema'),
-      ).toEqual({ properties: { children: { items: leaf, type: 'array' } }, type: 'object' })
+      ).toBe(dig(result, 'components', 'schemas', 'Tree'))
       expect(dig(result, 'paths', '/ping', 'post', 'callbacks')).toEqual({
         pong: { '{$request.body#/url}': {} },
         self: { '{$request.body#/url}': {} },
@@ -676,18 +677,20 @@ describe('downgradeSpecV31ToV30', () => {
       expect(JSON.stringify(result)).not.toMatch(removedPointer)
     })
 
-    it('stops inlining after a fixed number of copies instead of growing exponentially', () => {
+    it('converts a target reached through many references once', () => {
       const pointer = (index: number) => `#/webhooks/w${index}/post/requestBody/content/application~1json/schema`
-      const leaf = { content: { 'application/json': { schema: { type: 'string' } } } }
-      const webhooks: Record<string, unknown> = { w40: { post: { requestBody: leaf } } }
-      for (let index = 0; index < 40; index++) {
+      const leaf = { content: { 'application/json': { schema: { type: ['string', 'null'] } } } }
+      const webhooks: Record<string, unknown> = { w64: { post: { requestBody: leaf } } }
+      for (let index = 0; index < 64; index++) {
         const schema = { properties: { a: { $ref: pointer(index + 1) }, b: { $ref: pointer(index + 1) } }, type: 'object' }
         webhooks[`w${index}`] = { post: { requestBody: { content: { 'application/json': { schema } } } } }
       }
-      const result = convertSpec({ components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks })
-      const text = JSON.stringify(result)
-      expect(text.length).toBeLessThan(20_000_000)
-      expect(text).not.toMatch(removedPointer)
+      let node = dig(convertSpec({ components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks }), 'components', 'schemas', 'Root')
+      for (let index = 0; index < 64; index++) {
+        expect(dig(node, 'properties', 'a')).toBe(dig(node, 'properties', 'b'))
+        node = dig(node, 'properties', 'a')
+      }
+      expect(node).toEqual({ nullable: true, type: 'string' })
     })
 
     it('resolves percent-encoded and tilde-escaped pointers', () => {

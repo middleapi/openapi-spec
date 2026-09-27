@@ -93,20 +93,20 @@ Known limitations: security requirements keyed by URI, `$self`-relative referenc
 
 Converted:
 
-| 3.1 construct                                              | 3.0 result                                                                                                 |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                                                           |
-| missing `paths`                                            | `{}` (required in 3.0)                                                                                     |
-| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0)                                     |
-| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                                                        |
-| Reference Object `summary` / `description`                 | applied to an inlined copy whose type has the field, removed otherwise (3.0 references carry no overrides) |
-| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                                                            |
+| 3.1 construct                                              | 3.0 result                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                                                             |
+| missing `paths`                                            | `{}` (required in 3.0)                                                                                       |
+| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0)                                       |
+| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                                                          |
+| Reference Object `summary` / `description`                 | applied to an inlined target whose type has the field, removed otherwise (3.0 references carry no overrides) |
+| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                                                              |
 
 Removed, with no 3.0 equivalent:
 
 - `webhooks` and `components.pathItems`, after every same-document reference into them is resolved:
-  - Reference Objects, Path Item `$ref`s, and Schema `$ref`s are replaced by a converted copy of their target, following reference chains. A chain that leads back out keeps the reference where it lands, and a Path Item's own fields win over inlined ones.
-  - A reference back to a target that is still being inlined is cut: a Schema Object becomes `{}`, a Path Item keeps only its own fields, and any other reference is removed. Inlining also stops after 100,000 copies, so targets that reference each other many times over cannot blow up the output.
+  - Reference Objects, Path Item `$ref`s, and Schema `$ref`s are replaced by their target in converted form, following reference chains. A chain that leads back out keeps the reference where it lands, and a Path Item's own fields win over inlined ones.
+  - A reference back to a target that is still being converted is cut: a Schema Object becomes `{}`, a Path Item keeps only its own fields, and any other reference is removed. A recursive schema keeps one level this way.
   - A Link `operationRef` into them becomes the target operation's `operationId` when an operation with that `operationId` remains, such as one inlined into `paths`. Otherwise the link is removed, together with Link references that lead to it.
   - `discriminator.mapping` entries pointing into them are removed.
   - A reference whose target is missing, is not an object (or not a Path Item, for a Path Item `$ref`), or is a reference loop is left as written.
