@@ -28,7 +28,6 @@ interface Context {
   inlined: Map<Convert, Map<unknown, unknown>>
   inlining: Set<unknown>
   linkChecks: [links: Record<string, unknown>, name: string, operationId: string | typeof DROP][]
-  operationIds: Set<string>
   schemeTypes: ReadonlyMap<string, string>
 }
 
@@ -396,7 +395,6 @@ function createContext(spec: unknown): Context {
     inlined: new Map(),
     inlining: new Set(),
     linkChecks: [],
-    operationIds: new Set(),
     schemeTypes,
   }
   const fields = createSchemaFields(context)
@@ -546,9 +544,6 @@ function convertOperation(value: unknown, context: Context): unknown {
       security: item => convertSecurity(item, context),
     },
     (out) => {
-      if (typeof out.operationId === 'string') {
-        context.operationIds.add(out.operationId)
-      }
       if (out.responses === undefined) {
         out.responses = { default: { description: '' } }
       }
@@ -570,15 +565,20 @@ function convertPathItemFields(value: unknown, context: Context): unknown {
 
 function convertPathItem(value: unknown, context: Context): unknown {
   const chain = isRecord(value) ? followRefs(value, context, 'pathItem') : undefined
-  if (chain === undefined || !isRecord(chain.target)) {
+  if (!isRecord(value) || chain === undefined || !isRecord(chain.target)) {
     return convertPathItemFields(value, context)
   }
-  const own = Object.keys(chain.fields).length === 0 ? undefined : convertPathItemFields(chain.fields, context)
   const out = inline(chain.target, context, convertPathItem)
-  if (out === DROP) {
-    return own ?? {}
+  if (Object.keys(chain.fields).length === 0) {
+    return out === DROP ? {} : out
   }
-  return own === undefined ? out : { ...out as Record<string, unknown>, ...own as Record<string, unknown> }
+  const { $ref: _, ...own } = value
+  const inherited = Object.fromEntries(Object.entries(chain.fields).filter(([key]) => !Object.hasOwn(own, key)))
+  return {
+    ...(out === DROP ? {} : out) as Record<string, unknown>,
+    ...convertInlined(() => convertPathItemFields(inherited, context)) as Record<string, unknown>,
+    ...convertPathItemFields(own, context) as Record<string, unknown>,
+  }
 }
 
 function convertPaths(value: unknown, context: Context): unknown {
@@ -598,6 +598,24 @@ function convertComponents(value: unknown, context: Context): unknown {
     schemas: item => mapRecord(item, context.convertSchema),
     securitySchemes: item => mapRecord(item, (scheme, name) => isMutualTls(name, context) ? DROP : convertRefOr(scheme, context, deepClone)),
   })
+}
+
+function collectOperationIds(pathItems: unknown, ids: Set<string>, seen: WeakSet<object>): void {
+  for (const [key, pathItem] of isRecord(pathItems) ? Object.entries(pathItems) : []) {
+    if (key.startsWith('x-') || !isRecord(pathItem) || seen.has(pathItem)) {
+      continue
+    }
+    seen.add(pathItem)
+    for (const method of HTTP_METHODS_UP_TO_V31) {
+      const operation = pathItem[method]
+      if (isRecord(operation) && typeof operation.operationId === 'string') {
+        ids.add(operation.operationId)
+      }
+      for (const callback of isRecord(operation) && isRecord(operation.callbacks) ? Object.values(operation.callbacks) : []) {
+        collectOperationIds(callback, ids, seen)
+      }
+    }
+  }
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
@@ -620,9 +638,19 @@ export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV
       return out
     },
   )
-  for (const [links, name, operationId] of context.linkChecks) {
-    if (operationId === DROP || !context.operationIds.has(operationId)) {
-      delete links[name]
+  if (context.linkChecks.length > 0) {
+    const { components, paths } = converted as Record<string, unknown>
+    const operationIds = new Set<string>()
+    const seen = new WeakSet<object>()
+    collectOperationIds(paths, operationIds, seen)
+    const callbacks = isRecord(components) ? components.callbacks : undefined
+    for (const callback of isRecord(callbacks) ? Object.values(callbacks) : []) {
+      collectOperationIds(callback, operationIds, seen)
+    }
+    for (const [links, name, operationId] of context.linkChecks) {
+      if (operationId === DROP || !operationIds.has(operationId)) {
+        delete links[name]
+      }
     }
   }
   return converted as OpenAPIV3_0.OpenAPIObject

@@ -758,7 +758,9 @@ describe('downgradeSpecV31ToV30', () => {
     it('rewrites links into the removed parts to the operationId of an operation still in the output and removes the rest', () => {
       const result = convertSpec({
         components: {
+          callbacks: { Hook: { '{$url}': { $ref: '#/webhooks/callbackHook' } } },
           links: {
+            ByComponentCallback: { operationRef: '#/webhooks/callbackHook/post' },
             Gone: { operationRef: '#/webhooks/orphan/post' },
             Kept: { description: 'kept', operationRef: '#/webhooks/newPet/post' },
           },
@@ -795,8 +797,12 @@ describe('downgradeSpecV31ToV30', () => {
           },
           '/b': { $ref: '#/webhooks/newPet' },
           '/c': { $ref: '#/components/pathItems/NoId' },
+          '/d': { $ref: '#/webhooks/newPet' },
+          '/junk': 'junk',
+          'x-orphan': { post: { operationId: 'orphanHook' } },
         },
         webhooks: {
+          callbackHook: { post: { operationId: 'callbackHookOp', responses: {} } },
           newPet: {
             post: {
               operationId: 'newPetHook',
@@ -812,7 +818,11 @@ describe('downgradeSpecV31ToV30', () => {
         },
       })
       expect(result.components).toEqual({
-        links: { Kept: { description: 'kept', operationId: 'newPetHook' } },
+        callbacks: { Hook: { '{$url}': { post: { operationId: 'callbackHookOp', responses: {} } } } },
+        links: {
+          ByComponentCallback: { operationId: 'callbackHookOp' },
+          Kept: { description: 'kept', operationId: 'newPetHook' },
+        },
       })
       expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'links')).toEqual({
         both: { operationId: 'newPetHook' },
@@ -828,6 +838,34 @@ describe('downgradeSpecV31ToV30', () => {
         self: { operationId: 'newPetHook' },
       })
       expect(JSON.stringify(result)).not.toMatch(removedPointer)
+    })
+
+    it('removes a link to an operation that an own field of the referencing path item replaces', () => {
+      expect(
+        convertSpec({
+          components: { links: { L: { operationRef: '#/webhooks/w/post' } } },
+          paths: { '/a': { $ref: '#/webhooks/w', post: { responses: {} } } },
+          webhooks: { w: { post: { operationId: 'hidden', responses: {} } } },
+        }).components,
+      ).toEqual({ links: {} })
+    })
+
+    it('removes a link to a removed operation in a document without components', () => {
+      expect(
+        convertSpec({
+          paths: {
+            '/a': {
+              get: {
+                callbacks: { junk: 42 },
+                responses: { 200: { description: 'ok', links: { l: { operationRef: '#/webhooks/w/post' } } } },
+              },
+            },
+          },
+          webhooks: { w: { post: { operationId: 'hook', responses: {} } } },
+        }).paths,
+      ).toEqual({
+        '/a': { get: { callbacks: { junk: 42 }, responses: { 200: { description: 'ok', links: {} } } } },
+      })
     })
 
     it('removes discriminator mapping entries into the removed parts', () => {
@@ -985,6 +1023,35 @@ describe('downgradeSpecV31ToV30', () => {
         c: { '{$url}': { summary: 't' } },
       })
       expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+    })
+
+    it('cuts fields inherited from a later hop that lead back into it', () => {
+      const responses = { 200: { description: 'ok' } }
+      const result = convertSpec({
+        components: {
+          pathItems: {
+            A: { $ref: '#/components/pathItems/T', post: { callbacks: { c: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses } },
+            T: { summary: 't' },
+          },
+        },
+        paths: { '/p': { $ref: '#/components/pathItems/A' } },
+      })
+      expect(result.paths).toEqual({
+        '/p': { post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
+      })
+    })
+
+    it('keeps an object cycle that an inlined target also reaches', () => {
+      const a: Record<string, unknown> = { properties: {}, type: 'object' }
+      const b = { properties: { back: a }, type: 'object' }
+      a.properties = { hook: { $ref: schemaPointer }, b }
+      const result = convertSpec({
+        components: { schemas: { A: a } },
+        webhooks: { newPet: { post: { requestBody: { content: { 'application/json': { schema: { properties: { b }, type: 'object' } } } } } } },
+      })
+      const converted = dig(result, 'components', 'schemas', 'A')
+      expect(dig(converted, 'properties', 'b', 'properties', 'back')).toBe(converted)
+      expect(dig(converted, 'properties', 'hook', 'properties', 'b', 'properties', 'back')).toEqual({})
     })
 
     it('cuts a reference that comes back to an object shared within the input', () => {

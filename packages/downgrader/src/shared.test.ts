@@ -433,6 +433,19 @@ describe('convertInlined', () => {
     expect(dig(result, 'child', 'back')).toBe(DROP)
     expect(dig(result, 'child', 'node', 'self')).toBe(dig(result, 'child', 'node'))
   })
+
+  it('converts again, outside the inline, a result that was cut inside it', () => {
+    const node: Record<string, unknown> = { name: 'root' }
+    const child = { self: node }
+    node.self = child
+    const convertChild = (item: unknown): unknown => convertRecord(item, { self: convertNode })
+    const result = convertRecord(node, {
+      name: () => convertInlined(() => convertChild(child)),
+      self: convertChild,
+    })
+    expect(dig(result, 'name')).toEqual({})
+    expect(dig(result, 'self', 'self')).toBe(result)
+  })
 })
 
 describe('isConverting', () => {

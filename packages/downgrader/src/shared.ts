@@ -44,6 +44,7 @@ export function setOwn(object: object, key: PropertyKey, value: unknown): void {
 type Finish = (out: Record<string, unknown>, source: Record<string, unknown>) => unknown
 
 interface Conversion {
+  cutAt: number
   depth: number
   done: boolean
   fields: FieldTable
@@ -53,6 +54,7 @@ interface Conversion {
 
 const conversions = new Map<object, Conversion>()
 const clones = new Map<object, unknown>()
+const active: Conversion[] = []
 let depth = 0
 
 function cloneValue(value: unknown, seen: Map<object, unknown>): unknown {
@@ -92,15 +94,24 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
   }
   const known = conversions.get(value)
   if (known !== undefined && !known.done) {
-    return known.depth === depth ? known.result : DROP
+    if (known.depth === depth) {
+      return known.result
+    }
+    for (const conversion of active) {
+      if (conversion.depth > known.depth) {
+        conversion.cutAt = Math.max(conversion.cutAt, known.depth)
+      }
+    }
+    return DROP
   }
-  if (known !== undefined && known.fields === fields && known.finish === finish) {
+  if (known !== undefined && known.fields === fields && known.finish === finish && depth > known.cutAt) {
     return known.result
   }
   const out: Record<string, unknown> = {}
-  const conversion: Conversion = { depth, done: false, fields, finish, result: out }
+  const conversion: Conversion = { cutAt: -1, depth, done: false, fields, finish, result: out }
   const outermost = conversions.size === 0
   conversions.set(value, conversion)
+  active.push(conversion)
   try {
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
@@ -117,6 +128,7 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
     return conversion.result
   }
   finally {
+    active.pop()
     if (outermost) {
       conversions.clear()
       clones.clear()
