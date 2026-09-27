@@ -1330,6 +1330,11 @@ describe('downgradeSchemaV32ToV31', () => {
     })
   })
 
+  it('returns a fresh copy on every call', () => {
+    const schema: OpenAPIV3_2.SchemaObject = { properties: { a: { type: 'string' } }, type: 'object' }
+    expect(downgradeSchemaV32ToV31(schema)).not.toBe(downgradeSchemaV32ToV31(schema))
+  })
+
   it('never mutates the input schema', () => {
     const schema: OpenAPIV3_2.SchemaObject = {
       discriminator: { defaultMapping: 'Dog', propertyName: 'kind' },

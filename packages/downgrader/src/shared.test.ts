@@ -135,6 +135,11 @@ describe('deepClone', () => {
     expect(clone.x).not.toBe(shared)
     expect(clone.x).toBe(clone.y)
   })
+
+  it('returns a fresh copy on every call', () => {
+    const shared = { a: 1 }
+    expect(deepClone(shared)).not.toBe(deepClone(shared))
+  })
 })
 
 describe('convertRecord', () => {
@@ -255,22 +260,26 @@ describe('convertRecord', () => {
     expect(dig(result, 'a')).not.toBe(shared)
   })
 
-  it('converts a shared reference separately for each field table and finish', () => {
+  it('reuses a finished result only for the same field table and finish', () => {
     const shared = { name: 'x' }
-    const fields: FieldTable = { name: () => 'a' }
+    const fields: FieldTable = { name: () => 'converted' }
+    const wrap = (out: Record<string, unknown>) => ({ wrapped: out })
     const result = convertRecord(
-      { a: shared, b: shared, c: shared },
+      { a: shared, b: shared, c: shared, d: shared },
       {
-        a: item => convertRecord(item, fields),
-        b: item => convertRecord(item, { name: () => 'b' }),
-        c: item => convertRecord(item, fields, out => ({ ...out, finished: true })),
+        a: item => convertRecord(item, fields, wrap),
+        b: item => convertRecord(item, fields, wrap),
+        c: item => convertRecord(item, fields),
+        d: item => convertRecord(item, {}),
       },
     )
     expect(result).toEqual({
-      a: { name: 'a' },
-      b: { name: 'b' },
-      c: { finished: true, name: 'a' },
+      a: { wrapped: { name: 'converted' } },
+      b: { wrapped: { name: 'converted' } },
+      c: { name: 'converted' },
+      d: { name: 'x' },
     })
+    expect(dig(result, 'b')).toBe(dig(result, 'a'))
   })
 
   it('returns fresh results on every call', () => {
@@ -292,20 +301,23 @@ describe('convertRecord', () => {
     expect(convertRecord(value, { a: () => 2 })).toEqual({ a: 2 })
   })
 
-  it('forgets reused results when a converter throws', () => {
+  it('forgets reused results and clones when a converter throws', () => {
     const shared = { name: 'x' }
     const convert = vi.fn(() => 'converted')
     const fields: FieldTable = { name: convert }
+    let clone: unknown
     expect(() =>
       convertRecord({ a: shared }, {
         a: (item) => {
           convertRecord(item, fields)
+          clone = deepClone(item)
           throw new Error('boom')
         },
       }),
     ).toThrow('boom')
-    convertRecord(shared, fields)
+    const result = convertRecord({ a: shared, b: shared }, { a: item => convertRecord(item, fields) })
     expect(convert).toHaveBeenCalledTimes(2)
+    expect(dig(result, 'b')).not.toBe(clone)
   })
 })
 

@@ -52,7 +52,6 @@ interface Conversion {
 
 const conversions = new Map<object, Conversion>()
 const clones = new Map<object, unknown>()
-let depth = 0
 
 function cloneValue(value: unknown, seen: Map<object, unknown>): unknown {
   if (!(Array.isArray(value) || isRecord(value))) {
@@ -82,7 +81,7 @@ export function deepClone<T>(value: T): T {
   if (!(Array.isArray(value) || isRecord(value))) {
     return value
   }
-  return cloneValue(value, depth > 0 ? clones : new Map()) as T
+  return cloneValue(value, conversions.size > 0 ? clones : new Map()) as T
 }
 
 export function convertRecord(value: unknown, fields: FieldTable, finish?: Finish): unknown {
@@ -95,8 +94,8 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
   }
   const out: Record<string, unknown> = {}
   const conversion: Conversion = { done: false, fields, finish, result: out }
+  const outermost = conversions.size === 0
   conversions.set(value, conversion)
-  depth += 1
   try {
     for (const [key, item] of Object.entries(value)) {
       const convert = Object.hasOwn(fields, key) ? fields[key] : undefined
@@ -113,8 +112,7 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
     return conversion.result
   }
   finally {
-    depth -= 1
-    if (depth === 0) {
+    if (outermost) {
       conversions.clear()
       clones.clear()
     }
