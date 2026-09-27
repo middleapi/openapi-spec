@@ -1105,32 +1105,43 @@ describe('downgradeSchemaV31ToV30', () => {
   describe('content keywords', () => {
     it.each([
       [
-        'converts contentEncoding base64 into format byte',
-        { contentEncoding: 'base64' },
-        { format: 'byte' },
+        'converts encoded binary into type string with format byte',
+        { contentEncoding: 'base64', contentMediaType: 'image/png', type: 'string' },
+        { format: 'byte', type: 'string' },
+      ],
+      [
+        'converts raw binary into type string with format binary',
+        { contentMediaType: 'image/png' },
+        { format: 'binary', type: 'string' },
+      ],
+      [
+        'keeps nullable on binary strings',
+        { contentMediaType: 'image/png', type: ['string', 'null'] },
+        { format: 'binary', nullable: true, type: 'string' },
+      ],
+      [
+        'keeps format beside a multi-type anyOf that includes string',
+        { contentMediaType: 'image/png', type: ['string', 'integer'] },
+        { anyOf: [{ type: 'string' }, { type: 'integer' }], format: 'binary' },
       ],
       [
         'keeps an existing format over contentEncoding',
         { contentEncoding: 'base64', format: 'custom' },
-        { format: 'custom' },
-      ],
-      ['drops other content encodings', { contentEncoding: 'gzip' }, {}],
-      [
-        'converts contentMediaType application/octet-stream into format binary',
-        { contentMediaType: 'application/octet-stream' },
-        { format: 'binary' },
+        { format: 'custom', type: 'string' },
       ],
       [
-        'does not emit format binary when a contentEncoding is present',
-        {
-          contentEncoding: 'gzip',
-          contentMediaType: 'application/octet-stream',
-        },
-        {},
+        'drops content keywords on non-string types',
+        { contentMediaType: 'image/png', type: 'object' },
+        { type: 'object' },
       ],
       [
-        'drops other content media types',
-        { contentMediaType: 'image/png' },
+        'drops base64url, which format byte does not accept',
+        { contentEncoding: 'base64url', contentMediaType: 'image/png', type: 'string' },
+        { type: 'string' },
+      ],
+      [
+        'drops non-string content media types',
+        { contentMediaType: 42 },
         {},
       ],
       ['drops contentSchema', { contentSchema: { type: 'string' } }, {}],

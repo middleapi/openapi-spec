@@ -138,6 +138,36 @@ describe('3.1 example documents downgraded to 3.0', () => {
     await expectValidAs(converted, '3.0')
     expect(doc).toEqual(before)
   })
+
+  it('converts raw and encoded binary schemas to the 3.0 binary and byte formats', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      info: { title: 'Uploads', version: '1.0.0' },
+      openapi: '3.1.0',
+      paths: {
+        '/avatar': {
+          put: {
+            requestBody: {
+              content: {
+                'image/png': { schema: { contentMediaType: 'image/png' } },
+                'text/plain': { schema: { contentEncoding: 'base64', contentMediaType: 'image/png', type: 'string' } },
+              },
+            },
+            responses: { 204: { description: 'saved' } },
+          },
+        },
+      },
+    }
+    const before = structuredClone(doc)
+    const converted = downgradeSpecV31ToV30(doc)
+    expect(converted.paths['/avatar']?.put?.requestBody).toEqual({
+      content: {
+        'image/png': { schema: { format: 'binary', type: 'string' } },
+        'text/plain': { schema: { format: 'byte', type: 'string' } },
+      },
+    })
+    await expectValidAs(converted, '3.0')
+    expect(doc).toEqual(before)
+  })
 })
 
 describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {

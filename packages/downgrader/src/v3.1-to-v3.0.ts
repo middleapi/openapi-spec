@@ -80,6 +80,10 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
   }
 }
 
+function hasType(type: unknown, name: string): boolean {
+  return type === name || (Array.isArray(type) && type.includes(name))
+}
+
 function convertType(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const { type } = schema
   if (type === undefined) {
@@ -123,15 +127,27 @@ function convertExclusiveBounds(schema: Record<string, unknown>, out: Record<str
   }
 }
 
+function getContentFormat(schema: Record<string, unknown>): string | undefined {
+  if (schema.contentEncoding === 'base64') {
+    return 'byte'
+  }
+  if (schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string') {
+    return 'binary'
+  }
+  return undefined
+}
+
 function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (out.format !== undefined) {
+  const format = getContentFormat(schema)
+  const { type } = schema
+  if (format === undefined || (type !== undefined && !hasType(type, 'string'))) {
     return
   }
-  if (schema.contentEncoding === 'base64') {
-    out.format = 'byte'
+  if (type === undefined) {
+    out.type = 'string'
   }
-  else if (schema.contentEncoding === undefined && schema.contentMediaType === 'application/octet-stream') {
-    out.format = 'binary'
+  if (out.format === undefined) {
+    out.format = format
   }
 }
 
@@ -140,7 +156,7 @@ function convertXml(value: unknown, schemaType: unknown): unknown {
     if (xml.nodeType === 'attribute') {
       out.attribute = true
     }
-    else if (xml.nodeType === 'element' && (schemaType === 'array' || (Array.isArray(schemaType) && schemaType.includes('array')))) {
+    else if (xml.nodeType === 'element' && hasType(schemaType, 'array')) {
       out.wrapped = true
     }
     return out
