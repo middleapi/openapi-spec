@@ -1,4 +1,5 @@
-import type { OpenAPIV3_0, OpenAPIV3_1 } from '@openapi-spec/types'
+import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import type { FieldConverter, FieldTable } from './shared'
 import {
@@ -39,7 +40,6 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
     if (!nullable) {
       return
     }
-    out.nullable = true
     if ('const' in schema) {
       if (schema.const !== null) {
         out.not = {}
@@ -58,10 +58,14 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
     }
     return
   }
+  if (out.anyOf !== undefined && out.allOf !== undefined && !Array.isArray(out.allOf)) {
+    return
+  }
   const variants = rest.map((item) => {
     const variant: Record<string, unknown> = { type: item }
     if (item === 'array') {
-      variant.items = out.items === undefined ? {} : deepClone(out.items)
+      variant.items = out.items === undefined ? {} : out.items
+      delete out.items
     }
     if (nullable) {
       variant.nullable = true
@@ -71,9 +75,13 @@ function applyTypes(types: string[], schema: Record<string, unknown>, out: Recor
   if (out.anyOf === undefined) {
     out.anyOf = variants
   }
-  else if (out.allOf === undefined || Array.isArray(out.allOf)) {
+  else {
     out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
   }
+}
+
+function hasType(type: unknown, name: string): boolean {
+  return type === name || (Array.isArray(type) && type.includes(name))
 }
 
 function convertType(schema: Record<string, unknown>, out: Record<string, unknown>): void {
@@ -96,12 +104,8 @@ function convertType(schema: Record<string, unknown>, out: Record<string, unknow
 }
 
 function convertConst(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (!('const' in schema)) {
-    return
-  }
-  out.enum = [deepClone(schema.const)]
-  if (schema.const === null) {
-    out.nullable = true
+  if ('const' in schema) {
+    out.enum = [deepClone(schema.const)]
   }
 }
 
@@ -123,15 +127,27 @@ function convertExclusiveBounds(schema: Record<string, unknown>, out: Record<str
   }
 }
 
+function getContentFormat(schema: Record<string, unknown>): string | undefined {
+  if (schema.contentEncoding === 'base64') {
+    return 'byte'
+  }
+  if (schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string') {
+    return 'binary'
+  }
+  return undefined
+}
+
 function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (out.format !== undefined) {
+  const format = getContentFormat(schema)
+  const { type } = schema
+  if (format === undefined || (type !== undefined && !hasType(type, 'string'))) {
     return
   }
-  if (schema.contentEncoding === 'base64') {
-    out.format = 'byte'
+  if (type === undefined) {
+    out.type = 'string'
   }
-  else if (schema.contentEncoding === undefined && schema.contentMediaType === 'application/octet-stream') {
-    out.format = 'binary'
+  if (out.format === undefined) {
+    out.format = format
   }
 }
 
@@ -140,7 +156,7 @@ function convertXml(value: unknown, schemaType: unknown): unknown {
     if (xml.nodeType === 'attribute') {
       out.attribute = true
     }
-    else if (xml.nodeType === 'element' && (schemaType === 'array' || (Array.isArray(schemaType) && schemaType.includes('array')))) {
+    else if (xml.nodeType === 'element' && hasType(schemaType, 'array')) {
       out.wrapped = true
     }
     return out
