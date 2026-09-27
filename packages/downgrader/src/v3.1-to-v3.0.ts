@@ -137,8 +137,10 @@ function getContentFormat(schema: Record<string, unknown>): string | undefined {
   return undefined
 }
 
+const TYPE_CONSTRAINT_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'not', 'oneOf']
+
 function hasTypeConstraint(schema: Record<string, unknown>): boolean {
-  return '$ref' in schema || 'allOf' in schema || 'anyOf' in schema || 'not' in schema || 'oneOf' in schema
+  return TYPE_CONSTRAINT_KEYWORDS.some(keyword => keyword in schema)
     || ('const' in schema && typeof schema.const !== 'string')
     || (Array.isArray(schema.enum) && schema.enum.some(item => typeof item !== 'string'))
 }
