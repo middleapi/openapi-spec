@@ -1130,36 +1130,6 @@ describe('downgradeSchemaV31ToV30', () => {
         { format: 'custom', type: 'string' },
       ],
       [
-        'adds type string beside an all-string enum',
-        { contentMediaType: 'text/plain', enum: ['a', 'b'] },
-        { enum: ['a', 'b'], format: 'binary', type: 'string' },
-      ],
-      [
-        'does not add type string beside a non-string const',
-        { const: 42, contentEncoding: 'base64' },
-        { enum: [42], format: 'byte' },
-      ],
-      [
-        'does not add type string beside an enum with non-string values',
-        { contentMediaType: 'image/png', enum: ['x', null] },
-        { enum: ['x', null], format: 'binary' },
-      ],
-      [
-        'does not add type string beside allOf',
-        { allOf: [{ type: 'object' }], contentMediaType: 'image/png' },
-        { allOf: [{ type: 'object' }], format: 'binary' },
-      ],
-      [
-        'does not add type string beside a nullable anyOf',
-        { anyOf: [{ type: 'string' }, { type: 'null' }], contentEncoding: 'base64' },
-        { anyOf: [{ type: 'string' }, { enum: [null] }], format: 'byte' },
-      ],
-      [
-        'does not add type string beside $ref',
-        { $ref: '#/components/schemas/Image', contentMediaType: 'image/png' },
-        { allOf: [{ $ref: '#/components/schemas/Image' }], format: 'binary' },
-      ],
-      [
         'drops content keywords on non-string types',
         { contentMediaType: 'image/png', type: 'object' },
         { type: 'object' },

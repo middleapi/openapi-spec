@@ -137,21 +137,13 @@ function getContentFormat(schema: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-const TYPE_CONSTRAINT_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'not', 'oneOf']
-
-function hasTypeConstraint(schema: Record<string, unknown>): boolean {
-  return TYPE_CONSTRAINT_KEYWORDS.some(keyword => keyword in schema)
-    || ('const' in schema && typeof schema.const !== 'string')
-    || (Array.isArray(schema.enum) && schema.enum.some(item => typeof item !== 'string'))
-}
-
 function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   const format = getContentFormat(schema)
   const { type } = schema
   if (format === undefined || (type !== undefined && !hasType(type, 'string'))) {
     return
   }
-  if (type === undefined && !hasTypeConstraint(schema)) {
+  if (type === undefined) {
     out.type = 'string'
   }
   if (out.format === undefined) {
