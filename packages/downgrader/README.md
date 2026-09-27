@@ -58,7 +58,7 @@ All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi
 
 ## 3.2 → 3.1
 
-Schema Objects pass through unchanged. 3.2 keeps the 3.1 JSON Schema keyword set and only adds two fields to the OAS vocabulary, `discriminator.defaultMapping` and `xml.nodeType`, and both are kept. 3.1 tooling ignores them, so a `defaultMapping` fallback stops taking effect, while `nodeType` is picked up again on the 3.1 → 3.0 hop. The standard OpenAPI 3.1 document schema accepts them, but the strict OAS 3.1 base-vocabulary meta-schema closes the XML and Discriminator Objects and will flag them.
+Schema Objects pass through unchanged, apart from `$ref`s into removed parts of the document (see below). 3.2 keeps the 3.1 JSON Schema keyword set and only adds two fields to the OAS vocabulary, `discriminator.defaultMapping` and `xml.nodeType`, and both are kept. 3.1 tooling ignores them, so a `defaultMapping` fallback stops taking effect, while `nodeType` is picked up again on the 3.1 → 3.0 hop. The standard OpenAPI 3.1 document schema accepts them, but the strict OAS 3.1 base-vocabulary meta-schema closes the XML and Discriminator Objects and will flag them.
 
 Converted:
 
@@ -66,11 +66,12 @@ Converted:
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `openapi: 3.2.x`                                                           | `openapi: 3.1.2`                                                                                                                                                                                                                                                                                                |
 | `jsonSchemaDialect` naming a 3.2 OAS dialect                               | `https://spec.openapis.org/oas/3.1/dialect/base`; other dialects pass through                                                                                                                                                                                                                                   |
-| `components.mediaTypes` and content-map `$ref`s to it                      | references inlined and the component map removed. Entries whose target cannot be inlined (external, unknown, or cyclic) are removed, since 3.1 content maps cannot hold references. A parameter or header that loses its entire `content` that way is removed too, because 3.1 requires exactly one entry there |
+| `components.mediaTypes` and content-map `$ref`s                            | references inlined and the component map removed. Entries whose target cannot be inlined (external, unknown, or cyclic) are removed, since 3.1 content maps cannot hold references. A parameter or header that loses its entire `content` that way is removed too, because 3.1 requires exactly one entry there |
 | media type `itemSchema` without a sibling `schema`                         | `schema: { type: "array", items: … }`, the sequential media type data model                                                                                                                                                                                                                                     |
 | response `summary` without a `description`                                 | promoted to `description`; `""` when neither exists, since 3.1 requires it                                                                                                                                                                                                                                      |
 | example `dataValue` / `serializedValue` without `value` or `externalValue` | promoted to `value`, `dataValue` taking precedence                                                                                                                                                                                                                                                              |
 | parameter `style: "cookie"`                                                | removed so the 3.1 default `form` applies                                                                                                                                                                                                                                                                       |
+| `$ref` into a removed part                                                 | the target inlined in converted form, following reference chains, e.g. for `#/components/mediaTypes/Pet/schema`, anything under a `query` operation, or an index into a parameter list that lost entries. Beside other schema keywords it joins `allOf`; a cycle is cut by removing the reference               |
 
 Removed, with no 3.1 equivalent:
 
@@ -78,7 +79,7 @@ Removed, with no 3.1 equivalent:
 - server `name`
 - tag `summary`, `parent`, and `kind`
 - the Path Item `query` operation and `additionalOperations`
-- `in: "querystring"` parameters, in parameter lists and in `components.parameters`, together with references to removed component parameters and headers (chains of reference aliases included)
+- `in: "querystring"` parameters, in parameter lists and in `components.parameters`, together with references that resolve to a removed parameter or header (chains of reference aliases included)
 - `allowReserved` on non-query parameters
 - media type `description`
 - `prefixEncoding`, `itemEncoding`, and nested `encoding` on media types and encodings
@@ -86,7 +87,7 @@ Removed, with no 3.1 equivalent:
 - OAuth `deviceAuthorization` flows
 - security scheme `oauth2MetadataUrl` and `deprecated`
 
-Known limitations: security requirements keyed by URI, `$self`-relative reference resolution, and a `$schema` keyword inside a Schema Object that names the 3.2 dialect all pass through unchanged.
+Known limitations: security requirements keyed by URI, `$self`-relative reference resolution, Link `operationRef` and discriminator `mapping` values that point into removed parts, and a `$schema` keyword inside a Schema Object that names the 3.2 dialect all pass through unchanged.
 
 ## 3.1 → 3.0
 

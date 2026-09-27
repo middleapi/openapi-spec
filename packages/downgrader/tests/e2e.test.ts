@@ -217,6 +217,86 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
     expect(tagsExample).toEqual(before)
   })
 
+  it('inlines $refs into removed 3.2 parts so nothing dangles', async () => {
+    const pet: OpenAPIV3_2.SchemaObject = { properties: { name: { type: 'string' } }, type: 'object' }
+    const doc: OpenAPIV3_2.OpenAPIObject = {
+      components: {
+        mediaTypes: {
+          Pet: { examples: { tom: { dataValue: { name: 'Tom' } } }, schema: pet },
+        },
+        schemas: { Pet: { $ref: '#/components/mediaTypes/Pet/schema' } },
+      },
+      info: { title: 'Dangling', version: '1.0.0' },
+      openapi: '3.2.0',
+      paths: {
+        '/pets': {
+          additionalOperations: {
+            COPY: { responses: { 201: { description: 'Copied' } } },
+          },
+          get: {
+            parameters: [
+              {
+                content: { 'application/x-www-form-urlencoded': { schema: { type: 'object' } } },
+                in: 'querystring',
+                name: 'filter',
+              },
+              { in: 'query', name: 'limit', schema: { type: 'integer' } },
+            ],
+            responses: {
+              200: {
+                content: {
+                  'application/json': {
+                    examples: { tom: { $ref: '#/components/mediaTypes/Pet/examples/tom' } },
+                    schema: { items: { $ref: '#/components/schemas/Pet' }, type: 'array' },
+                  },
+                },
+                description: 'Pets',
+              },
+            },
+          },
+          post: {
+            parameters: [{ $ref: '#/paths/~1pets/get/parameters/1' }],
+            requestBody: { $ref: '#/paths/~1pets/query/requestBody' },
+            responses: {
+              200: { $ref: '#/paths/~1pets/query/responses/200' },
+              201: { $ref: '#/paths/~1pets/additionalOperations/COPY/responses/201' },
+            },
+          },
+          query: {
+            requestBody: {
+              content: {
+                'application/json': { schema: { $ref: '#/components/mediaTypes/Pet/schema' } },
+              },
+            },
+            responses: { 200: { summary: 'Matching pets' } },
+          },
+        },
+      },
+    }
+    const before = structuredClone(doc)
+
+    const v31 = downgradeSpecV32ToV31(doc)
+    const serialized = JSON.stringify(v31)
+    expect(serialized).not.toContain('#/components/mediaTypes/')
+    expect(serialized).not.toContain('~1pets/')
+    expect(v31.components?.schemas).toEqual({ Pet: pet })
+    expect(v31.paths?.['/pets']?.get?.responses?.['200']).toMatchObject({
+      content: { 'application/json': { examples: { tom: { value: { name: 'Tom' } } } } },
+    })
+    expect(v31.paths?.['/pets']?.post).toEqual({
+      parameters: [{ in: 'query', name: 'limit', schema: { type: 'integer' } }],
+      requestBody: { content: { 'application/json': { schema: pet } } },
+      responses: {
+        200: { description: 'Matching pets' },
+        201: { description: 'Copied' },
+      },
+    })
+    await expectValidAs(v31, '3.1')
+
+    await expectValidAs(downgradeSpecV31ToV30(v31), '3.0')
+    expect(doc).toEqual(before)
+  })
+
   it('converts the 3.2 mega document, preserving the discriminator defaultMapping in the schema', async () => {
     const before = structuredClone(mega32)
     const v31 = downgradeSpecV32ToV31(mega32)

@@ -119,6 +119,10 @@ export function convertRecord(value: unknown, fields: FieldTable, finish?: Finis
   }
 }
 
+export function isConverting(value: unknown): boolean {
+  return isRecord(value) && conversions.get(value)?.done === false
+}
+
 export function mapRecord(value: unknown, convert: (item: unknown, key: string) => unknown): unknown {
   if (!isRecord(value)) {
     return deepClone(value)
@@ -145,4 +149,38 @@ export function getRef(value: unknown): string | undefined {
     return value.$ref
   }
   return undefined
+}
+
+export function parseLocalRef(ref: string): string[] | undefined {
+  if (!ref.startsWith('#')) {
+    return undefined
+  }
+  let pointer = ref.slice(1)
+  if (pointer.includes('%')) {
+    try {
+      pointer = decodeURIComponent(pointer)
+    }
+    catch {
+      return undefined
+    }
+  }
+  if (pointer === '') {
+    return []
+  }
+  if (!pointer.startsWith('/')) {
+    return undefined
+  }
+  const tokens = pointer.slice(1).split('/')
+  return pointer.includes('~') ? tokens.map(token => token.replaceAll('~1', '/').replaceAll('~0', '~')) : tokens
+}
+
+export function getChild(value: unknown, token: string): unknown {
+  if (Array.isArray(value)) {
+    return /^(?:0|[1-9]\d*)$/.test(token) && Object.hasOwn(value, token) ? value[Number(token)] : undefined
+  }
+  return isRecord(value) && Object.hasOwn(value, token) ? value[token] : undefined
+}
+
+export function resolveLocalRef(root: unknown, ref: string): unknown {
+  return parseLocalRef(ref)?.reduce<unknown>((node, token) => getChild(node, token), root)
 }

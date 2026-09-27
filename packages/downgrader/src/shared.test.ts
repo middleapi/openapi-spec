@@ -5,12 +5,16 @@ import {
   convertRecord,
   deepClone,
   DROP,
+  getChild,
   getRef,
   HTTP_METHODS_UP_TO_V31,
+  isConverting,
   isRecord,
   mapArray,
   mapRecord,
   operationFields,
+  parseLocalRef,
+  resolveLocalRef,
   setOwn,
 } from './shared'
 
@@ -414,6 +418,86 @@ describe('getRef', () => {
     expect(getRef({ $ref: 42 })).toBeUndefined()
     expect(getRef({ $ref: { nested: true } })).toBeUndefined()
     expect(getRef({ $ref: null })).toBeUndefined()
+  })
+})
+
+describe('isConverting', () => {
+  it('reports only source records whose conversion is still in progress', () => {
+    const child = { a: 1 }
+    const source = { child }
+    const seen: boolean[] = []
+    convertRecord(source, {
+      child: (item) => {
+        seen.push(isConverting(source), isConverting(item))
+        return item
+      },
+    })
+    expect(seen).toEqual([true, false])
+    expect(isConverting(source)).toBe(false)
+    expect(isConverting('text')).toBe(false)
+  })
+})
+
+describe('parseLocalRef', () => {
+  it('splits a local JSON pointer into unescaped tokens', () => {
+    expect(parseLocalRef('#/components/schemas/Pet')).toEqual(['components', 'schemas', 'Pet'])
+    expect(parseLocalRef('#/paths/~1pets~1{id}/a~0b')).toEqual(['paths', '/pets/{id}', 'a~b'])
+    expect(parseLocalRef('#/~01')).toEqual(['~1'])
+  })
+
+  it('percent-decodes the fragment before splitting it', () => {
+    expect(parseLocalRef('#/paths/~1pets~1%7Bid%7D')).toEqual(['paths', '/pets/{id}'])
+    expect(parseLocalRef('#/a%2Fb')).toEqual(['a', 'b'])
+  })
+
+  it('returns no tokens for the whole-document pointer', () => {
+    expect(parseLocalRef('#')).toEqual([])
+    expect(parseLocalRef('#/')).toEqual([''])
+  })
+
+  it('returns undefined for external refs, anchors, and malformed percent-encoding', () => {
+    expect(parseLocalRef('other.json#/a')).toBeUndefined()
+    expect(parseLocalRef('#anchor')).toBeUndefined()
+    expect(parseLocalRef('#/%E0%A4%A')).toBeUndefined()
+  })
+})
+
+describe('getChild', () => {
+  it('reads own record keys, including __proto__', () => {
+    expect(getChild({ a: 1 }, 'a')).toBe(1)
+    expect(getChild(JSON.parse('{"__proto__": 2}'), '__proto__')).toBe(2)
+  })
+
+  it('reads canonical array indices only', () => {
+    const list = ['a', 'b']
+    expect(getChild(list, '1')).toBe('b')
+    expect(getChild(list, '2')).toBeUndefined()
+    expect(getChild(list, '01')).toBeUndefined()
+    expect(getChild(list, '-')).toBeUndefined()
+    expect(getChild(list, 'length')).toBeUndefined()
+    // eslint-disable-next-line no-sparse-arrays
+    expect(getChild([, 'b'], '0')).toBeUndefined()
+  })
+
+  it('does not read inherited members or step into primitives', () => {
+    expect(getChild({}, 'hasOwnProperty')).toBeUndefined()
+    expect(getChild('text', 'length')).toBeUndefined()
+    expect(getChild(null, 'a')).toBeUndefined()
+  })
+})
+
+describe('resolveLocalRef', () => {
+  const root = { a: [{ 'b/c': 1 }] }
+
+  it('resolves a local pointer against the root', () => {
+    expect(resolveLocalRef(root, '#/a/0/b~1c')).toBe(1)
+    expect(resolveLocalRef(root, '#')).toBe(root)
+  })
+
+  it('returns undefined for unresolvable or non-local pointers', () => {
+    expect(resolveLocalRef(root, '#/a/1')).toBeUndefined()
+    expect(resolveLocalRef(root, '#/x/y/z')).toBeUndefined()
+    expect(resolveLocalRef(root, 'other.json#/a')).toBeUndefined()
   })
 })
 
