@@ -246,7 +246,7 @@ describe('downgradeSpecV31ToV30', () => {
       ).toEqual({ $ref: '#/components/pathItems/Reusable' })
     })
 
-    it('stops at cyclic reference chains, leaving the innermost reference to dangle', () => {
+    it('leaves a reference chain that loops without reaching a path item as written', () => {
       expect(
         convertWithPathItems(
           { '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } },
@@ -255,22 +255,21 @@ describe('downgradeSpecV31ToV30', () => {
             Pong: { $ref: '#/components/pathItems/Ping' },
           },
         ).paths,
-      ).toEqual({
-        '/a': {
-          $ref: '#/components/pathItems/Ping',
-          description: 'ping',
-          summary: 'Own',
-        },
-      })
+      ).toEqual({ '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } })
     })
 
-    it('stops when a path item reaches itself through its callbacks', () => {
+    it('cuts a path item that reaches itself through its callbacks down to its own fields', () => {
       const result = convertWithPathItems(
         { '/a': { $ref: '#/components/pathItems/Self' } },
         {
           Self: {
             post: {
-              callbacks: { loop: { expr: { $ref: '#/components/pathItems/Self' } } },
+              callbacks: {
+                loop: {
+                  bare: { $ref: '#/components/pathItems/Self' },
+                  own: { $ref: '#/components/pathItems/Self', summary: 'own' },
+                },
+              },
               responses: {},
             },
           },
@@ -279,7 +278,7 @@ describe('downgradeSpecV31ToV30', () => {
       expect(result.paths).toEqual({
         '/a': {
           post: {
-            callbacks: { loop: { expr: { $ref: '#/components/pathItems/Self' } } },
+            callbacks: { loop: { bare: {}, own: { summary: 'own' } } },
             responses: {},
           },
         },
@@ -295,6 +294,579 @@ describe('downgradeSpecV31ToV30', () => {
       expect(result.paths).toEqual({
         '/a': { get: { responses: {}, security: [{ api: [] }] } },
       })
+    })
+  })
+
+  describe('references into webhooks and components.pathItems', () => {
+    const removedPointer = /#\/(?:webhooks|components\/pathItems)/
+    const schemaPointer = '#/webhooks/newPet/post/requestBody/content/application~1json/schema'
+    const hook = {
+      post: {
+        operationId: 'newPetHook',
+        parameters: [{ description: 'orig', in: 'header', name: 'X-Hook', schema: { type: ['string', 'null'] } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { properties: { name: { type: 'string' } }, type: 'object' },
+            },
+          },
+        },
+        responses: { 200: { description: 'ok' } },
+      },
+    }
+    const hookParameter = { description: 'orig', in: 'header', name: 'X-Hook', schema: { nullable: true, type: 'string' } }
+    const item = {
+      get: { operationId: 'getItem', responses: { 200: { description: 'item' } } },
+      parameters: [{ in: 'query', name: 'q', schema: { const: 'x' } }],
+    }
+
+    it('inlines the reported references without mutating the input', () => {
+      const input = {
+        ...base,
+        components: {
+          pathItems: { Item: item },
+          schemas: { Pet: { $ref: schemaPointer } },
+        },
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { $ref: '#/webhooks/newPet/post/parameters/0' },
+                { $ref: '#/components/pathItems/Item/parameters/0' },
+              ],
+              responses: {
+                200: { $ref: '#/webhooks/newPet/post/responses/200' },
+                201: {
+                  description: 'created',
+                  links: {
+                    l1: { operationRef: '#/webhooks/newPet/post' },
+                    l2: { operationRef: '#/components/pathItems/Item/get' },
+                  },
+                },
+              },
+            },
+          },
+          '/b': { $ref: '#/webhooks/newPet' },
+        },
+        webhooks: { newPet: hook },
+      }
+      const before = structuredClone(input)
+      const result = downgradeSpecV31ToV30(input as any)
+      expect(result.components).toEqual({
+        schemas: { Pet: { properties: { name: { type: 'string' } }, type: 'object' } },
+      })
+      expect(result.paths).toEqual({
+        '/a': {
+          get: {
+            parameters: [hookParameter, { in: 'query', name: 'q', schema: { enum: ['x'] } }],
+            responses: {
+              200: { description: 'ok' },
+              201: { description: 'created', links: { l1: { operationId: 'newPetHook' } } },
+            },
+          },
+        },
+        '/b': { post: { ...hook.post, parameters: [hookParameter] } },
+      })
+      expect(JSON.stringify(result)).not.toMatch(removedPointer)
+      expect(input).toEqual(before)
+    })
+
+    it('converts each inlined target for its position, in every component map', () => {
+      const pointer = (path: string) => `#/webhooks/full/post/${path}`
+      const response = {
+        content: { 'application/json': { examples: { e: { value: 1 } } } },
+        description: 'ok',
+        headers: { H: { schema: { const: 1 } } },
+      }
+      const result = convertSpec({
+        components: {
+          callbacks: { C: { $ref: pointer('callbacks/cb') } },
+          examples: { E: { $ref: pointer('responses/200/content/application~1json/examples/e') } },
+          headers: { H: { $ref: pointer('responses/200/headers/H') } },
+          parameters: { P: { $ref: pointer('parameters/0') } },
+          requestBodies: { B: { $ref: pointer('requestBody') } },
+          responses: { R: { $ref: pointer('responses/200') } },
+          securitySchemes: { S: { $ref: pointer('x-scheme') } },
+        },
+        webhooks: {
+          full: {
+            post: {
+              'callbacks': { cb: { '{$url}': { get: {} } } },
+              'parameters': [{ in: 'path', name: 'id' }],
+              'requestBody': {
+                content: { 'application/json': { schema: { type: ['string', 'null'] } } },
+              },
+              'responses': { 200: response },
+              'x-scheme': { in: 'header', name: 'k', type: 'apiKey' },
+            },
+          },
+        },
+      })
+      expect(result.components).toEqual({
+        callbacks: { C: { '{$url}': { get: { responses: { default: { description: '' } } } } } },
+        examples: { E: { value: 1 } },
+        headers: { H: { schema: { enum: [1] } } },
+        parameters: { P: { in: 'path', name: 'id', required: true } },
+        requestBodies: {
+          B: { content: { 'application/json': { schema: { nullable: true, type: 'string' } } } },
+        },
+        responses: { R: { ...response, headers: { H: { schema: { enum: [1] } } } } },
+        securitySchemes: { S: { in: 'header', name: 'k', type: 'apiKey' } },
+      })
+    })
+
+    it('follows chains through the removed parts and keeps the reference where a chain leaves them', () => {
+      const result = convertSpec({
+        components: {
+          parameters: { Shared: { in: 'query', name: 'shared' } },
+          pathItems: { Deep: { parameters: [{ in: 'query', name: 'deep' }] } },
+          schemas: {
+            Exit: { $ref: '#/webhooks/chain/post/requestBody/content/application~1json/schema' },
+            Name: { type: 'string' },
+          },
+        },
+        paths: {
+          '/a': {
+            post: {
+              parameters: [
+                { $ref: '#/webhooks/chain/post/parameters/0' },
+                { $ref: '#/webhooks/chain/post/parameters/1', description: 'dropped' },
+              ],
+              responses: {},
+            },
+          },
+          '/b': { $ref: '#/webhooks/alias', description: 'own' },
+        },
+        webhooks: {
+          alias: { $ref: '#/paths/~1a', summary: 'alias' },
+          chain: {
+            post: {
+              parameters: [
+                { $ref: '#/components/pathItems/Deep/parameters/0' },
+                { $ref: '#/components/parameters/Shared' },
+              ],
+              requestBody: {
+                content: { 'application/json': { schema: { $ref: '#/components/schemas/Name' } } },
+              },
+            },
+          },
+        },
+      })
+      expect(result.components?.schemas?.Exit).toEqual({ $ref: '#/components/schemas/Name' })
+      expect(result.paths).toEqual({
+        '/a': {
+          post: {
+            parameters: [{ in: 'query', name: 'deep' }, { $ref: '#/components/parameters/Shared' }],
+            responses: {},
+          },
+        },
+        '/b': { $ref: '#/paths/~1a', description: 'own', summary: 'alias' },
+      })
+    })
+
+    it('follows long chains without growing the stack', () => {
+      const webhooks: Record<string, unknown> = { w10000: { get: { responses: {} } } }
+      for (let index = 0; index < 10_000; index++) {
+        webhooks[`w${index}`] = { $ref: `#/webhooks/w${index + 1}` }
+      }
+      expect(convertSpec({ paths: { '/a': { $ref: '#/webhooks/w0' } }, webhooks }).paths).toEqual({
+        '/a': { get: { responses: {} } },
+      })
+    })
+
+    it('applies the outermost summary and description override where the target has that field', () => {
+      const result = convertSpec({
+        components: {
+          callbacks: { C: { $ref: '#/webhooks/newPet/x-callback', description: 'ignored' } },
+          examples: { E: { $ref: '#/webhooks/newPet/x-example', summary: 'outer' } },
+          parameters: { P: { $ref: '#/webhooks/newPet/x-alias', description: 'outer' } },
+        },
+        webhooks: {
+          newPet: {
+            ...hook,
+            'x-alias': { $ref: '#/webhooks/newPet/post/parameters/0', description: 'inner' },
+            'x-callback': { '{$url}': { summary: 's' } },
+            'x-example': { description: 'd', summary: 's', value: 1 },
+          },
+        },
+      })
+      expect(result.components).toEqual({
+        callbacks: { C: { '{$url}': { summary: 's' } } },
+        examples: { E: { description: 'd', summary: 'outer', value: 1 } },
+        parameters: { P: { ...hookParameter, description: 'outer' } },
+      })
+    })
+
+    it.each([
+      ['a missing target', '#/webhooks/newPet/post/parameters/9'],
+      ['a non-object target', '#/webhooks/newPet/post/operationId'],
+      ['a looping chain', '#/components/pathItems/Loop/parameters/0'],
+      ['a malformed percent escape', '#/webhooks/%E0%A4%A'],
+    ])('leaves a reference to %s as written, in every position', (_name, ref) => {
+      const reference = { $ref: ref, description: 'd' }
+      const bare = { $ref: ref }
+      const result = convertSpec({
+        components: {
+          callbacks: { C: reference },
+          examples: { E: reference },
+          headers: { H: reference },
+          links: { L: reference },
+          parameters: { P: reference },
+          pathItems: {
+            Loop: {
+              parameters: [
+                { $ref: '#/components/pathItems/Loop/parameters/1' },
+                { $ref: '#/components/pathItems/Loop/parameters/0' },
+              ],
+            },
+          },
+          requestBodies: { B: reference },
+          responses: { R: reference },
+          schemas: { S: bare, T: { $ref: ref, type: 'string' } },
+          securitySchemes: { S: reference },
+        },
+        paths: {
+          '/a': {
+            get: {
+              callbacks: { cb: reference },
+              parameters: [reference, { in: 'query', name: 'kept' }],
+              requestBody: reference,
+              responses: {
+                200: {
+                  content: {
+                    'application/json': {
+                      encoding: { f: { headers: { H: reference } } },
+                      examples: { e: reference },
+                      schema: bare,
+                    },
+                  },
+                  description: 'ok',
+                  headers: { H: reference },
+                  links: { l: reference },
+                },
+                201: reference,
+              },
+            },
+            parameters: [reference],
+          },
+          '/b': reference,
+        },
+        webhooks: { newPet: hook },
+      })
+      expect(result.components).toEqual({
+        callbacks: { C: bare },
+        examples: { E: bare },
+        headers: { H: bare },
+        links: { L: bare },
+        parameters: { P: bare },
+        requestBodies: { B: bare },
+        responses: { R: bare },
+        schemas: { S: bare, T: { allOf: [bare], type: 'string' } },
+        securitySchemes: { S: bare },
+      })
+      expect(result.paths).toEqual({
+        '/a': {
+          get: {
+            callbacks: { cb: bare },
+            parameters: [bare, { in: 'query', name: 'kept' }],
+            requestBody: bare,
+            responses: {
+              200: {
+                content: {
+                  'application/json': {
+                    encoding: { f: { headers: { H: bare } } },
+                    examples: { e: bare },
+                    schema: bare,
+                  },
+                },
+                description: 'ok',
+                headers: { H: bare },
+                links: { l: bare },
+              },
+              201: bare,
+            },
+          },
+          parameters: [bare],
+        },
+        '/b': reference,
+      })
+    })
+
+    it('inlines Schema $refs with or without siblings and converts boolean targets', () => {
+      const pointer = (path: string) => `#/components/pathItems/Schemas/x-schemas/${path}`
+      const result = convertSpec({
+        components: {
+          pathItems: {
+            Schemas: {
+              'x-schemas': {
+                alias: { $ref: pointer('nullable') },
+                never: false,
+                nullable: { type: ['string', 'null'] },
+                withSiblings: { $ref: pointer('nullable'), description: 'wrapped' },
+              },
+            },
+          },
+          schemas: {
+            Alias: { $ref: pointer('alias') },
+            Never: { $ref: pointer('never') },
+            NotNever: { not: { $ref: pointer('never') } },
+            Siblings: { $ref: pointer('nullable'), description: 'd' },
+            WithSiblings: { $ref: pointer('withSiblings') },
+          },
+        },
+      })
+      const nullable = { nullable: true, type: 'string' }
+      expect(result.components).toEqual({
+        schemas: {
+          Alias: nullable,
+          Never: { not: {} },
+          NotNever: { not: { not: {} } },
+          Siblings: { allOf: [nullable], description: 'd' },
+          WithSiblings: { allOf: [nullable], description: 'wrapped' },
+        },
+      })
+    })
+
+    it('cuts recursion into {} for schemas and into own fields for path items, keeping the output acyclic', () => {
+      const result = convertSpec({
+        components: { schemas: { Tree: { $ref: '#/webhooks/tree/post/requestBody/content/application~1json/schema' } } },
+        paths: {
+          '/ping': { $ref: '#/webhooks/ping' },
+          '/tree': { $ref: '#/webhooks/tree' },
+        },
+        webhooks: {
+          ping: {
+            post: {
+              callbacks: {
+                pong: { $ref: '#/webhooks/ping/post/callbacks/self' },
+                self: { '{$request.body#/url}': { $ref: '#/webhooks/ping' } },
+              },
+              responses: {},
+            },
+          },
+          tree: {
+            post: {
+              requestBody: {
+                content: {
+                  'application/json': {
+                    schema: {
+                      properties: {
+                        children: { items: { $ref: '#/webhooks/tree/post/requestBody/content/application~1json/schema' }, type: 'array' },
+                      },
+                      type: 'object',
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      })
+      const leaf = { properties: { children: { items: {}, type: 'array' } }, type: 'object' }
+      expect(result.components).toEqual({ schemas: { Tree: leaf } })
+      expect(
+        dig(result, 'paths', '/tree', 'post', 'requestBody', 'content', 'application/json', 'schema'),
+      ).toEqual({ properties: { children: { items: leaf, type: 'array' } }, type: 'object' })
+      expect(dig(result, 'paths', '/ping', 'post', 'callbacks')).toEqual({
+        pong: { '{$request.body#/url}': {} },
+        self: { '{$request.body#/url}': {} },
+      })
+      expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+      expect(JSON.stringify(result)).not.toMatch(removedPointer)
+    })
+
+    it('stops inlining after a fixed number of copies instead of growing exponentially', () => {
+      const pointer = (index: number) => `#/webhooks/w${index}/post/requestBody/content/application~1json/schema`
+      const leaf = { content: { 'application/json': { schema: { type: 'string' } } } }
+      const webhooks: Record<string, unknown> = { w40: { post: { requestBody: leaf } } }
+      for (let index = 0; index < 40; index++) {
+        const schema = { properties: { a: { $ref: pointer(index + 1) }, b: { $ref: pointer(index + 1) } }, type: 'object' }
+        webhooks[`w${index}`] = { post: { requestBody: { content: { 'application/json': { schema } } } } }
+      }
+      const result = convertSpec({ components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks })
+      const text = JSON.stringify(result)
+      expect(text.length).toBeLessThan(20_000_000)
+      expect(text).not.toMatch(removedPointer)
+    })
+
+    it('resolves percent-encoded and tilde-escaped pointers', () => {
+      const result = convertSpec({
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { $ref: '#/webhooks/new%20pet/post/parameters/0' },
+                { $ref: '#/webhooks/a~0b~1c/post/parameters/0' },
+                { $ref: '#%2Fwebhooks%2Fnew%20pet%2Fpost%2Fparameters%2F1' },
+              ],
+              responses: {},
+            },
+          },
+          '/b': { $ref: '#/webhooks/new%20pet/post/callbacks/cb/%7B$request.body%23~1url%7D' },
+        },
+        webhooks: {
+          'a~b/c': { post: { parameters: [{ in: 'query', name: 'tilde' }] } },
+          'new pet': {
+            post: {
+              callbacks: { cb: { '{$request.body#/url}': { summary: 'callback' } } },
+              parameters: [
+                { in: 'query', name: 'space' },
+                { in: 'query', name: 'encoded' },
+              ],
+            },
+          },
+        },
+      })
+      expect(result.paths).toEqual({
+        '/a': {
+          get: {
+            parameters: [
+              { in: 'query', name: 'space' },
+              { in: 'query', name: 'tilde' },
+              { in: 'query', name: 'encoded' },
+            ],
+            responses: {},
+          },
+        },
+        '/b': { summary: 'callback' },
+      })
+    })
+
+    it('resolves pointer tokens only against keys and indices the document owns', () => {
+      const refs = [
+        '#/webhooks/__proto__/post/parameters/0',
+        '#/webhooks/__proto__/post/parameters/length',
+        '#/webhooks/__proto__/post/parameters/00',
+        '#/webhooks/__proto__/post/parameters/-',
+        '#/webhooks/constructor',
+        '#/webhooks/hasOwnProperty',
+      ]
+      const result = convertSpec({
+        paths: { '/a': { get: { parameters: refs.map($ref => ({ $ref })), responses: {} } } },
+        webhooks: JSON.parse('{"__proto__":{"post":{"parameters":[{"in":"query","name":"own"}]}}}'),
+      })
+      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
+        { in: 'query', name: 'own' },
+        ...refs.slice(1).map($ref => ({ $ref })),
+      ])
+    })
+
+    it('rewrites links into the removed parts to the operationId of an operation still in the output and removes the rest', () => {
+      const result = convertSpec({
+        components: {
+          links: {
+            Gone: { operationRef: '#/webhooks/orphan/post' },
+            Kept: { description: 'kept', operationRef: '#/webhooks/newPet/post' },
+          },
+          pathItems: { Item: item, NoId: { get: { responses: {} } } },
+        },
+        paths: {
+          '/a': {
+            get: {
+              callbacks: {
+                cb: { '{$request.body#/url}': { $ref: '#/components/pathItems/Item' } },
+              },
+              responses: {
+                200: {
+                  description: 'ok',
+                  links: {
+                    both: { operationId: 'stale', operationRef: '#/webhooks/newPet/post' },
+                    byCallback: {
+                      operationRef: '#/components/pathItems/Item/get',
+                      parameters: { id: '$response.body#/id' },
+                    },
+                    byId: { operationId: 'orphanHook' },
+                    byPath: { operationRef: '#/paths/~1b/post' },
+                    external: { $ref: 'https://example.com/links.json#/Kept' },
+                    inlined: { $ref: '#/webhooks/newPet/post/responses/200/links/self' },
+                    missing: { operationRef: '#/webhooks/missing/post' },
+                    noId: { operationRef: '#/components/pathItems/NoId/get' },
+                    refGone: { $ref: '#/components/links/Gone' },
+                    refKept: { $ref: '#/components/links/Kept' },
+                    refUnknown: { $ref: '#/components/links/Unknown' },
+                  },
+                },
+              },
+            },
+          },
+          '/b': { $ref: '#/webhooks/newPet' },
+          '/c': { $ref: '#/components/pathItems/NoId' },
+        },
+        webhooks: {
+          newPet: {
+            post: {
+              operationId: 'newPetHook',
+              responses: {
+                200: {
+                  description: 'ok',
+                  links: { self: { operationRef: '#/webhooks/newPet/post' } },
+                },
+              },
+            },
+          },
+          orphan: { post: { operationId: 'orphanHook', responses: {} } },
+        },
+      })
+      expect(result.components).toEqual({
+        links: { Kept: { description: 'kept', operationId: 'newPetHook' } },
+      })
+      expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'links')).toEqual({
+        both: { operationId: 'newPetHook' },
+        byCallback: { operationId: 'getItem', parameters: { id: '$response.body#/id' } },
+        byId: { operationId: 'orphanHook' },
+        byPath: { operationRef: '#/paths/~1b/post' },
+        external: { $ref: 'https://example.com/links.json#/Kept' },
+        inlined: { operationId: 'newPetHook' },
+        refKept: { $ref: '#/components/links/Kept' },
+        refUnknown: { $ref: '#/components/links/Unknown' },
+      })
+      expect(dig(result, 'paths', '/b', 'post', 'responses', '200', 'links')).toEqual({
+        self: { operationId: 'newPetHook' },
+      })
+      expect(JSON.stringify(result)).not.toMatch(removedPointer)
+    })
+
+    it('removes discriminator mapping entries into the removed parts', () => {
+      expect(
+        convertSpec({
+          components: {
+            schemas: {
+              Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
+              Pet: {
+                discriminator: {
+                  mapping: {
+                    cat: '#/components/schemas/Cat',
+                    dog: schemaPointer,
+                    fish: 'Fish',
+                    hamster: '#/components/pathItems/Item',
+                  },
+                  propertyName: 'kind',
+                },
+              },
+            },
+          },
+        }).components,
+      ).toEqual({
+        schemas: {
+          Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
+          Pet: {
+            discriminator: {
+              mapping: { cat: '#/components/schemas/Cat', fish: 'Fish' },
+              propertyName: 'kind',
+            },
+          },
+        },
+      })
+    })
+
+    it('inlines into a cyclic input graph, preserving its cycle', () => {
+      const node: Record<string, unknown> = { type: 'object' }
+      node.properties = { hook: { $ref: schemaPointer }, self: node }
+      const result = convertSpec({ components: { schemas: { Node: node } }, webhooks: { newPet: hook } })
+      const converted = dig(result, 'components', 'schemas', 'Node')
+      expect(dig(converted, 'properties', 'self')).toBe(converted)
+      expect(dig(converted, 'properties', 'hook')).toEqual({ properties: { name: { type: 'string' } }, type: 'object' })
     })
   })
 

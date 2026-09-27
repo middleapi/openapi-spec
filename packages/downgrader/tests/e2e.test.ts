@@ -101,6 +101,96 @@ describe('3.1 example documents downgraded to 3.0', () => {
     expect(doc).toEqual(before)
   })
 
+  it('resolves $refs and link operationRefs into the removed webhooks and components.pathItems so nothing dangles', async () => {
+    const petSchema = '#/webhooks/newPet/post/requestBody/content/application~1json/schema'
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      components: {
+        pathItems: {
+          item: {
+            get: { operationId: 'getItem', responses: { 200: { description: 'item' } } },
+            parameters: [{ in: 'query', name: 'q', schema: { type: ['string', 'null'] } }],
+          },
+        },
+        schemas: { Pet: { $ref: petSchema } },
+      },
+      info: { title: 'Webhook references', version: '1.0.0' },
+      openapi: '3.1.0',
+      paths: {
+        '/items': { $ref: '#/components/pathItems/item' },
+        '/pets': {
+          get: {
+            parameters: [
+              { $ref: '#/webhooks/newPet/post/parameters/0' },
+              { $ref: '#/components/pathItems/item/parameters/0', description: 'Filter' },
+            ],
+            responses: {
+              200: {
+                content: { 'application/json': { schema: { items: { $ref: petSchema }, type: 'array' } } },
+                description: 'ok',
+                links: {
+                  hook: { operationRef: '#/webhooks/newPet/post' },
+                  item: { operationRef: '#/components/pathItems/item/get' },
+                },
+              },
+              201: { $ref: '#/webhooks/newPet/post/responses/200' },
+            },
+          },
+        },
+      },
+      webhooks: {
+        newPet: {
+          post: {
+            operationId: 'newPetHook',
+            parameters: [{ in: 'header', name: 'X-Signature', schema: { type: 'string' } }],
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    properties: { name: { type: 'string' }, parent: { $ref: petSchema } },
+                    type: 'object',
+                  },
+                },
+              },
+            },
+            responses: { 200: { description: 'received' } },
+          },
+        },
+      },
+    }
+    await expectValidAs(doc, '3.1')
+    const before = structuredClone(doc)
+    const converted = downgradeSpecV31ToV30(doc)
+    const pet = { properties: { name: { type: 'string' }, parent: {} }, type: 'object' }
+    expect(converted.components).toEqual({ schemas: { Pet: pet } })
+    expect(converted.paths).toEqual({
+      '/items': {
+        get: { operationId: 'getItem', responses: { 200: { description: 'item' } } },
+        parameters: [{ in: 'query', name: 'q', schema: { nullable: true, type: 'string' } }],
+      },
+      '/pets': {
+        get: {
+          parameters: [
+            { in: 'header', name: 'X-Signature', schema: { type: 'string' } },
+            { description: 'Filter', in: 'query', name: 'q', schema: { nullable: true, type: 'string' } },
+          ],
+          responses: {
+            200: {
+              content: { 'application/json': { schema: { items: pet, type: 'array' } } },
+              description: 'ok',
+              links: { item: { operationId: 'getItem' } },
+            },
+            201: { description: 'received' },
+          },
+        },
+      },
+    })
+    const serialized = JSON.stringify(converted)
+    expect(serialized).not.toContain('#/webhooks/')
+    expect(serialized).not.toContain('#/components/pathItems/')
+    await expectValidAs(converted, '3.0')
+    expect(doc).toEqual(before)
+  })
+
   it('clones a discriminator with defaultMapping as-is into the 3.0 document', async () => {
     const doc = {
       components: {

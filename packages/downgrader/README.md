@@ -92,21 +92,25 @@ Known limitations: security requirements keyed by URI, `$self`-relative referenc
 
 Converted:
 
-| 3.1 construct                                              | 3.0 result                                                             |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                       |
-| missing `paths`                                            | `{}` (required in 3.0)                                                 |
-| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0) |
-| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                    |
-| Reference Object `summary` / `description`                 | removed (3.0 references carry no overrides)                            |
-| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                        |
+| 3.1 construct                                              | 3.0 result                                                                                                 |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                                                                           |
+| missing `paths`                                            | `{}` (required in 3.0)                                                                                     |
+| missing operation `responses`                              | `{ "default": { "description": "" } }` (required and non-empty in 3.0)                                     |
+| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`)                                                        |
+| Reference Object `summary` / `description`                 | applied to an inlined copy whose type has the field, removed otherwise (3.0 references carry no overrides) |
+| security requirement scopes on `apiKey` and `http` schemes | emptied to `[]`                                                                                            |
 
 Removed, with no 3.0 equivalent:
 
-- `webhooks`
+- `webhooks` and `components.pathItems`, after every same-document reference into them is resolved:
+  - Reference Objects, Path Item `$ref`s, and Schema `$ref`s are replaced by a converted copy of their target, following reference chains. A chain that leads back out keeps the reference where it lands, and a Path Item's own fields win over inlined ones.
+  - A reference back to a target that is still being inlined is cut: a Schema Object becomes `{}`, a Path Item keeps only its own fields, and any other reference is removed. Inlining also stops after 100,000 copies, so targets that reference each other many times over cannot blow up the output.
+  - A Link `operationRef` into them becomes the target operation's `operationId` when an operation with that `operationId` remains, such as one inlined into `paths`. Otherwise the link is removed, together with Link references that lead to it.
+  - `discriminator.mapping` entries pointing into them are removed.
+  - A reference whose target is missing, is not an object (or not a Path Item, for a Path Item `$ref`), or is a reference loop is left as written.
 - `jsonSchemaDialect`
 - `info.summary` and `license.identifier`
-- `components.pathItems`. Path Item `$ref`s to it, in `paths` and in callbacks, are inlined first, following reference chains, with the referencing Path Item's own fields winning over inlined ones. A reference that cannot be inlined (unknown or cyclic target) is left as is and will dangle.
 - `mutualTLS` security schemes, reference aliases included. Their names are stripped from every security requirement, a requirement left empty is removed, and a `security` list left empty is removed entirely, since an explicit empty list means "no security required" and would make the operation public.
 
 Schema Objects:
@@ -133,6 +137,7 @@ Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamic
 Known limitations:
 
 - `$ref`s into dropped keywords (`#/…/$defs/…` pointers, `$anchor` targets, `$id`-based bases) will dangle. Hoist reusable subschemas into `components.schemas` before downgrading.
+- A pointer into `webhooks` or `components.pathItems` that passes through another `$ref` is not followed and will dangle, and a Link naming a removed operation only by `operationId` is kept. A Path Item inlined in several places repeats its `operationId`s, which 3.0 requires to be unique.
 - Non-standard schema keywords are preserved per the extension contract, even though the official 3.0 schema forbids unknown Schema Object fields.
 - Dropping keywords inside `not`, where loosening the operand tightens the whole, or inside `oneOf` branches, where loosening one branch can break exclusivity, can change what validates.
 
