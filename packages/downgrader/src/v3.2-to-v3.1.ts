@@ -1,4 +1,5 @@
-import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import type { FieldConverter, FieldTable } from './shared'
 import {

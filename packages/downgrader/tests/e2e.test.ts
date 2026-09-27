@@ -1,4 +1,5 @@
-import type { OpenAPIV3_1, OpenAPIV3_2 } from '@openapi-spec/types'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { doc as queryExample } from '../../types/tests/examples/3-2-query-example'
 import { doc as tagsExample } from '../../types/tests/examples/3-2-tags-example'
@@ -134,6 +135,36 @@ describe('3.1 example documents downgraded to 3.0', () => {
         propertyName: 'kind',
       },
     )
+    await expectValidAs(converted, '3.0')
+    expect(doc).toEqual(before)
+  })
+
+  it('converts raw and encoded binary schemas to the 3.0 binary and byte formats', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      info: { title: 'Uploads', version: '1.0.0' },
+      openapi: '3.1.0',
+      paths: {
+        '/avatar': {
+          put: {
+            requestBody: {
+              content: {
+                'image/png': { schema: { contentMediaType: 'image/png' } },
+                'text/plain': { schema: { contentEncoding: 'base64', contentMediaType: 'image/png', type: 'string' } },
+              },
+            },
+            responses: { 204: { description: 'saved' } },
+          },
+        },
+      },
+    }
+    const before = structuredClone(doc)
+    const converted = downgradeSpecV31ToV30(doc)
+    expect(converted.paths['/avatar']?.put?.requestBody).toEqual({
+      content: {
+        'image/png': { schema: { format: 'binary', type: 'string' } },
+        'text/plain': { schema: { format: 'byte', type: 'string' } },
+      },
+    })
     await expectValidAs(converted, '3.0')
     expect(doc).toEqual(before)
   })
