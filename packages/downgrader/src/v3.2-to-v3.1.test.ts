@@ -530,6 +530,35 @@ describe('downgradeSpecV32ToV31', () => {
       ).toEqual({ 'a/6': { example: 1 } })
     })
 
+    it('inlines content-map references to any local media type, decoding escaped names', () => {
+      expect(
+        convertSpec({
+          components: {
+            mediaTypes: { 'a/b': { schema: { type: 'string' } } },
+            requestBodies: {
+              Json: { content: { 'application/json': { schema: { type: 'number' } } } },
+              Reuse: {
+                content: {
+                  'application/json': {
+                    $ref: '#/components/requestBodies/Json/content/application~1json',
+                  },
+                  'text/plain': { $ref: '#/components/mediaTypes/a~1b' },
+                },
+              },
+            },
+          },
+        }).components?.requestBodies,
+      ).toEqual({
+        Json: { content: { 'application/json': { schema: { type: 'number' } } } },
+        Reuse: {
+          content: {
+            'application/json': { schema: { type: 'number' } },
+            'text/plain': { schema: { type: 'string' } },
+          },
+        },
+      })
+    })
+
     it('does not resolve names through the prototype chain of the mediaTypes map', () => {
       expect(
         convertContent(
@@ -1204,6 +1233,445 @@ describe('downgradeSpecV32ToV31', () => {
     })
   })
 
+  describe('references into removed parts', () => {
+    const petRef = { $ref: '#/components/mediaTypes/Pet/schema' }
+    const pet = { type: 'object', xml: { nodeType: 'element' } }
+
+    it('inlines schema $refs at every subschema position', () => {
+      const everyPosition = (schema: unknown) => ({
+        $defs: { d: schema },
+        additionalProperties: schema,
+        allOf: [schema],
+        anyOf: [schema],
+        contains: schema,
+        contentSchema: schema,
+        dependentSchemas: { d: schema },
+        else: schema,
+        if: schema,
+        items: schema,
+        not: schema,
+        oneOf: [schema],
+        patternProperties: { '^x': schema },
+        prefixItems: [schema],
+        properties: { p: schema },
+        propertyNames: schema,
+        then: schema,
+        unevaluatedItems: schema,
+        unevaluatedProperties: schema,
+      })
+      expect(
+        convertComponent('schemas', everyPosition(petRef), {
+          mediaTypes: { Pet: { schema: pet } },
+        }),
+      ).toEqual(everyPosition(pet))
+    })
+
+    it('inlines schema $refs in parameter, header, media type, and itemSchema positions', () => {
+      expect(
+        convertSpec({
+          components: {
+            headers: { H: { schema: petRef } },
+            mediaTypes: { Pet: { schema: pet } },
+            parameters: { P: { in: 'query', name: 'p', schema: petRef } },
+            requestBodies: {
+              B: {
+                content: {
+                  'application/json': { schema: petRef },
+                  'application/jsonl': { itemSchema: petRef },
+                },
+              },
+            },
+          },
+        }).components,
+      ).toEqual({
+        headers: { H: { schema: pet } },
+        parameters: { P: { in: 'query', name: 'p', schema: pet } },
+        requestBodies: {
+          B: {
+            content: {
+              'application/json': { schema: pet },
+              'application/jsonl': { schema: { items: pet, type: 'array' } },
+            },
+          },
+        },
+      })
+    })
+
+    it('keeps data keywords, extensions, and non-string $ref values verbatim', () => {
+      const schema = {
+        'const': petRef,
+        'default': petRef,
+        'enum': [petRef],
+        'examples': [petRef],
+        'properties': { p: { $ref: 42 } },
+        'x-data': petRef,
+      }
+      expect(
+        convertSpec({
+          components: {
+            headers: { H: { schema: petRef } },
+            mediaTypes: { Pet: { schema: pet } },
+            schemas: { S: schema },
+          },
+        }).components,
+      ).toEqual({ headers: { H: { schema: pet } }, schemas: { S: schema } })
+    })
+
+    it.each([
+      [
+        'adds allOf beside sibling annotations',
+        { $ref: petRef.$ref, description: 'd' },
+        { allOf: [pet], description: 'd' },
+      ],
+      [
+        'appends to an existing allOf, keeping its indices',
+        { $ref: petRef.$ref, allOf: [{ required: ['a'] }] },
+        { allOf: [{ required: ['a'] }, pet] },
+      ],
+      [
+        'nests the siblings when allOf is malformed',
+        { $ref: petRef.$ref, allOf: 'junk' },
+        { allOf: [{ allOf: 'junk' }, pet] },
+      ],
+    ])('merges a dangling schema $ref with its siblings: %s', (_name, schema, expected) => {
+      expect(
+        convertComponent('schemas', schema, { mediaTypes: { Pet: { schema: pet } } }),
+      ).toEqual(expected)
+    })
+
+    it('inlines a boolean target schema', () => {
+      expect(
+        convertComponent('schemas', { $ref: '#/components/mediaTypes/None/schema' }, {
+          mediaTypes: { None: { schema: false } },
+        }),
+      ).toBe(false)
+    })
+
+    it('inlines Reference Objects into query, additionalOperations, and components.mediaTypes, converting each target', () => {
+      const result = convertSpec({
+        components: {
+          callbacks: { C: { $ref: '#/paths/~1search/query/callbacks/onDone' } },
+          examples: { E: { $ref: '#/components/mediaTypes/Pet/examples/e' } },
+          headers: {
+            H: { $ref: '#/components/mediaTypes/Pet/encoding/file/headers/X-Rate' },
+          },
+          links: { L: { $ref: '#/paths/~1search/query/responses/200/links/next' } },
+          mediaTypes: {
+            Pet: {
+              encoding: {
+                file: {
+                  headers: {
+                    'X-Rate': { examples: { a: { serializedValue: '1' } } },
+                  },
+                },
+              },
+              examples: { e: { dataValue: 1 } },
+            },
+          },
+        },
+        paths: {
+          '/search': {
+            additionalOperations: {
+              COPY: { responses: { 201: { summary: 'Copied' } } },
+            },
+            post: {
+              parameters: [{ $ref: '#/paths/~1search/query/parameters/0' }],
+              requestBody: { $ref: '#/paths/~1search/query/requestBody' },
+              responses: {
+                200: { $ref: '#/paths/~1search/query/responses/200' },
+                201: {
+                  $ref: '#/paths/~1search/additionalOperations/COPY/responses/201',
+                },
+              },
+            },
+            query: {
+              callbacks: {
+                onDone: {
+                  '{$request.body#/url}': {
+                    post: { responses: { 200: { summary: 'ack' } } },
+                  },
+                },
+              },
+              parameters: [{ in: 'cookie', name: 'c', style: 'cookie' }],
+              requestBody: {
+                content: { 'application/jsonl': { itemSchema: { type: 'string' } } },
+              },
+              responses: {
+                200: {
+                  links: { next: { operationId: 'x', server: { name: 'n', url: '/' } } },
+                  summary: 'Found',
+                },
+              },
+            },
+          },
+        },
+      })
+      expect(result.components).toEqual({
+        callbacks: {
+          C: {
+            '{$request.body#/url}': {
+              post: { responses: { 200: { description: 'ack' } } },
+            },
+          },
+        },
+        examples: { E: { value: 1 } },
+        headers: { H: { examples: { a: { value: '1' } } } },
+        links: { L: { operationId: 'x', server: { url: '/' } } },
+      })
+      expect(result.paths).toEqual({
+        '/search': {
+          post: {
+            parameters: [{ in: 'cookie', name: 'c' }],
+            requestBody: {
+              content: {
+                'application/jsonl': {
+                  schema: { items: { type: 'string' }, type: 'array' },
+                },
+              },
+            },
+            responses: {
+              200: {
+                description: 'Found',
+                links: { next: { operationId: 'x', server: { url: '/' } } },
+              },
+              201: { description: 'Copied' },
+            },
+          },
+        },
+      })
+    })
+
+    it('follows reference chains through removed parts and keeps references that reach surviving ones', () => {
+      const result = convertSpec({
+        components: {
+          responses: {
+            Deep: { $ref: '#/paths/~1a/query/responses/200' },
+            Kept: { $ref: '#/paths/~1a/query/responses/201' },
+            Real: { description: 'real' },
+          },
+        },
+        paths: {
+          '/a': {
+            query: {
+              responses: {
+                200: { $ref: '#/paths/~1b/query/responses/200' },
+                201: { $ref: '#/components/responses/Real' },
+              },
+            },
+          },
+          '/b': { query: { responses: { 200: { summary: 'deep' } } } },
+        },
+      })
+      expect(result.components).toEqual({
+        responses: {
+          Deep: { description: 'deep' },
+          Kept: { $ref: '#/components/responses/Real' },
+          Real: { description: 'real' },
+        },
+      })
+      expect(result.paths).toEqual({ '/a': {}, '/b': {} })
+    })
+
+    it('removes a Reference Object whose inlining cycles', () => {
+      expect(
+        convertSpec({
+          components: {
+            responses: {
+              Keep: { description: 'k' },
+              Loop: { $ref: '#/paths/~1a/query/responses/200' },
+            },
+          },
+          paths: {
+            '/a': { query: { responses: { 200: { $ref: '#/paths/~1b/query/responses/200' } } } },
+            '/b': { query: { responses: { 200: { $ref: '#/paths/~1a/query/responses/200' } } } },
+          },
+        }).components,
+      ).toEqual({ responses: { Keep: { description: 'k' } } })
+    })
+
+    it('cuts a recursive schema at its first repeat by removing only the $ref keyword', () => {
+      const tree = {
+        properties: {
+          children: {
+            items: { $ref: '#/components/mediaTypes/Tree/schema' },
+            type: 'array',
+          },
+          parent: { $ref: '#/components/mediaTypes/Tree/schema', description: 'up' },
+        },
+        type: 'object',
+      }
+      expect(
+        convertComponent('schemas', { $ref: '#/components/mediaTypes/Tree/schema' }, {
+          mediaTypes: { Tree: { schema: tree } },
+        }),
+      ).toEqual({
+        properties: {
+          children: { items: {}, type: 'array' },
+          parent: { description: 'up' },
+        },
+        type: 'object',
+      })
+    })
+
+    it('inlines references into a parameter list that lost entries, since its indices shift', () => {
+      const result = convertSpec({
+        components: {
+          parameters: {
+            Kept: { $ref: '#/paths/~1b/get/parameters/0' },
+            Shifted: { $ref: '#/paths/~1a/get/parameters/1' },
+          },
+        },
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { in: 'querystring', name: 'qs' },
+                { in: 'query', name: 'b' },
+              ],
+              responses: {},
+            },
+          },
+          '/b': { get: { parameters: [{ in: 'query', name: 'c' }], responses: {} } },
+        },
+      })
+      expect(result.components).toEqual({
+        parameters: {
+          Kept: { $ref: '#/paths/~1b/get/parameters/0' },
+          Shifted: { in: 'query', name: 'b' },
+        },
+      })
+      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
+        { in: 'query', name: 'b' },
+      ])
+    })
+
+    it('removes parameter and header references that resolve to removed ones through any pointer', () => {
+      expect(
+        convertSpec({
+          components: {
+            headers: {
+              H: { $ref: '#/paths/~1a/get/responses/200/headers/X-Broken' },
+            },
+            parameters: { P: { $ref: '#/paths/~1a/get/parameters/0' } },
+          },
+          paths: {
+            '/a': {
+              get: {
+                parameters: [{ in: 'querystring', name: 'qs' }],
+                responses: {
+                  200: {
+                    description: 'ok',
+                    headers: {
+                      'X-Broken': {
+                        content: {
+                          'application/json': { $ref: '#/components/mediaTypes/Missing' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }).components,
+      ).toEqual({ headers: {}, parameters: {} })
+    })
+
+    it('keeps parameter references whose alias chain cycles', () => {
+      const parameters = {
+        A: { $ref: '#/components/parameters/B' },
+        B: { $ref: '#/components/parameters/A' },
+      }
+      expect(convertSpec({ components: { parameters } }).components).toEqual({
+        parameters,
+      })
+    })
+
+    it('leaves external, anchor, root, unparseable, and already dangling references untouched', () => {
+      const schemas = {
+        Anchor: { $ref: '#pet' },
+        BadEscape: { $ref: '#/components/mediaTypes/%E0%A4%A' },
+        External: {
+          $ref: 'https://example.com/api.json#/components/mediaTypes/Pet/schema',
+        },
+        Missing: { $ref: '#/components/mediaTypes/Nope/schema' },
+        Root: { $ref: '#' },
+      }
+      expect(
+        convertSpec({
+          components: {
+            headers: { H: { schema: petRef } },
+            mediaTypes: { Pet: { schema: pet } },
+            schemas,
+          },
+        }).components,
+      ).toEqual({ headers: { H: { schema: pet } }, schemas })
+    })
+
+    it('decodes escaped and percent-encoded pointer tokens', () => {
+      expect(
+        convertSpec({
+          components: {
+            mediaTypes: {
+              'a/b~c': { schema: { type: 'string' } },
+              'My Type': { schema: { type: 'number' } },
+            },
+            schemas: {
+              Escaped: { $ref: '#/components/mediaTypes/a~1b~0c/schema' },
+              Percent: { $ref: '#/components/mediaTypes/My%20Type/schema' },
+              Templated: {
+                $ref: '#/paths/~1pets~1%7Bid%7D/query/requestBody/content/application~1json/schema',
+              },
+            },
+          },
+          paths: {
+            '/pets/{id}': {
+              query: {
+                requestBody: {
+                  content: { 'application/json': { schema: { type: 'integer' } } },
+                },
+              },
+            },
+          },
+        }).components,
+      ).toEqual({
+        schemas: {
+          Escaped: { type: 'string' },
+          Percent: { type: 'number' },
+          Templated: { type: 'integer' },
+        },
+      })
+    })
+
+    it('inlines pointers to an itemSchema that the conversion moves or removes', () => {
+      expect(
+        convertSpec({
+          components: {
+            requestBodies: {
+              B: {
+                content: {
+                  'application/json': {
+                    itemSchema: { type: 'number' },
+                    schema: { type: 'array' },
+                  },
+                  'application/jsonl': { itemSchema: { type: 'string' } },
+                },
+              },
+            },
+            schemas: {
+              Moved: {
+                $ref: '#/components/requestBodies/B/content/application~1jsonl/itemSchema',
+              },
+              Removed: {
+                $ref: '#/components/requestBodies/B/content/application~1json/itemSchema',
+              },
+            },
+          },
+        }).components?.schemas,
+      ).toEqual({ Moved: { type: 'string' }, Removed: { type: 'number' } })
+    })
+  })
+
   describe('robustness', () => {
     it('never mutates the input document', () => {
       const spec = {
@@ -1215,7 +1683,10 @@ describe('downgradeSpecV32ToV31', () => {
             B: { itemSchema: { xml: { nodeType: 'text' } } },
           },
           pathItems: { P: { query: { description: 'q' } } },
-          schemas: { S: { discriminator: { defaultMapping: 'Dog' } } },
+          schemas: {
+            R: { $ref: '#/components/mediaTypes/B/itemSchema', description: 'r' },
+            S: { discriminator: { defaultMapping: 'Dog' } },
+          },
           securitySchemes: { O: { deprecated: true, type: 'oauth2' } },
         },
         openapi: '3.2.0',
