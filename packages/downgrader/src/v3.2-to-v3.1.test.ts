@@ -1621,8 +1621,9 @@ describe('downgradeSpecV32ToV31', () => {
       const result = convertSpec({
         components: {
           parameters: {
+            External: { $ref: '#/paths/~1a/get/parameters/1' },
             Kept: { $ref: '#/paths/~1b/get/parameters/0' },
-            Shifted: { $ref: '#/paths/~1a/get/parameters/1' },
+            Shifted: { $ref: '#/paths/~1a/get/parameters/2' },
           },
         },
         paths: {
@@ -1630,6 +1631,7 @@ describe('downgradeSpecV32ToV31', () => {
             get: {
               parameters: [
                 { in: 'querystring', name: 'qs' },
+                { $ref: './parameters/limit.yaml' },
                 { in: 'query', name: 'b' },
               ],
               responses: {},
@@ -1640,36 +1642,15 @@ describe('downgradeSpecV32ToV31', () => {
       })
       expect(result.components).toEqual({
         parameters: {
+          External: { $ref: './parameters/limit.yaml' },
           Kept: { $ref: '#/paths/~1b/get/parameters/0' },
           Shifted: { in: 'query', name: 'b' },
         },
       })
       expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
+        { $ref: './parameters/limit.yaml' },
         { in: 'query', name: 'b' },
       ])
-    })
-
-    it('inlines references into a shifted parameter list entry that references an external file', () => {
-      const result = convertSpec({
-        paths: {
-          '/a': {
-            get: {
-              parameters: [
-                { in: 'querystring', name: 'qs' },
-                { $ref: './parameters/limit.yaml' },
-                { in: 'header', name: 'secret' },
-              ],
-              responses: {},
-            },
-          },
-          '/b': { get: { parameters: [{ $ref: '#/paths/~1a/get/parameters/1' }], responses: {} } },
-        },
-      })
-      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
-        { $ref: './parameters/limit.yaml' },
-        { in: 'header', name: 'secret' },
-      ])
-      expect(dig(result, 'paths', '/b', 'get', 'parameters')).toEqual([{ $ref: './parameters/limit.yaml' }])
     })
 
     it('removes parameter and header references that resolve to removed ones through any pointer', () => {

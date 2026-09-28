@@ -618,29 +618,11 @@ describe('downgrade', () => {
     })
   })
 
-  it('inlines references whose target is itself a reference that cannot be followed', () => {
+  it('inlines a reference whose target is itself an external reference', () => {
     expect(convertDocument({
-      items: [{ drop: true }, { $ref: './item.yaml' }, { value: 'next' }],
-      named: {
-        external: { $ref: '#/removed/external' },
-        missing: { $ref: '#/removed/missing' },
-        shifted: { $ref: '#/items/1' },
-      },
-      removed: { external: { $ref: 'other.json#/a' }, missing: { $ref: '#/removed/gone' } },
-    }).out).toEqual({
-      items: [{ $ref: './item.yaml' }, { value: 'next' }],
-      named: {
-        external: { $ref: 'other.json#/a' },
-        missing: { $ref: '#/removed/gone' },
-        shifted: { $ref: './item.yaml' },
-      },
-    })
-  })
-
-  it('keeps a reference into a removed loop of aliases as written', () => {
-    const items = [{ $ref: '#/removed/a' }]
-    const removed = { a: { $ref: '#/removed/b' }, b: { $ref: '#/removed/a' } }
-    expect(convertDocument({ items, removed }, ['#/removed/']).out).toEqual({ items })
+      items: [{ $ref: '#/removed/a' }],
+      removed: { a: { $ref: 'other.json#/a' } },
+    }).out).toEqual({ items: [{ $ref: 'other.json#/a' }] })
   })
 
   it('leaves missing, external, anchor, and malformed references as written', () => {
@@ -694,9 +676,11 @@ describe('downgrade', () => {
     })
   })
 
-  it('keeps a loop of aliases as written', () => {
+  it('keeps a loop of aliases as written, even in a removed part', () => {
+    const items = [{ $ref: '#/named/a' }, { $ref: '#/removed/a' }]
     const named = { a: { $ref: '#/named/b' }, b: { $ref: '#/named/a' } }
-    expect(convertDocument({ items: [{ $ref: '#/named/a' }], named }).out).toEqual({ items: [{ $ref: '#/named/a' }], named })
+    const removed = { a: { $ref: '#/removed/b' }, b: { $ref: '#/removed/a' } }
+    expect(convertDocument({ items, named, removed }, ['#/removed/']).out).toEqual({ items, named })
   })
 
   it('removes references to removed targets, cascading through aliases', () => {

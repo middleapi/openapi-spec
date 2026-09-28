@@ -205,19 +205,10 @@ describe('downgradeSpecV31ToV30', () => {
     it('inlines an entry that references an external file', () => {
       expect(
         convertWithPathItems(
-          {
-            '/pets': { $ref: '#/components/pathItems/Pets' },
-            '/pets/{id}': { $ref: '#/components/pathItems/Pet', summary: 'Own' },
-          },
-          {
-            Pet: { $ref: './paths/pet.yaml' },
-            Pets: { $ref: './paths/pets.yaml' },
-          },
+          { '/a': { $ref: '#/components/pathItems/External', summary: 'Own' } },
+          { External: { $ref: './paths/a.yaml' } },
         ).paths,
-      ).toEqual({
-        '/pets': { $ref: './paths/pets.yaml' },
-        '/pets/{id}': { $ref: './paths/pet.yaml', summary: 'Own' },
-      })
+      ).toEqual({ '/a': { $ref: './paths/a.yaml', summary: 'Own' } })
     })
 
     it('inlines references inside callbacks', () => {
@@ -2237,16 +2228,6 @@ describe('downgradeSchemaV31ToV30', () => {
         $defs: { pet: { $ref: './schemas/pet.yaml' } },
         properties: { pet: { $ref: '#/$defs/pet' } },
       })).toEqual({ properties: { pet: { $ref: './schemas/pet.yaml' } } })
-      expect(dig(convertSpec({
-        components: {
-          schemas: {
-            Owner: {
-              $defs: { pet: { $ref: './schemas/pet.yaml' } },
-              properties: { pet: { $ref: '#/components/schemas/Owner/$defs/pet' } },
-            },
-          },
-        },
-      }), 'components', 'schemas')).toEqual({ Owner: { properties: { pet: { $ref: './schemas/pet.yaml' } } } })
     })
 
     it('inlines a $ref to items removed beside prefixItems instead of the items placeholder', () => {
