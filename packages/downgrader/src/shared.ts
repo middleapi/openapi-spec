@@ -306,10 +306,10 @@ function isPathItemPointer(tokens: readonly string[]): boolean {
   if (tokens.length === 3 && first === 'components' && second === 'pathItems') {
     return true
   }
-  return tokens.length > 4
+  return tokens.length > 3
     && tokens.at(-3) === 'callbacks'
     && !(tokens.at(-1) as string).startsWith('x-')
-    && isOperationPointer(tokens.slice(0, -3))
+    && (tokens.length === 4 ? first === 'components' : isOperationPointer(tokens.slice(0, -3)))
 }
 
 function mergeMissing(out: Record<string, unknown>, target: unknown): void {

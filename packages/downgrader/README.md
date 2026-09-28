@@ -18,14 +18,14 @@
   </a>
 </div>
 
-`@openapi-spec/downgrader` downgrades [OpenAPI Specification](https://spec.openapis.org/) documents one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0. Use it when you author against a newer version than your tools accept, such as a code generator, gateway, or validator that stops at 3.0 or 3.1. Each converter handles a whole document or a single Schema Object.
+`@openapi-spec/downgrader` downgrades [OpenAPI Specification](https://spec.openapis.org/) documents one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0. Use it when your tools, such as a code generator, gateway, or validator, only support an older version. Each step converts a whole document or a single Schema Object.
 
 Every converter follows the same contract:
 
-- **Loses detail, never meaning.** Constructs the target version cannot express are converted where an equivalent exists and removed otherwise. A downgraded schema accepts every value the original accepts and may accept more. The exceptions are binary content without a `type`, which 3.0 can only describe as `type: string`, and the known limitations below.
-- **Leaves no dangling references.** A local `$ref` whose target the conversion removes, moves, or renumbers is replaced by that target in converted form.
-- **Never throws, never mutates.** The input is left untouched and the result is a new object. Unexpected shapes, such as an `allOf` that is not an array, are copied through as they are, references inside them included. Objects that are cyclic in the input, such as the output of a `$ref` dereferencer, stay cyclic in the result, and shared objects may stay shared. Only pathologically deep nesting (thousands of levels) can exhaust the call stack.
-- **Preserves extensions, never invents them.** `x-` keys and unknown keys survive.
+- **Loses detail, never meaning.** Anything the target version lacks is converted to an equivalent or, failing that, removed. A downgraded schema accepts every value the original accepts, and possibly more. The exceptions are `contentEncoding` or `contentMediaType` without a `type`, which 3.0 can only express with `type: string`, and the [known limitations](#known-limitations).
+- **Adds no dangling references.** A local `$ref` whose target is removed or moved is replaced by the converted target. [References](#references) lists the exceptions.
+- **Never throws, never mutates.** The result is a new object. Unexpected shapes are copied through as they are, references inside them included. Cyclic input, such as a dereferenced document, stays cyclic, and the result may reuse one object in several places. Only nesting thousands of levels deep can overflow the stack.
+- **Keeps extensions.** `x-` keys and unknown keys survive, except on Reference Objects that are inlined or downgraded to 3.0.
 
 ## Usage
 
@@ -59,28 +59,30 @@ All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi
 
 ## 3.2 → 3.1
 
+Schema Objects change only in `xml.nodeType`, `discriminator.defaultMapping`, and references into removed or moved parts.
+
 Converted:
 
-| 3.2 construct                                                             | 3.1 result                                                                                                                              |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi: 3.2.x`                                                          | `openapi: 3.1.2`                                                                                                                        |
-| `jsonSchemaDialect` naming a 3.2 OAS dialect                              | `https://spec.openapis.org/oas/3.1/dialect/base`; other dialects pass through                                                           |
-| content-map `$ref`s to Media Type Objects                                 | the converted Media Type Object. Entries that cannot be inlined are removed, and so is a parameter or header left without its `content` |
-| media type `itemSchema` without `schema`                                  | `schema: { type: "array", items: … }`                                                                                                   |
-| response `summary` without `description`                                  | `description`; `""` when neither exists                                                                                                 |
-| example `dataValue` / `serializedValue` without `value` / `externalValue` | `value`, `dataValue` first                                                                                                              |
-| XML `nodeType: "attribute"`, or `"element"` on an array                   | `attribute: true`, or `wrapped: true`                                                                                                   |
-| parameter `style: "cookie"`                                               | removed, so the 3.1 default `form` applies                                                                                              |
+| 3.2 construct                                                             | 3.1 result                                                                                                                                |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi: 3.2.x`                                                          | `openapi: 3.1.2`                                                                                                                          |
+| `jsonSchemaDialect` naming a 3.2 OAS dialect                              | `https://spec.openapis.org/oas/3.1/dialect/base`; other dialects pass through                                                             |
+| `$ref` in a `content` map                                                 | the converted Media Type Object; an external, missing, or looping one is removed, along with a parameter or header left without `content` |
+| media type `itemSchema` without `schema`                                  | `schema: { type: "array", items: … }`                                                                                                     |
+| response without `description`                                            | `description` from `summary`, or `""`                                                                                                     |
+| example `dataValue` / `serializedValue` without `value` / `externalValue` | `value`, preferring `dataValue`                                                                                                           |
+| XML `nodeType: "attribute"`, or `"element"` on an array                   | `attribute: true`, or `wrapped: true`                                                                                                     |
+| parameter `style: "cookie"`                                               | removed, so the 3.1 default `form` applies                                                                                                |
 
 Removed, with no 3.1 equivalent:
 
 - `$self` and `components.mediaTypes`
 - server `name`, and tag `summary`, `parent`, and `kind`
 - the Path Item `query` operation and `additionalOperations`
-- `in: "querystring"` parameters, and `allowReserved` on parameters that are not in the query
+- `in: "querystring"` parameters, and `allowReserved` on non-query parameters
 - parameter and header `example` / `examples` beside `content`
-- media type `description`, `prefixEncoding`, `itemEncoding`, and nested `encoding`
-- `itemSchema` beside `schema`, and response `summary` beside `description`
+- media type `description`, `prefixEncoding`, `itemEncoding`, and Encoding Object `encoding`
+- `itemSchema`, response `summary`, and example `dataValue` / `serializedValue`, after the conversions above
 - other XML `nodeType` values and `discriminator.defaultMapping`
 - OAuth `deviceAuthorization` flows, and security scheme `oauth2MetadataUrl` and `deprecated`
 
@@ -88,60 +90,63 @@ Removed, with no 3.1 equivalent:
 
 Converted:
 
-| 3.1 construct                                              | 3.0 result                                          |
-| ---------------------------------------------------------- | --------------------------------------------------- |
-| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                                    |
-| missing `paths`                                            | `{}`                                                |
-| missing operation `responses`                              | `{ "default": { "description": "" } }`              |
-| path parameters without `required: true`                   | `required: true` added (mandatory for `in: "path"`) |
-| security requirement scopes on `apiKey` and `http` schemes | `[]`                                                |
+| 3.1 construct                                              | 3.0 result                             |
+| ---------------------------------------------------------- | -------------------------------------- |
+| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                       |
+| missing `paths`                                            | `{}`                                   |
+| missing operation `responses`                              | `{ "default": { "description": "" } }` |
+| path parameter without `required: true`                    | `required: true`                       |
+| security requirement scopes on `apiKey` and `http` schemes | `[]`                                   |
 
 Removed, with no 3.0 equivalent:
 
 - `jsonSchemaDialect`, `webhooks`, and `components.pathItems`
 - `info.summary` and `license.identifier`
-- every Reference Object field beside `$ref`, `summary`, `description`, and extensions included
-- `mutualTLS` security schemes. Their names leave every security requirement, a requirement left empty is removed, and so is a `security` list left empty, since an empty list would make the operation public.
+- Reference Object fields other than `$ref`, such as `summary`, `description`, and extensions
+- `mutualTLS` security schemes and their names in security requirements. An emptied requirement or `security` list is removed, because an empty one would mean no security. An operation then falls back to the root `security`.
 
-Schema Objects:
+### Schema Objects
 
-| 3.1 construct                                                  | 3.0 result                                                                                                               |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `true` / `false`                                               | `{}` / `{ not: {} }`                                                                                                     |
-| `$ref` with sibling keywords                                   | siblings kept, `$ref` moved into `allOf`                                                                                 |
-| `type: ["T", "null"]`                                          | `type: "T"` plus `nullable: true`                                                                                        |
-| `type` with several non-null entries                           | `anyOf` of single-type schemas, each `nullable` when `null` was listed. A sibling `items` moves into the `array` variant |
-| `type: "null"`                                                 | `enum: [null]`. An existing `enum` or `const` is intersected with it, and becomes `not: {}` when nothing is left         |
-| `const`                                                        | single-value `enum`                                                                                                      |
-| numeric `exclusiveMinimum` / `exclusiveMaximum`                | `minimum` / `maximum` plus the boolean flag; a tighter existing bound wins                                               |
-| `examples`                                                     | first entry becomes `example` when none exists                                                                           |
-| `contentEncoding: base64`                                      | `format: byte` unless `format` exists, plus `type: string` when `type` is missing. Skipped when `type` excludes `string` |
-| `contentMediaType` without `contentEncoding`                   | as above, with `format: binary`                                                                                          |
-| `type: "array"` without `items`                                | `items: {}`                                                                                                              |
-| `enum: []` / `required: []`                                    | removed                                                                                                                  |
-| duplicate `required` entries                                   | deduplicated                                                                                                             |
-| `not` whose operand was loosened                               | removed, since negating a looser operand would reject values the original accepts                                        |
-| `oneOf` with a branch that was loosened                        | `anyOf`, since looser branches may overlap                                                                               |
-| XML `nodeType`, carried over from 3.2                          | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
-| `not` or `oneOf` reaching back into a cycle of the input graph | treated as loosened, since the cycle is not finished while it converts                                                   |
+A schema is _loosened_ when the conversion removes a restriction from it or a subschema, or when it contains an object cycle, as in a dereferenced document.
 
-Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, and a non-`base64` `contentEncoding` with its `contentMediaType`.
+Converted:
+
+| 3.1 construct                                      | 3.0 result                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `true` / `false`, except as `additionalProperties` | `{}` / `{ not: {} }`                                                                                                     |
+| `$ref` with sibling keywords                       | siblings kept, `$ref` moved into `allOf`                                                                                 |
+| `type: ["T", "null"]`                              | `type: "T"` plus `nullable: true`                                                                                        |
+| `type` with several non-null entries               | `anyOf` of single-type schemas, each `nullable` when `null` was listed; a sibling `items` moves into the `array` variant |
+| `type: "null"`                                     | `enum: [null]`, or `not: {}` when a sibling `enum` or `const` excludes `null`                                            |
+| `const`                                            | single-value `enum`                                                                                                      |
+| numeric `exclusiveMinimum` / `exclusiveMaximum`    | `minimum` / `maximum` plus the boolean flag; a tighter existing bound wins                                               |
+| `examples`                                         | its first entry becomes `example` unless `example` exists                                                                |
+| `contentEncoding: base64`                          | `format: byte` unless `format` exists, plus `type: string` when `type` is missing; nothing when `type` excludes `string` |
+| `contentMediaType` without `contentEncoding`       | as above, with `format: binary`                                                                                          |
+| `type: "array"` without `items`                    | `items: {}`                                                                                                              |
+| `enum: []` / `required: []`                        | removed                                                                                                                  |
+| duplicate `required` entries                       | deduplicated                                                                                                             |
+| `not` over a loosened schema                       | removed, since negating a looser schema would reject values the original accepts                                         |
+| `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
+| XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
+
+Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
 
 ## References
 
 Both converters treat local `$ref`s the same way:
 
-- A reference into a removed or renumbered part, such as `webhooks`, `components.pathItems`, `components.mediaTypes`, `$defs`, a `query` operation, or a parameter list that lost entries, is replaced by its target in converted form, following reference chains. A Path Item `$ref` merges its target, the Path Item's own fields winning.
-- A target inlined at several references is converted once and shared. A cycle is cut where it reaches a target or an object that is still being converted, however the reference is spelled: a schema becomes `{}`, a Path Item keeps the fields that do not lead back, and anything else is removed.
-- A reference whose target is removed, such as a `querystring` parameter or a `mutualTLS` scheme, is removed too, and so are Links whose `operationRef` and discriminator `mapping` entries that point into a removed part.
-- The `summary` and `description` of an inlined Reference Object are dropped.
-- External references, anchors, and references that already dangle in the input are left as written, and so are references that loop, point at a value that is not an object, or give a Path Item `$ref` something that is not a Path Item.
+- A `$ref` whose target is removed or moved is replaced by its converted target, following the reference chain until it leaves the removed part. Beside other schema keywords, the target joins `allOf`. When a Path Item `$ref` is replaced, its own fields win over the target's. This covers `webhooks`, `components.pathItems`, `components.mediaTypes`, `$defs`, `itemSchema`, `query` and `additionalOperations` operations, and parameter lists that lost entries.
+- A target inlined in several places is converted once and shared. Where it refers back to itself, the inner reference becomes `{}` in a schema, keeps only its own fields on a Path Item, and is removed elsewhere.
+- A `$ref` to an object the target version cannot express, such as a `querystring` parameter or a `mutualTLS` scheme, is removed with it. So are Links and discriminator `mapping` entries that point into a removed part.
+- Inlining ignores the Reference Object's own fields, such as `summary`, `description`, and extensions.
+- Left as written, even if they then dangle: external references, `$anchor` references, references that already dangle, `$ref` chains that loop, references to values other than objects and boolean schemas, and Path Item `$ref`s whose target is not a Path Item. The exception is a `$ref` in a 3.2 `content` map, which is removed because 3.1 cannot hold a reference there.
 
-Known limitations:
+## Known limitations
 
-- Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept.
-- 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. A recursive schema inlined from a removed part is cut to `{}` where it repeats, which can reject values the original accepts under `not`, `oneOf`, or `unevaluated*`.
-- 3.1 → 3.0: `$ref`s resolved against an `$id` base are not followed. A `not` or `oneOf` whose operand is a `$ref` to a loosened schema keeps its shape and can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids unknown Schema Object fields. A Path Item inlined in several places repeats its `operationId`s.
+- Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
+- 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts.
+- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
 
 ## Sponsors
 

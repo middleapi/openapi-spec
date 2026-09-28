@@ -1882,6 +1882,24 @@ describe('downgradeSpecV32ToV31', () => {
         query: { description: 'inlined', summary: 'Own' },
       })
     })
+
+    it('inlines a path item $ref into a removed operation of a callbacks component', () => {
+      const result = convertSpec({
+        components: {
+          callbacks: {
+            C: { '{$url}': { query: { callbacks: { d: { '{$v}': { description: 'inlined' } } } } }, 'x-cb': { query: {} } },
+          },
+          pathItems: {
+            P: { $ref: '#/components/callbacks/C/{$url}/query/callbacks/d/{$v}' },
+            X: { $ref: '#/components/callbacks/C/x-cb' },
+          },
+        },
+      })
+      expect(dig(result, 'components', 'pathItems')).toEqual({
+        P: { description: 'inlined' },
+        X: { $ref: '#/components/callbacks/C/x-cb' },
+      })
+    })
   })
 
   describe('robustness', () => {
