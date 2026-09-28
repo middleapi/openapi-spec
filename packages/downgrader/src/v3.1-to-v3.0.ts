@@ -1,236 +1,293 @@
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import type { FieldConverter, FieldTable } from './shared'
+import type { Context } from './shared'
 import {
-  convertInlined,
-  convertRecord,
-  deepClone,
+  allOfItems,
+  child,
+  clone,
+  convertMappingRef,
+  convertObject,
+  convertXml,
+  defineFields,
+  downgrade,
   DROP,
   getRef,
-  HTTP_METHODS_UP_TO_V31,
-  isConverting,
+  hasDanglingOperationRef,
+  hasType,
+  HTTP_METHODS,
+  inlineSchema,
+  isNotExtension,
+  isPath,
   isRecord,
-  mapArray,
-  mapRecord,
-  operationFields,
-  parseLocalRef,
-  resolveLocalRef,
+  list,
+  map,
+  mergeRef,
+  placeholder,
+  refOr,
+  removedPrefixes,
+  setOwn,
 } from './shared'
 
-const HTTP_METHODS = new Set<string>(HTTP_METHODS_UP_TO_V31)
-const DESCRIPTION = ['description']
-const SUMMARY_AND_DESCRIPTION = ['summary', 'description']
+const LOOSENING_KEYWORDS = new Set([
+  '$dynamicRef',
+  'contains',
+  'dependentRequired',
+  'dependentSchemas',
+  'else',
+  'if',
+  'maxContains',
+  'minContains',
+  'patternProperties',
+  'prefixItems',
+  'propertyNames',
+  'then',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+])
 
-interface Context {
-  convertSchema: (value: unknown) => unknown
-  document: Record<string, unknown> | undefined
-  inlined: Map<Convert, Map<unknown, unknown>>
-  inlining: Set<unknown>
-  linkChecks: [links: Record<string, unknown>, name: string, operationId: string | typeof DROP][]
-  schemeTypes: ReadonlyMap<string, string>
-}
+const ANNOTATION_KEYWORDS = [
+  '$anchor',
+  '$comment',
+  '$defs',
+  '$dynamicAnchor',
+  '$id',
+  '$schema',
+  '$vocabulary',
+  'contentEncoding',
+  'contentMediaType',
+  'contentSchema',
+  'examples',
+]
 
-type Convert = (item: unknown, context: Context) => unknown
+const LOOSE = new WeakSet<object>()
 
-interface Chain {
-  fields: Record<string, unknown>
-  target: unknown
-}
+const convertCallback = map(convertPathItem, isNotExtension)
+const convertContent = map(convertMediaType)
+const convertRequirements = list(convertRequirement)
+const finishPathItem = mergeRef(convertPathItem)
+const convertCallbackRef = refOr(convertCallback, reference)
+const convertExampleRef = refOr(clone, reference)
+const convertLinkRef = refOr(convertLink, reference)
+const convertParameterRef = refOr(convertParameter, reference)
+const convertRequestBodyRef = refOr(convertRequestBody, reference)
+const convertResponseRef = refOr(convertResponse, reference)
+const convertSecuritySchemeRef = refOr(convertSecurityScheme, reference)
 
-function parseRemovedRef(ref: string, context: Context): string[] | undefined {
-  if (context.document === undefined || !(ref.startsWith('#/webhooks') || ref.startsWith('#/components/pathItems') || ref.includes('%'))) {
-    return undefined
-  }
-  const tokens = parseLocalRef(ref)
-  const removed = tokens?.[0] === 'webhooks' || (tokens?.[0] === 'components' && tokens[1] === 'pathItems')
-  return removed ? tokens : undefined
-}
+const DISCRIMINATOR_FIELDS = defineFields({
+  mapping: map(convertMappingRef),
+})
 
-function isPureRef(value: unknown): value is { $ref: string } {
-  return isRecord(value) && typeof value.$ref === 'string' && Object.keys(value).length === 1
-}
-
-function isPathItemLocation(tokens: readonly string[]): boolean {
-  if (tokens.length === (tokens[0] === 'webhooks' ? 2 : 3)) {
-    return true
-  }
-  const [method = '', callbacks, , expression = 'x-'] = tokens.slice(-4)
-  return callbacks === 'callbacks'
-    && HTTP_METHODS.has(method)
-    && !expression.startsWith('x-')
-    && isPathItemLocation(tokens.slice(0, -4))
-}
-
-function followRefs(value: Record<string, unknown>, context: Context, kind: 'pathItem' | 'reference' | 'schema'): Chain | undefined {
-  const seen = new Set<unknown>()
-  let fields: Record<string, unknown> = {}
-  let target: unknown = value
-  while (isRecord(target) && typeof target.$ref === 'string') {
-    const tokens = parseRemovedRef(target.$ref, context)
-    if (tokens === undefined || (kind === 'schema' && !isPureRef(target))) {
-      break
+const SCHEMA_FIELDS = defineFields({
+  ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
+  $ref: item => (typeof item === 'string' ? DROP : clone(item)),
+  additionalProperties: (item, ctx, schema) => {
+    if ('patternProperties' in schema) {
+      return DROP
     }
-    if (seen.has(target) || (kind === 'pathItem' && !isPathItemLocation(tokens))) {
-      return undefined
+    return typeof item === 'boolean' ? item : convertSchema(item, ctx)
+  },
+  allOf: list(convertSchema),
+  anyOf: list(convertSchema),
+  const: DROP,
+  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
+  exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
+  exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
+  items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
+  not: convertSchema,
+  oneOf: list(convertSchema),
+  properties: map(convertSchema),
+  required: (item) => {
+    if (!Array.isArray(item)) {
+      return clone(item)
     }
-    seen.add(target)
-    const { $ref: ref, ...own } = target
-    fields = { ...own, ...fields }
-    target = resolveLocalRef(context.document, ref)
-  }
-  return target === value || target === undefined ? undefined : { fields, target }
+    return item.length === 0 ? DROP : clone([...new Set(item)])
+  },
+  type: DROP,
+  xml: convertXml,
+})
+
+const PARAMETER_FIELDS = defineFields({
+  content: convertContent,
+  examples: map(convertExampleRef),
+  schema: convertSchema,
+})
+
+const MEDIA_TYPE_FIELDS = defineFields({
+  encoding: map(convertEncoding),
+  examples: map(convertExampleRef),
+  schema: convertSchema,
+})
+
+const ENCODING_FIELDS = defineFields({
+  headers: map(convertParameterRef),
+})
+
+const REQUEST_BODY_FIELDS = defineFields({
+  content: convertContent,
+})
+
+const RESPONSE_FIELDS = defineFields({
+  content: convertContent,
+  headers: map(convertParameterRef),
+  links: map(convertLinkRef),
+})
+
+const OPERATION_FIELDS = defineFields({
+  callbacks: map(convertCallbackRef),
+  parameters: list(convertParameterRef),
+  requestBody: convertRequestBodyRef,
+  responses: map(convertResponseRef, isNotExtension),
+  security: convertSecurity,
+})
+
+const PATH_ITEM_FIELDS = defineFields({
+  ...Object.fromEntries(HTTP_METHODS.map(method => [method, convertOperation])),
+  parameters: list(convertParameterRef),
+})
+
+const COMPONENTS_FIELDS = defineFields({
+  callbacks: map(convertCallbackRef),
+  examples: map(convertExampleRef),
+  headers: map(convertParameterRef),
+  links: map(convertLinkRef),
+  parameters: map(convertParameterRef),
+  pathItems: DROP,
+  requestBodies: map(convertRequestBodyRef),
+  responses: map(convertResponseRef),
+  schemas: map(convertSchema),
+  securitySchemes: map(convertSecuritySchemeRef),
+})
+
+const LICENSE_FIELDS = defineFields({
+  identifier: DROP,
+})
+
+const INFO_FIELDS = defineFields({
+  license: (item, ctx) => convertObject(item, ctx, LICENSE_FIELDS),
+  summary: DROP,
+})
+
+const DOCUMENT_FIELDS = defineFields({
+  components: (item, ctx) => convertObject(item, ctx, COMPONENTS_FIELDS),
+  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS),
+  jsonSchemaDialect: DROP,
+  paths: map(convertPathItem, isPath),
+  security: convertSecurity,
+  webhooks: DROP,
+})
+
+const REMOVED = removedPrefixes({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS })
+
+function reference(value: Record<string, unknown>): unknown {
+  return { $ref: value.$ref }
 }
 
-function resolveRefChain(value: unknown, document: unknown): unknown {
-  const seen = new Set<unknown>()
-  let target = value
-  while (isRecord(target) && typeof target.$ref === 'string' && !seen.has(target)) {
-    seen.add(target)
-    target = resolveLocalRef(document, target.$ref)
-  }
-  return target
+function isLoose(value: unknown): boolean {
+  return LOOSE.has(value as object)
 }
 
-function inline(target: unknown, context: Context, convert: Convert): unknown {
-  const cache = context.inlined.get(convert) ?? new Map<unknown, unknown>()
-  context.inlined.set(convert, cache)
-  if (cache.has(target)) {
-    return cache.get(target)
+function hasLoose(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && Object.values(value).some(isLoose)
+}
+
+function loosened(out: object): object {
+  LOOSE.add(out)
+  return out
+}
+
+function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
+  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+    || (Array.isArray(schema.enum) && schema.enum.length === 0)
+    || isLoose(out.items)
+    || isLoose(out.additionalProperties)
+    || hasLoose(out.properties)
+    || hasLoose(out.allOf)
+    || hasLoose(out.anyOf)
+}
+
+function addAnyOf(out: Record<string, unknown>, variants: unknown): void {
+  if (out.anyOf === undefined) {
+    out.anyOf = variants
   }
-  if (isConverting(target) || context.inlining.has(target)) {
-    return DROP
-  }
-  context.inlining.add(target)
-  try {
-    const out = convertInlined(() => convert(target, context))
-    cache.set(target, out)
-    return out
-  }
-  finally {
-    context.inlining.delete(target)
+  else {
+    out.allOf = [...allOfItems(out.allOf), { anyOf: variants }]
   }
 }
 
-function pickFields(fields: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
-  return Object.fromEntries(keys.filter(key => Object.hasOwn(fields, key)).map(key => [key, deepClone(fields[key])]))
-}
-
-function convertRefOr(value: unknown, context: Context, convert: Convert, overrides: readonly string[] = DESCRIPTION): unknown {
-  if (!isRecord(value) || typeof value.$ref !== 'string') {
-    return convert(value, context)
-  }
-  const chain = followRefs(value, context, 'reference')
-  if (chain === undefined || !isRecord(chain.target)) {
-    return { $ref: value.$ref }
-  }
-  const ref = getRef(chain.target)
-  if (ref !== undefined) {
+function convertSchemaRef(ref: string, ctx: Context): unknown {
+  if (!ctx.dangles(ref)) {
     return { $ref: ref }
   }
-  const out = inline(chain.target, context, convert)
-  const own = pickFields(chain.fields, overrides)
-  return out === DROP || Object.keys(own).length === 0 ? out : { ...out as Record<string, unknown>, ...own }
+  const out = inlineSchema(ref, ctx, convertSchema)
+  return out === DROP ? loosened({}) : out
 }
 
-function refMap(context: Context, convert: Convert, overrides?: readonly string[]): FieldConverter {
-  return item => mapRecord(item, entry => convertRefOr(entry, context, convert, overrides))
-}
-
-function refList(context: Context, convert: Convert): FieldConverter {
-  return item => mapArray(item, entry => convertRefOr(entry, context, convert))
-}
-
-function applyTypes(types: string[], schema: Record<string, unknown>, out: Record<string, unknown>): void {
+function convertType(out: Record<string, unknown>, type: unknown): boolean {
+  if (typeof type === 'string' && type !== 'null') {
+    out.type = type
+    return false
+  }
+  const types = (Array.isArray(type) ? type : [type]).filter(item => typeof item === 'string')
+  if (types.length === 0) {
+    if (type !== undefined && !(Array.isArray(type) && type.length === 0)) {
+      out.type = clone(type)
+    }
+    return false
+  }
   const nullable = types.includes('null')
-  const rest = types.filter(item => item !== 'null')
+  const rest = [...new Set(types.filter(item => item !== 'null'))]
   if (rest.length === 1) {
     out.type = rest[0]
     if (nullable) {
       out.nullable = true
     }
-    return
   }
-  if (rest.length === 0) {
-    if (!nullable) {
-      return
-    }
-    if ('const' in schema) {
-      if (schema.const !== null) {
-        out.not = {}
-      }
-    }
-    else if (Array.isArray(schema.enum)) {
-      if (schema.enum.includes(null)) {
-        out.enum = [null]
-      }
-      else {
-        out.not = {}
-      }
-    }
-    else if (!('enum' in schema)) {
-      out.enum = [null]
-    }
-    return
-  }
-  if (out.anyOf !== undefined && out.allOf !== undefined && !Array.isArray(out.allOf)) {
-    return
-  }
-  const variants = rest.map((item) => {
-    const variant: Record<string, unknown> = { type: item }
-    if (item === 'array') {
-      variant.items = out.items === undefined ? {} : out.items
+  else if (rest.length > 1) {
+    addAnyOf(out, rest.map(item => ({
+      type: item,
+      ...(item === 'array' && { items: out.items ?? {} }),
+      ...(nullable && { nullable: true }),
+    })))
+    if (rest.includes('array')) {
       delete out.items
     }
-    if (nullable) {
-      variant.nullable = true
-    }
-    return variant
-  })
-  if (out.anyOf === undefined) {
-    out.anyOf = variants
+  }
+  else if (out.enum === undefined) {
+    out.enum = [null]
+  }
+  else if (!Array.isArray(out.enum)) {
+    return true
+  }
+  else if (out.enum.includes(null)) {
+    out.enum = [null]
   }
   else {
-    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
+    out.not = {}
   }
+  return false
 }
 
-function hasType(type: unknown, name: string): boolean {
-  return type === name || (Array.isArray(type) && type.includes(name))
-}
-
-function convertType(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  const { type } = schema
-  if (type === undefined) {
-    return
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
+  if (typeof schema.$ref === 'string') {
+    out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
   }
-  if (typeof type === 'string') {
-    applyTypes([type], schema, out)
-    return
+  let loose = isLooseSchema(out, schema)
+  if (isLoose(out.not)) {
+    delete out.not
+    loose = true
   }
-  if (Array.isArray(type)) {
-    const types = [...new Set(type.filter(item => typeof item === 'string'))]
-    if (types.length > 0 || type.length === 0) {
-      applyTypes(types, schema, out)
-      return
-    }
+  if (hasLoose(out.oneOf)) {
+    addAnyOf(out, out.oneOf)
+    delete out.oneOf
+    loose = true
   }
-  out.type = deepClone(type)
-}
-
-function convertConst(schema: Record<string, unknown>, out: Record<string, unknown>): void {
   if ('const' in schema) {
-    out.enum = [deepClone(schema.const)]
+    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
+    out.enum = [clone(schema.const)]
   }
-}
-
-function convertExamples(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
-    out.example = deepClone(schema.examples[0])
-  }
-}
-
-function convertExclusiveBounds(schema: Record<string, unknown>, out: Record<string, unknown>): void {
+  loose = convertType(out, schema.type) || loose
   const { exclusiveMaximum, exclusiveMinimum, maximum, minimum } = schema
   if (typeof exclusiveMinimum === 'number' && !(typeof minimum === 'number' && minimum > exclusiveMinimum)) {
     out.minimum = exclusiveMinimum
@@ -240,418 +297,132 @@ function convertExclusiveBounds(schema: Record<string, unknown>, out: Record<str
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
-}
-
-function getContentFormat(schema: Record<string, unknown>): string | undefined {
-  if (schema.contentEncoding === 'base64') {
-    return 'byte'
+  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
+    out.example = clone(schema.examples[0])
   }
-  if (schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string') {
-    return 'binary'
-  }
-  return undefined
-}
-
-function convertContentKeywords(schema: Record<string, unknown>, out: Record<string, unknown>): void {
-  const format = getContentFormat(schema)
-  const { type } = schema
-  if (format === undefined || (type !== undefined && !hasType(type, 'string'))) {
-    return
-  }
-  if (type === undefined) {
-    out.type = 'string'
-  }
-  if (out.format === undefined) {
-    out.format = format
-  }
-}
-
-function convertXml(value: unknown, schemaType: unknown): unknown {
-  return convertRecord(value, { nodeType: DROP }, (out, xml) => {
-    if (xml.nodeType === 'attribute') {
-      out.attribute = true
+  const format = schema.contentEncoding === 'base64'
+    ? 'byte'
+    : schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string' ? 'binary' : undefined
+  if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
+    out.format ??= format
+    if (schema.type === undefined) {
+      out.type = 'string'
     }
-    else if (xml.nodeType === 'element' && hasType(schemaType, 'array')) {
-      out.wrapped = true
-    }
-    return out
-  })
-}
-
-function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, context: Context): Record<string, unknown> {
-  convertType(schema, out)
-  convertConst(schema, out)
-  convertExamples(schema, out)
-  convertExclusiveBounds(schema, out)
-  convertContentKeywords(schema, out)
+  }
   if (out.type === 'array' && out.items === undefined) {
-    out.items = {}
+    out.items = placeholder()
   }
-  if (typeof schema.$ref === 'string') {
-    if (out.allOf === undefined || Array.isArray(out.allOf)) {
-      out.allOf = [convertSchemaRef({ $ref: schema.$ref }, context), ...(Array.isArray(out.allOf) ? out.allOf : [])]
+  return loose ? loosened(out) : out
+}
+
+function convertSchema(value: unknown, ctx: Context): unknown {
+  if (typeof value === 'boolean') {
+    return value ? {} : { not: {} }
+  }
+  const ref = getRef(value)
+  if (ref !== undefined && Object.keys(value as object).length === 1) {
+    return convertSchemaRef(ref, ctx)
+  }
+  const cyclic = ctx.converting.includes(value)
+  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  return cyclic ? loosened(out === DROP ? {} : out as object) : out
+}
+
+function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): unknown {
+  if (parameter.in === 'path') {
+    out.required = true
+  }
+  return out
+}
+
+function convertParameter(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
+}
+
+function convertMediaType(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
+}
+
+function convertEncoding(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, ENCODING_FIELDS)
+}
+
+function convertRequestBody(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, REQUEST_BODY_FIELDS)
+}
+
+function convertResponse(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, RESPONSE_FIELDS)
+}
+
+function convertLink(value: unknown, ctx: Context): unknown {
+  return hasDanglingOperationRef(value, ctx) ? DROP : clone(value)
+}
+
+function finishOperation(out: Record<string, unknown>): unknown {
+  out.responses ??= { default: { description: '' } }
+  return out
+}
+
+function convertOperation(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, OPERATION_FIELDS, finishOperation)
+}
+
+function convertPathItem(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, PATH_ITEM_FIELDS, finishPathItem)
+}
+
+function schemeType(name: string, ctx: Context): unknown {
+  let scheme = child(ctx.resolve('#/components/securitySchemes'), name)
+  const ref = getRef(scheme)
+  if (ref !== undefined) {
+    const end = ctx.aliasEnd(ref)
+    scheme = end === undefined ? undefined : ctx.resolve(end)
+  }
+  return isRecord(scheme) ? scheme.type : undefined
+}
+
+function convertSecurityScheme(value: unknown): unknown {
+  return isRecord(value) && value.type === 'mutualTLS' ? DROP : clone(value)
+}
+
+function convertRequirement(value: unknown, ctx: Context): unknown {
+  if (!isRecord(value)) {
+    return clone(value)
+  }
+  const out: Record<string, unknown> = {}
+  let removed = false
+  for (const [name, scopes] of Object.entries(value)) {
+    const type = schemeType(name, ctx)
+    if (type === 'mutualTLS') {
+      removed = true
     }
     else {
-      out.$ref = schema.$ref
+      setOwn(out, name, Array.isArray(scopes) && (type === 'apiKey' || type === 'http') ? [] : clone(scopes))
     }
   }
+  return removed && Object.keys(out).length === 0 ? DROP : out
+}
+
+function convertSecurity(value: unknown, ctx: Context): unknown {
+  const out = convertRequirements(value, ctx)
+  return Array.isArray(value) && value.length > 0 && (out as unknown[]).length === 0 ? DROP : out
+}
+
+function finishDocument(out: Record<string, unknown>): unknown {
+  out.openapi = '3.0.4'
+  out.paths ??= {}
   return out
 }
 
-function createSchemaFields(context: Context): FieldTable {
-  const convert = context.convertSchema
-  const convertSubschemas = (item: unknown): unknown => mapArray(item, convert)
-  return {
-    $anchor: DROP,
-    $comment: DROP,
-    $defs: DROP,
-    $dynamicAnchor: DROP,
-    $dynamicRef: DROP,
-    $id: DROP,
-    $ref: item => (typeof item === 'string' ? DROP : deepClone(item)),
-    $schema: DROP,
-    $vocabulary: DROP,
-    additionalProperties: (item, schema) => {
-      if ('patternProperties' in schema) {
-        return DROP
-      }
-      return typeof item === 'boolean' ? item : convert(item)
-    },
-    allOf: convertSubschemas,
-    anyOf: convertSubschemas,
-    const: DROP,
-    contains: DROP,
-    contentEncoding: DROP,
-    contentMediaType: DROP,
-    contentSchema: DROP,
-    dependentRequired: DROP,
-    dependentSchemas: DROP,
-    discriminator: item => convertRecord(item, {
-      mapping: mapping => mapRecord(mapping, value => (typeof value === 'string' && parseRemovedRef(value, context) !== undefined ? DROP : deepClone(value))),
-    }),
-    else: DROP,
-    enum: item => (Array.isArray(item) && item.length === 0 ? DROP : deepClone(item)),
-    examples: DROP,
-    exclusiveMaximum: item => (typeof item === 'number' ? DROP : deepClone(item)),
-    exclusiveMinimum: item => (typeof item === 'number' ? DROP : deepClone(item)),
-    if: DROP,
-    items: (item, schema) => ('prefixItems' in schema ? DROP : convert(item)),
-    maxContains: DROP,
-    minContains: DROP,
-    not: convert,
-    oneOf: convertSubschemas,
-    patternProperties: DROP,
-    prefixItems: DROP,
-    properties: item => mapRecord(item, convert),
-    propertyNames: DROP,
-    required: (item) => {
-      if (!Array.isArray(item)) {
-        return deepClone(item)
-      }
-      return item.length === 0 ? DROP : deepClone([...new Set(item)])
-    },
-    then: DROP,
-    type: DROP,
-    unevaluatedItems: DROP,
-    unevaluatedProperties: DROP,
-    xml: (item, schema) => convertXml(item, schema.type),
-  }
-}
-
-function convertSchemaRef(value: { $ref: string }, context: Context): unknown {
-  const target = followRefs(value, context, 'schema')?.target
-  if (isPureRef(target)) {
-    return { $ref: target.$ref }
-  }
-  if (!isRecord(target) && typeof target !== 'boolean') {
-    return { $ref: value.$ref }
-  }
-  const out = inline(target, context, context.convertSchema)
-  return out === DROP ? {} : out
-}
-
-const STANDALONE_CONTEXT = createContext(undefined)
-
-export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return STANDALONE_CONTEXT.convertSchema(schema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
-}
-
-function createContext(spec: unknown): Context {
-  const document = isRecord(spec) ? spec : undefined
-  const components = document?.components
-  const schemes = isRecord(components) ? components.securitySchemes : undefined
-  const schemeTypes = new Map<string, string>()
-  if (isRecord(schemes)) {
-    for (const [name, scheme] of Object.entries(schemes)) {
-      const target = resolveRefChain(scheme, document)
-      if (isRecord(target) && typeof target.type === 'string') {
-        schemeTypes.set(name, target.type)
-      }
-    }
-  }
-  const context: Context = {
-    convertSchema,
-    document,
-    inlined: new Map(),
-    inlining: new Set(),
-    linkChecks: [],
-    schemeTypes,
-  }
-  const fields = createSchemaFields(context)
-  const finish = (out: Record<string, unknown>, schema: Record<string, unknown>): unknown => finishSchema(out, schema, context)
-  function convertSchema(value: unknown): unknown {
-    if (value === true) {
-      return {}
-    }
-    if (value === false) {
-      return { not: {} }
-    }
-    if (isPureRef(value)) {
-      return convertSchemaRef(value, context)
-    }
-    const out = convertRecord(value, fields, finish)
-    return out === DROP ? {} : out
-  }
-  return context
-}
-
-function isMutualTls(name: string, context: Context): boolean {
-  return context.schemeTypes.get(name) === 'mutualTLS'
-}
-
-function convertRequirement(value: unknown, context: Context): unknown {
-  if (!isRecord(value)) {
-    return deepClone(value)
-  }
-  const entries = Object.entries(value)
-  const kept = entries.filter(([name]) => !isMutualTls(name, context))
-  if (kept.length === 0 && entries.length > 0) {
-    return DROP
-  }
-  return Object.fromEntries(kept.map(([name, scopes]) => {
-    const type = context.schemeTypes.get(name)
-    const scoped = type === undefined || type === 'oauth2' || type === 'openIdConnect'
-    return [name, Array.isArray(scopes) && !scoped ? [] : deepClone(scopes)]
-  }))
-}
-
-function convertSecurity(value: unknown, context: Context): unknown {
-  if (!Array.isArray(value)) {
-    return deepClone(value)
-  }
-  const out = value.map(item => convertRequirement(item, context)).filter(item => item !== DROP)
-  return value.length > 0 && out.length === 0 ? DROP : out
-}
-
-function convertInfo(value: unknown): unknown {
-  return convertRecord(value, {
-    license: item => convertRecord(item, { identifier: DROP }),
-    summary: DROP,
-  })
-}
-
-function convertParameterOrHeader(value: unknown, context: Context): unknown {
-  return convertRecord(
-    value,
-    {
-      content: item => convertContent(item, context),
-      examples: refMap(context, deepClone, SUMMARY_AND_DESCRIPTION),
-      schema: context.convertSchema,
-    },
-    (out, parameter) => {
-      if (parameter.in === 'path') {
-        out.required = true
-      }
-      return out
-    },
-  )
-}
-
-function convertEncoding(value: unknown, context: Context): unknown {
-  return convertRecord(value, { headers: refMap(context, convertParameterOrHeader) })
-}
-
-function convertMediaType(value: unknown, context: Context): unknown {
-  return convertRecord(value, {
-    encoding: item => mapRecord(item, entry => convertEncoding(entry, context)),
-    examples: refMap(context, deepClone, SUMMARY_AND_DESCRIPTION),
-    schema: context.convertSchema,
-  })
-}
-
-function convertContent(item: unknown, context: Context): unknown {
-  return mapRecord(item, entry => convertMediaType(entry, context))
-}
-
-function convertRequestBody(value: unknown, context: Context): unknown {
-  return convertRecord(value, { content: item => convertContent(item, context) })
-}
-
-function linkedOperationId(link: unknown, context: Context): string | typeof DROP | undefined {
-  const target = resolveRefChain(link, context.document)
-  const operationRef = isRecord(target) ? target.operationRef : undefined
-  if (typeof operationRef !== 'string' || parseRemovedRef(operationRef, context) === undefined) {
-    return undefined
-  }
-  const operation = resolveLocalRef(context.document, operationRef)
-  return isRecord(operation) && typeof operation.operationId === 'string' ? operation.operationId : DROP
-}
-
-function convertLink(value: unknown, context: Context): unknown {
-  const operationId = linkedOperationId(value, context)
-  if (typeof operationId !== 'string') {
-    return deepClone(value)
-  }
-  return convertRecord(value, { operationRef: DROP }, (out) => {
-    out.operationId = operationId
-    return out
-  })
-}
-
-function convertLinks(value: unknown, context: Context): unknown {
-  const out = mapRecord(value, item => convertRefOr(item, context, convertLink))
-  if (isRecord(value)) {
-    for (const [name, item] of Object.entries(value)) {
-      const operationId = linkedOperationId(item, context)
-      if (operationId !== undefined) {
-        context.linkChecks.push([out as Record<string, unknown>, name, operationId])
-      }
-    }
-  }
-  return out
-}
-
-function convertResponse(value: unknown, context: Context): unknown {
-  return convertRecord(value, {
-    content: item => convertContent(item, context),
-    headers: refMap(context, convertParameterOrHeader),
-    links: item => convertLinks(item, context),
-  })
-}
-
-function convertResponses(item: unknown, context: Context): unknown {
-  return mapRecord(item, (entry, key) => key.startsWith('x-') ? deepClone(entry) : convertRefOr(entry, context, convertResponse))
-}
-
-function convertOperation(value: unknown, context: Context): unknown {
-  return convertRecord(
-    value,
-    {
-      callbacks: refMap(context, convertCallback, []),
-      parameters: refList(context, convertParameterOrHeader),
-      requestBody: item => convertRefOr(item, context, convertRequestBody),
-      responses: item => convertResponses(item, context),
-      security: item => convertSecurity(item, context),
-    },
-    (out) => {
-      if (out.responses === undefined) {
-        out.responses = { default: { description: '' } }
-      }
-      return out
-    },
-  )
-}
-
-function convertCallback(value: unknown, context: Context): unknown {
-  return mapRecord(value, (item, key) => key.startsWith('x-') ? deepClone(item) : convertPathItem(item, context))
-}
-
-function convertPathItemFields(value: unknown, context: Context): unknown {
-  return convertRecord(value, {
-    ...operationFields(item => convertOperation(item, context)),
-    parameters: refList(context, convertParameterOrHeader),
-  })
-}
-
-function convertPathItem(value: unknown, context: Context): unknown {
-  const chain = isRecord(value) ? followRefs(value, context, 'pathItem') : undefined
-  if (!isRecord(value) || chain === undefined || !isRecord(chain.target)) {
-    return convertPathItemFields(value, context)
-  }
-  const out = inline(chain.target, context, convertPathItem)
-  if (Object.keys(chain.fields).length === 0) {
-    return out === DROP ? {} : out
-  }
-  const { $ref: _, ...own } = value
-  const inherited = Object.fromEntries(Object.entries(chain.fields).filter(([key]) => !Object.hasOwn(own, key)))
-  return {
-    ...(out === DROP ? {} : out) as Record<string, unknown>,
-    ...convertInlined(() => convertPathItemFields(inherited, context)) as Record<string, unknown>,
-    ...convertPathItemFields(own, context) as Record<string, unknown>,
-  }
-}
-
-function convertPaths(value: unknown, context: Context): unknown {
-  return mapRecord(value, (item, key) => key.startsWith('/') ? convertPathItem(item, context) : deepClone(item))
-}
-
-function convertComponents(value: unknown, context: Context): unknown {
-  return convertRecord(value, {
-    callbacks: refMap(context, convertCallback, []),
-    examples: refMap(context, deepClone, SUMMARY_AND_DESCRIPTION),
-    headers: refMap(context, convertParameterOrHeader),
-    links: item => convertLinks(item, context),
-    parameters: refMap(context, convertParameterOrHeader),
-    pathItems: DROP,
-    requestBodies: refMap(context, convertRequestBody),
-    responses: refMap(context, convertResponse),
-    schemas: item => mapRecord(item, context.convertSchema),
-    securitySchemes: item => mapRecord(item, (scheme, name) => isMutualTls(name, context) ? DROP : convertRefOr(scheme, context, deepClone)),
-  })
-}
-
-function collectOperationIds(pathItems: unknown, ids: Set<string>, seen: WeakSet<object>): void {
-  for (const [key, pathItem] of isRecord(pathItems) ? Object.entries(pathItems) : []) {
-    if (key.startsWith('x-') || !isRecord(pathItem) || seen.has(pathItem)) {
-      continue
-    }
-    seen.add(pathItem)
-    for (const method of HTTP_METHODS_UP_TO_V31) {
-      const operation = pathItem[method]
-      if (isRecord(operation) && typeof operation.operationId === 'string') {
-        ids.add(operation.operationId)
-      }
-      for (const callback of isRecord(operation) && isRecord(operation.callbacks) ? Object.values(operation.callbacks) : []) {
-        collectOperationIds(callback, ids, seen)
-      }
-    }
-  }
+function convertDocument(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, DOCUMENT_FIELDS, finishDocument)
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
-  const context = createContext(spec)
-  const converted = convertRecord(
-    spec,
-    {
-      components: item => convertComponents(item, context),
-      info: convertInfo,
-      jsonSchemaDialect: DROP,
-      paths: item => convertPaths(item, context),
-      security: item => convertSecurity(item, context),
-      webhooks: DROP,
-    },
-    (out) => {
-      out.openapi = '3.0.4'
-      if (out.paths === undefined) {
-        out.paths = {}
-      }
-      return out
-    },
-  )
-  if (context.linkChecks.length > 0) {
-    const { components, paths } = converted as Record<string, unknown>
-    const operationIds = new Set<string>()
-    const seen = new WeakSet<object>()
-    collectOperationIds(paths, operationIds, seen)
-    const callbacks = isRecord(components) ? components.callbacks : undefined
-    for (const callback of isRecord(callbacks) ? Object.values(callbacks) : []) {
-      collectOperationIds(callback, operationIds, seen)
-    }
-    for (const [links, name, operationId] of context.linkChecks) {
-      if (operationId === DROP || !operationIds.has(operationId)) {
-        delete links[name]
-      }
-    }
-  }
-  return converted as OpenAPIV3_0.OpenAPIObject
+  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_0.OpenAPIObject
+}
+
+export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
+  return downgrade(schema, convertSchema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }

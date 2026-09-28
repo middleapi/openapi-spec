@@ -102,7 +102,7 @@ describe('3.1 example documents downgraded to 3.0', () => {
     expect(doc).toEqual(before)
   })
 
-  it('resolves $refs and link operationRefs into the removed webhooks and components.pathItems so nothing dangles', async () => {
+  it('resolves $refs into the removed webhooks and components.pathItems and drops links into them so nothing dangles', async () => {
     const petSchema = '#/webhooks/newPet/post/requestBody/content/application~1json/schema'
     const doc: OpenAPIV3_1.OpenAPIObject = {
       components: {
@@ -172,13 +172,13 @@ describe('3.1 example documents downgraded to 3.0', () => {
         get: {
           parameters: [
             { in: 'header', name: 'X-Signature', schema: { type: 'string' } },
-            { description: 'Filter', in: 'query', name: 'q', schema: { nullable: true, type: 'string' } },
+            { in: 'query', name: 'q', schema: { nullable: true, type: 'string' } },
           ],
           responses: {
             200: {
               content: { 'application/json': { schema: { items: pet, type: 'array' } } },
               description: 'ok',
-              links: { item: { operationId: 'getItem' } },
+              links: {},
             },
             201: { description: 'received' },
           },
@@ -387,7 +387,7 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
     expect(doc).toEqual(before)
   })
 
-  it('converts the 3.2 mega document, preserving the discriminator defaultMapping in the schema', async () => {
+  it('converts the 3.2 mega document, removing the discriminator defaultMapping from the schema', async () => {
     const before = structuredClone(mega32)
     const v31 = downgradeSpecV32ToV31(mega32)
     expect(v31.openapi).toBe('3.1.2')
@@ -402,10 +402,7 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
       'schema',
       'discriminator',
     ]
-    expect(v31).toHaveProperty(
-      [...megaDiscriminatorPath, 'defaultMapping'],
-      'Bar',
-    )
+    expect(v31).not.toHaveProperty([...megaDiscriminatorPath, 'defaultMapping'])
     expect(v31).toHaveProperty(
       [...megaDiscriminatorPath, 'propertyName'],
       'type',

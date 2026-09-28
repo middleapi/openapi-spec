@@ -377,7 +377,7 @@ describe('downgradeSpecV32ToV31', () => {
         { allowReserved: true, schema: {} },
       ],
       [
-        'keeps parameter schemas verbatim and converts example maps',
+        'maps parameter schema xml nodeType and converts example maps',
         {
           examples: {
             inline: { dataValue: 1 },
@@ -394,7 +394,7 @@ describe('downgradeSpecV32ToV31', () => {
           },
           in: 'query',
           name: 'q',
-          schema: { type: 'string', xml: { nodeType: 'attribute' } },
+          schema: { type: 'string', xml: { attribute: true } },
         },
       ],
     ])('%s', (_name, input, expected) => {
@@ -413,6 +413,39 @@ describe('downgradeSpecV32ToV31', () => {
       ).toEqual({
         parameters: 'junk',
       })
+    })
+  })
+
+  describe('parameters and headers with content', () => {
+    it('removes parameter and header examples beside content', () => {
+      const content = { 'a/b': { schema: { type: 'object' } } }
+      const operation = dig(convertSpec({
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { content, example: { a: 1 }, in: 'query', name: 'moved' },
+                { content: { 'a/b': { example: 'own' } }, examples: { e: { dataValue: 1 } }, in: 'query', name: 'kept' },
+                { content: { 'a/b': {}, 'c/d': {} }, example: 1, in: 'query', name: 'many' },
+                { example: 1, in: 'query', name: 'plain', schema: { type: 'integer' } },
+              ],
+              responses: { 200: { description: 'ok', headers: { X: { content, examples: { e: { dataValue: 2 } } } } } },
+            },
+          },
+        },
+      }), 'paths', '/a', 'get')
+      expect(dig(operation, 'parameters')).toEqual([
+        { content, in: 'query', name: 'moved' },
+        { content: { 'a/b': { example: 'own' } }, in: 'query', name: 'kept' },
+        { content: { 'a/b': {}, 'c/d': {} }, in: 'query', name: 'many' },
+        { example: 1, in: 'query', name: 'plain', schema: { type: 'integer' } },
+      ])
+      expect(dig(operation, 'responses', '200', 'headers', 'X')).toEqual({ content })
+    })
+
+    it('keeps a parameter whose content was already empty', () => {
+      const parameter = { content: {}, in: 'query', name: 'q' }
+      expect(dig(convertSpec({ paths: { '/a': { get: { parameters: [parameter] } } } }), 'paths', '/a', 'get', 'parameters')).toEqual([parameter])
     })
   })
 
@@ -767,7 +800,7 @@ describe('downgradeSpecV32ToV31', () => {
       expect(result).toEqual({
         'application/jsonl': {
           schema: {
-            items: { type: 'object', xml: { nodeType: 'text' } },
+            items: { type: 'object', xml: {} },
             type: 'array',
           },
         },
@@ -1215,12 +1248,15 @@ describe('downgradeSpecV32ToV31', () => {
       })
     })
 
-    it('clones components.schemas entries unchanged, keeping 3.2 OAS vocabulary fields', () => {
+    it('maps xml nodeType and removes discriminator defaultMapping in components.schemas entries', () => {
       const schema = {
         discriminator: { defaultMapping: 'Dog', propertyName: 'kind' },
         xml: { nodeType: 'attribute' },
       }
-      expect(convertComponent('schemas', schema)).toEqual(schema)
+      expect(convertComponent('schemas', schema)).toEqual({
+        discriminator: { propertyName: 'kind' },
+        xml: { attribute: true },
+      })
     })
 
     it('clones unknown component keys and passes non-object components through', () => {
@@ -1236,6 +1272,7 @@ describe('downgradeSpecV32ToV31', () => {
   describe('references into removed parts', () => {
     const petRef = { $ref: '#/components/mediaTypes/Pet/schema' }
     const pet = { type: 'object', xml: { nodeType: 'element' } }
+    const convertedPet = { type: 'object', xml: {} }
 
     it('inlines schema $refs at every subschema position', () => {
       const everyPosition = (schema: unknown) => ({
@@ -1263,7 +1300,7 @@ describe('downgradeSpecV32ToV31', () => {
         convertComponent('schemas', everyPosition(petRef), {
           mediaTypes: { Pet: { schema: pet } },
         }),
-      ).toEqual(everyPosition(pet))
+      ).toEqual(everyPosition(convertedPet))
     })
 
     it('inlines schema $refs in parameter, header, media type, and itemSchema positions', () => {
@@ -1284,13 +1321,13 @@ describe('downgradeSpecV32ToV31', () => {
           },
         }).components,
       ).toEqual({
-        headers: { H: { schema: pet } },
-        parameters: { P: { in: 'query', name: 'p', schema: pet } },
+        headers: { H: { schema: convertedPet } },
+        parameters: { P: { in: 'query', name: 'p', schema: convertedPet } },
         requestBodies: {
           B: {
             content: {
-              'application/json': { schema: pet },
-              'application/jsonl': { schema: { items: pet, type: 'array' } },
+              'application/json': { schema: convertedPet },
+              'application/jsonl': { schema: { items: convertedPet, type: 'array' } },
             },
           },
         },
@@ -1314,24 +1351,24 @@ describe('downgradeSpecV32ToV31', () => {
             schemas: { S: schema },
           },
         }).components,
-      ).toEqual({ headers: { H: { schema: pet } }, schemas: { S: schema } })
+      ).toEqual({ headers: { H: { schema: convertedPet } }, schemas: { S: schema } })
     })
 
     it.each([
       [
         'adds allOf beside sibling annotations',
         { $ref: petRef.$ref, description: 'd' },
-        { allOf: [pet], description: 'd' },
+        { allOf: [convertedPet], description: 'd' },
       ],
       [
         'appends to an existing allOf, keeping its indices',
         { $ref: petRef.$ref, allOf: [{ required: ['a'] }] },
-        { allOf: [{ required: ['a'] }, pet] },
+        { allOf: [{ required: ['a'] }, convertedPet] },
       ],
       [
         'nests the siblings when allOf is malformed',
         { $ref: petRef.$ref, allOf: 'junk' },
-        { allOf: [{ allOf: 'junk' }, pet] },
+        { allOf: [{ allOf: 'junk' }, convertedPet] },
       ],
     ])('merges a dangling schema $ref with its siblings: %s', (_name, schema, expected) => {
       expect(
@@ -1472,7 +1509,7 @@ describe('downgradeSpecV32ToV31', () => {
       expect(result.paths).toEqual({ '/a': {}, '/b': {} })
     })
 
-    it('removes a Reference Object whose inlining cycles, together with references to it', () => {
+    it('leaves a Reference Object whose chain loops through removed parts as written', () => {
       const result = convertSpec({
         components: {
           responses: {
@@ -1486,8 +1523,17 @@ describe('downgradeSpecV32ToV31', () => {
           '/c': { get: { responses: { 200: { $ref: '#/components/responses/Loop' } } } },
         },
       })
-      expect(result.components).toEqual({ responses: { Keep: { description: 'k' } } })
-      expect(result.paths).toEqual({ '/a': {}, '/b': {}, '/c': { get: { responses: {} } } })
+      expect(result.components).toEqual({
+        responses: {
+          Keep: { description: 'k' },
+          Loop: { $ref: '#/paths/~1a/query/responses/200' },
+        },
+      })
+      expect(result.paths).toEqual({
+        '/a': {},
+        '/b': {},
+        '/c': { get: { responses: { 200: { $ref: '#/components/responses/Loop' } } } },
+      })
     })
 
     it('cuts a recursive schema at its first repeat by removing only the $ref keyword', () => {
@@ -1568,7 +1614,7 @@ describe('downgradeSpecV32ToV31', () => {
         },
       })
       expect(() => JSON.stringify(result)).not.toThrow()
-      expect(result).toEqual({ items: {}, type: 'array' })
+      expect(result).toEqual({ items: { properties: { children: {} }, type: 'object' }, type: 'array' })
     })
 
     it('inlines references into a parameter list that lost entries, since its indices shift', () => {
@@ -1635,7 +1681,7 @@ describe('downgradeSpecV32ToV31', () => {
       ).toEqual({ headers: {}, parameters: {} })
     })
 
-    it('removes references whose alias chain cycles, since they can never resolve', () => {
+    it('leaves references whose alias chain loops as written, since they never resolve', () => {
       expect(
         convertSpec({
           components: {
@@ -1645,10 +1691,15 @@ describe('downgradeSpecV32ToV31', () => {
             },
           },
         }).components,
-      ).toEqual({ parameters: {} })
+      ).toEqual({
+        parameters: {
+          A: { $ref: '#/components/parameters/B' },
+          B: { $ref: '#/components/parameters/A' },
+        },
+      })
     })
 
-    it('removes a looping reference in both passes, so later parameter indices stay correct', () => {
+    it('leaves a looping reference as written, so later parameter indices stay correct', () => {
       const result = convertSpec({
         components: { parameters: { P: { $ref: '#/paths/~1a/get/parameters/1' } } },
         paths: {
@@ -1662,8 +1713,11 @@ describe('downgradeSpecV32ToV31', () => {
           '/c': { query: { parameters: [{ $ref: '#/paths/~1b/query/parameters/0' }] } },
         },
       })
-      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([{ in: 'query', name: 'b' }])
-      expect(result.components).toEqual({ parameters: { P: { in: 'query', name: 'b' } } })
+      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
+        { $ref: '#/paths/~1b/query/parameters/0' },
+        { in: 'query', name: 'b' },
+      ])
+      expect(result.components).toEqual({ parameters: { P: { $ref: '#/paths/~1a/get/parameters/1' } } })
     })
 
     it('leaves external, anchor, root, unparseable, and already dangling references untouched', () => {
@@ -1684,7 +1738,7 @@ describe('downgradeSpecV32ToV31', () => {
             schemas,
           },
         }).components,
-      ).toEqual({ headers: { H: { schema: pet } }, schemas })
+      ).toEqual({ headers: { H: { schema: convertedPet } }, schemas })
     })
 
     it('decodes escaped and percent-encoded pointer tokens', () => {
@@ -1748,6 +1802,85 @@ describe('downgradeSpecV32ToV31', () => {
           },
         }).components?.schemas,
       ).toEqual({ Moved: { type: 'string' }, Removed: { type: 'number' } })
+    })
+    it('keeps a header alias whose target is only cut by a media type cycle', () => {
+      const result = convertSpec({
+        components: {
+          headers: { A: { $ref: '#/components/mediaTypes/M/encoding/e/headers/h' } },
+          mediaTypes: {
+            M: {
+              encoding: { e: { headers: { h: { content: { 'a/b': { $ref: '#/components/mediaTypes/M' } } }, x: { $ref: '#/components/headers/A' } } } },
+              schema: { type: 'string' },
+            },
+          },
+        },
+        paths: {
+          '/p': {
+            get: {
+              responses: {
+                200: {
+                  content: { 'a/b': { $ref: '#/components/mediaTypes/M' } },
+                  description: 'ok',
+                  headers: { X: { $ref: '#/components/headers/A' } },
+                },
+              },
+            },
+          },
+        },
+      })
+      expect(dig(result, 'paths', '/p', 'get', 'responses', '200', 'headers')).toEqual({ X: { $ref: '#/components/headers/A' } })
+      expect(dig(result, 'components', 'headers', 'A', 'content', 'a/b', 'schema')).toEqual({ type: 'string' })
+    })
+
+    it('removes links and discriminator mappings that point into removed parts', () => {
+      const result = convertSpec({
+        components: {
+          links: { gone: { operationRef: '#/paths/~1a/query' }, kept: { operationRef: '#/paths/~1a/get' } },
+          mediaTypes: { M: { schema: {} } },
+          schemas: {
+            Pet: {
+              discriminator: {
+                mapping: { cat: '#/components/schemas/Cat', item: '#/components/mediaTypes/M/schema' },
+                propertyName: 'kind',
+              },
+            },
+          },
+        },
+        paths: { '/a': { get: {}, query: {} } },
+      })
+      expect(dig(result, 'components', 'links')).toEqual({ kept: { operationRef: '#/paths/~1a/get' } })
+      expect(dig(result, 'components', 'schemas', 'Pet', 'discriminator')).toEqual({ mapping: { cat: '#/components/schemas/Cat' }, propertyName: 'kind' })
+    })
+
+    it('follows schema alias chains through removed parts, stopping at an alias with siblings', () => {
+      const result = convertSpec({
+        components: {
+          mediaTypes: {
+            A: { schema: { $ref: '#/components/mediaTypes/B/schema' } },
+            B: { schema: { $ref: '#/components/mediaTypes/C/schema', description: 'b' } },
+            C: { schema: { type: 'string' } },
+          },
+          schemas: { S: { $ref: '#/components/mediaTypes/A/schema' } },
+        },
+      })
+      expect(dig(result, 'components', 'schemas', 'S')).toEqual({ allOf: [{ type: 'string' }], description: 'b' })
+    })
+
+    it('inlines a path item $ref that points into a removed operation, keeping own fields', () => {
+      const callbacks = { c: { '{$url}': { description: 'inlined', summary: 'Inlined' } } }
+      const result = convertSpec({
+        components: {
+          pathItems: {
+            copy: { $ref: '#/paths/~1a/additionalOperations/COPY/callbacks/c/{$url}' },
+            query: { $ref: '#/paths/~1a/query/callbacks/c/{$url}', summary: 'Own' },
+          },
+        },
+        paths: { '/a': { additionalOperations: { COPY: { callbacks } }, query: { callbacks } } },
+      })
+      expect(dig(result, 'components', 'pathItems')).toEqual({
+        copy: { description: 'inlined', summary: 'Inlined' },
+        query: { description: 'inlined', summary: 'Own' },
+      })
     })
   })
 
@@ -1837,7 +1970,7 @@ describe('downgradeSpecV32ToV31', () => {
 })
 
 describe('downgradeSchemaV32ToV31', () => {
-  it('deep-clones schemas, preserving discriminator defaultMapping and xml nodeType verbatim', () => {
+  it('deep-clones schemas, removing discriminator defaultMapping and mapping xml nodeType', () => {
     const source = {
       discriminator: {
         defaultMapping: 'Dog',
@@ -1849,7 +1982,12 @@ describe('downgradeSchemaV32ToV31', () => {
       xml: { nodeType: 'attribute' },
     } satisfies OpenAPIV3_2.SchemaObject
     const result = downgradeSchemaV32ToV31(source)
-    expect(result).toEqual(source)
+    expect(result).toEqual({
+      discriminator: { mapping: { dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
+      properties: { a: { xml: {} } },
+      type: 'object',
+      xml: { attribute: true },
+    })
     expect(result).not.toBe(source)
     expect(dig(result, 'discriminator')).not.toBe(source.discriminator)
     expect(dig(result, 'properties')).not.toBe(source.properties)
@@ -1866,10 +2004,41 @@ describe('downgradeSchemaV32ToV31', () => {
       items: { xml: { nodeType: 'cdata' } },
     }
     const result = downgradeSchemaV32ToV31(source as any)
-    expect(result).toEqual(source)
+    expect(result).toEqual({ allOf: [{ discriminator: {} }, true], items: { xml: {} } })
     expect(dig(result, 'allOf')).not.toBe(source.allOf)
     expect(dig(result, 'allOf', '0')).not.toBe(source.allOf[0])
     expect(dig(result, 'items')).not.toBe(source.items)
+  })
+
+  it.each([
+    ['maps an attribute node', { xml: { name: 'n', nodeType: 'attribute' } }, { xml: { attribute: true, name: 'n' } }],
+    ['maps an element node on an array to wrapped', { type: ['array', 'null'], xml: { nodeType: 'element' } }, { type: ['array', 'null'], xml: { wrapped: true } }],
+    ['drops an element node elsewhere', { type: 'object', xml: { nodeType: 'element' } }, { type: 'object', xml: {} }],
+    ['drops nodes 3.1 cannot express', { xml: { nodeType: 'text' } }, { xml: {} }],
+    ['passes a malformed xml through', { xml: 'junk' }, { xml: 'junk' }],
+  ])('xml: %s', (_name, input, expected) => {
+    expect(downgradeSchemaV32ToV31(input as any)).toEqual(expected)
+  })
+
+  it('converts nested schemas at every subschema position', () => {
+    const inner = { discriminator: { defaultMapping: 'A', propertyName: 'kind' } }
+    const out = { discriminator: { propertyName: 'kind' } }
+    const keywords = ['additionalProperties', 'contains', 'contentSchema', 'else', 'if', 'items', 'not', 'propertyNames', 'then', 'unevaluatedItems', 'unevaluatedProperties']
+    const lists = ['allOf', 'anyOf', 'oneOf', 'prefixItems']
+    const maps = ['$defs', 'dependentSchemas', 'patternProperties', 'properties']
+    expect(downgradeSchemaV32ToV31({
+      ...Object.fromEntries(keywords.map(key => [key, inner])),
+      ...Object.fromEntries(lists.map(key => [key, [inner, true]])),
+      ...Object.fromEntries(maps.map(key => [key, { a: inner }])),
+      'const': inner,
+      'x-extension': inner,
+    } as any)).toEqual({
+      ...Object.fromEntries(keywords.map(key => [key, out])),
+      ...Object.fromEntries(lists.map(key => [key, [out, true]])),
+      ...Object.fromEntries(maps.map(key => [key, { a: out }])),
+      'const': inner,
+      'x-extension': inner,
+    })
   })
 
   it('keeps unknown schema keywords, validation keywords, and extensions unchanged', () => {

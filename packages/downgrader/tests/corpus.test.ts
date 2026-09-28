@@ -76,7 +76,7 @@ import { doc as tagObjectExampleV32 } from '../../types/tests/schema-tests-3.2/t
 import { doc as validSchemaTypesV32 } from '../../types/tests/schema-tests-3.2/valid-schema-types'
 import { doc as webhookExampleV32 } from '../../types/tests/schema-tests-3.2/webhook-example'
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '../src/index'
-import { expectValidAs } from './helpers'
+import { expectNoNewDanglingRefs, expectValidAs } from './helpers'
 
 // Excluded: security-scheme-object-examples (external $ref the validator cannot resolve)
 // and style-defaults (x-comment in an Encoding Object, rejected by the official 3.0 schema).
@@ -187,13 +187,14 @@ const corpus32: readonly (readonly [
 
 describe('3.1 corpus downgraded to 3.0', () => {
   it.each(corpus31)(
-    'converts %s to a valid 3.0 document without mutating the input',
+    'converts %s to a valid 3.0 document without new dangling references or mutating the input',
     async (_name, doc) => {
       await expectValidAs(doc, '3.1')
       const before = structuredClone(doc)
       const v30 = downgradeSpecV31ToV30(doc)
       expect(v30.openapi).toBe('3.0.4')
       await expectValidAs(v30, '3.0')
+      expectNoNewDanglingRefs(doc, v30)
       expect(doc).toEqual(before)
     },
   )
@@ -201,16 +202,18 @@ describe('3.1 corpus downgraded to 3.0', () => {
 
 describe('3.2 corpus downgraded to 3.1 and chained to 3.0', () => {
   it.each(corpus32)(
-    'converts %s to valid 3.1 and 3.0 documents without mutating the input',
+    'converts %s to valid 3.1 and 3.0 documents without new dangling references or mutating the input',
     async (_name, doc) => {
       await expectValidAs(doc, '3.2')
       const before = structuredClone(doc)
       const v31 = downgradeSpecV32ToV31(doc)
       expect(v31.openapi).toBe('3.1.2')
       await expectValidAs(v31, '3.1')
+      expectNoNewDanglingRefs(doc, v31)
       const v30 = downgradeSpecV31ToV30(v31)
       expect(v30.openapi).toBe('3.0.4')
       await expectValidAs(v30, '3.0')
+      expectNoNewDanglingRefs(v31, v30)
       expect(doc).toEqual(before)
     },
   )
