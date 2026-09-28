@@ -397,7 +397,7 @@ exports[`3.1 example documents downgraded to 3.0 > converts the webhook example,
 }
 `;
 
-exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts the 3.2 mega document, preserving the discriminator defaultMapping in the schema > v3.0 1`] = `
+exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts the 3.2 mega document, removing the discriminator defaultMapping from the schema > v3.0 1`] = `
 {
   "components": {
     "schemas": {
@@ -438,7 +438,7 @@ exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts t
 }
 `;
 
-exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts the 3.2 mega document, preserving the discriminator defaultMapping in the schema > v3.1 1`] = `
+exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts the 3.2 mega document, removing the discriminator defaultMapping from the schema > v3.1 1`] = `
 {
   "components": {
     "pathItems": {
@@ -454,7 +454,6 @@ exports[`3.2 example documents downgraded to 3.1 and chained to 3.0 > converts t
                     },
                   ],
                   "discriminator": {
-                    "defaultMapping": "Bar",
                     "mapping": {
                       "foo": "Foo",
                     },

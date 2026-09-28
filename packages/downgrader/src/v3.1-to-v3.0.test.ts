@@ -361,7 +361,7 @@ describe('downgradeSpecV31ToV30', () => {
             parameters: [hookParameter, { in: 'query', name: 'q', schema: { enum: ['x'] } }],
             responses: {
               200: { description: 'ok' },
-              201: { description: 'created', links: { l1: { operationId: 'newPetHook' } } },
+              201: { description: 'created', links: {} },
             },
           },
         },
@@ -474,7 +474,7 @@ describe('downgradeSpecV31ToV30', () => {
       })
     })
 
-    it('applies the outermost summary and description override where the target has that field', () => {
+    it('ignores summary and description overrides when it inlines a reference', () => {
       const result = convertSpec({
         components: {
           callbacks: { C: { $ref: '#/webhooks/newPet/x-callback', description: 'ignored' } },
@@ -492,8 +492,8 @@ describe('downgradeSpecV31ToV30', () => {
       })
       expect(result.components).toEqual({
         callbacks: { C: { '{$url}': { summary: 's' } } },
-        examples: { E: { description: 'd', summary: 'outer', value: 1 } },
-        parameters: { P: { ...hookParameter, description: 'outer' } },
+        examples: { E: { description: 'd', summary: 's', value: 1 } },
+        parameters: { P: hookParameter },
       })
     })
 
@@ -668,7 +668,7 @@ describe('downgradeSpecV31ToV30', () => {
       })
       expect(
         dig(result, 'paths', '/tree', 'post', 'requestBody', 'content', 'application/json', 'schema'),
-      ).toBe(dig(result, 'components', 'schemas', 'Tree'))
+      ).toEqual(dig(result, 'components', 'schemas', 'Tree'))
       expect(dig(result, 'paths', '/ping', 'post', 'callbacks')).toEqual({
         pong: { '{$request.body#/url}': {} },
         self: { '{$request.body#/url}': {} },
@@ -755,7 +755,7 @@ describe('downgradeSpecV31ToV30', () => {
       ])
     })
 
-    it('rewrites links into the removed parts to the operationId of an operation still in the output and removes the rest', () => {
+    it('removes links whose operationRef points into the removed parts, together with references to them', () => {
       const result = convertSpec({
         components: {
           callbacks: { Hook: { '{$url}': { $ref: '#/webhooks/callbackHook' } } },
@@ -819,24 +819,15 @@ describe('downgradeSpecV31ToV30', () => {
       })
       expect(result.components).toEqual({
         callbacks: { Hook: { '{$url}': { post: { operationId: 'callbackHookOp', responses: {} } } } },
-        links: {
-          ByComponentCallback: { operationId: 'callbackHookOp' },
-          Kept: { description: 'kept', operationId: 'newPetHook' },
-        },
+        links: {},
       })
       expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'links')).toEqual({
-        both: { operationId: 'newPetHook' },
-        byCallback: { operationId: 'getItem', parameters: { id: '$response.body#/id' } },
         byId: { operationId: 'orphanHook' },
         byPath: { operationRef: '#/paths/~1b/post' },
         external: { $ref: 'https://example.com/links.json#/Kept' },
-        inlined: { operationId: 'newPetHook' },
-        refKept: { $ref: '#/components/links/Kept' },
         refUnknown: { $ref: '#/components/links/Unknown' },
       })
-      expect(dig(result, 'paths', '/b', 'post', 'responses', '200', 'links')).toEqual({
-        self: { operationId: 'newPetHook' },
-      })
+      expect(dig(result, 'paths', '/b', 'post', 'responses', '200', 'links')).toEqual({})
       expect(JSON.stringify(result)).not.toMatch(removedPointer)
     })
 
@@ -1068,7 +1059,7 @@ describe('downgradeSpecV31ToV30', () => {
       })
     })
 
-    it('expands an enclosing path item once before cutting the reference back into it', () => {
+    it('cuts a callback that reaches back into the path item that contains it', () => {
       const result = convertSpec({
         components: { callbacks: { C: { $ref: '#/webhooks/ping/post/callbacks/self' } } },
         webhooks: {
@@ -1076,7 +1067,7 @@ describe('downgradeSpecV31ToV30', () => {
         },
       })
       expect(dig(result, 'components', 'callbacks', 'C')).toEqual({
-        expr: { post: { callbacks: { self: { expr: {} } }, responses: {} } },
+        expr: { post: { callbacks: { self: {} }, responses: {} } },
       })
     })
 
@@ -1519,11 +1510,8 @@ describe('downgradeSpecV31ToV30', () => {
         ping: { $ref: '#/components/securitySchemes/pong' },
         pong: { $ref: '#/components/securitySchemes/ping' },
       }
-      expect(
-        convertSpec({ components: { securitySchemes } }).components,
-      ).toEqual({
-        securitySchemes,
-      })
+      const security = [{ dangling: ['a'], external: ['b'], junk: ['c'], nested: ['d'], ping: ['e'] }]
+      expect(convertSpec({ components: { securitySchemes }, security })).toMatchObject({ components: { securitySchemes }, security })
     })
 
     it('empties roles on non-OAuth schemes and keeps them elsewhere', () => {
@@ -1601,6 +1589,20 @@ describe('downgradeSpecV31ToV30', () => {
       ).toEqual({
         securitySchemes: 'junk',
       })
+    })
+  })
+
+  describe('shared objects', () => {
+    it('converts an object shared between an operation and a schema as each', () => {
+      const empty = {}
+      for (const fields of [
+        { components: { schemas: { S: empty } }, paths: { '/a': { get: empty } } },
+        { paths: { '/a': { get: empty } }, components: { schemas: { S: empty } } },
+      ]) {
+        const result = convertSpec(fields)
+        expect(dig(result, 'paths', '/a', 'get')).toEqual({ responses: { default: { description: '' } } })
+        expect(dig(result, 'components', 'schemas', 'S')).toEqual({})
+      }
     })
   })
 
@@ -1707,9 +1709,9 @@ describe('downgradeSchemaV31ToV30', () => {
         { allOf: [{ $ref: '#/c/s' }, { type: 'string' }] },
       ],
       [
-        'keeps a malformed allOf and leaves the $ref in place',
+        'nests a malformed allOf and moves the $ref into allOf',
         { $ref: '#/c/s', allOf: 'junk' },
-        { $ref: '#/c/s', allOf: 'junk' },
+        { allOf: [{ $ref: '#/c/s' }, { allOf: 'junk' }] },
       ],
       [
         'passes a non-string $ref through unchanged',
@@ -1836,14 +1838,17 @@ describe('downgradeSchemaV31ToV30', () => {
         },
       ],
       [
-        'drops the type union when anyOf exists and allOf is malformed',
+        'nests a malformed allOf beside the type union when anyOf exists',
         {
           allOf: 'junk',
           anyOf: [{ type: 'string' }],
           items: { type: 'integer' },
           type: ['array', 'string'],
         },
-        { allOf: 'junk', anyOf: [{ type: 'string' }], items: { type: 'integer' } },
+        {
+          allOf: [{ allOf: 'junk' }, { anyOf: [{ items: { type: 'integer' }, type: 'array' }, { type: 'string' }] }],
+          anyOf: [{ type: 'string' }],
+        },
       ],
       [
         'deduplicates type array entries',
@@ -2197,6 +2202,75 @@ describe('downgradeSchemaV31ToV30', () => {
       ],
     ])('%s', (_name, input, expected) => {
       expect(convertSchema(input)).toEqual(expected)
+    })
+  })
+
+  describe('references into dropped keywords', () => {
+    it('inlines $refs into $defs, cutting recursion into {}', () => {
+      expect(convertSchema({
+        $defs: { node: { properties: { next: { $ref: '#/$defs/node' } }, type: 'object' } },
+        $ref: '#/$defs/node',
+      })).toEqual({ allOf: [{ properties: { next: {} }, type: 'object' }] })
+      expect(convertSchema({ $defs: { a: { type: 'string' } }, items: { $ref: '#/$defs/a' }, type: 'array' })).toEqual({ items: { type: 'string' }, type: 'array' })
+    })
+
+    it('inlines a $ref to items removed beside prefixItems instead of the items placeholder', () => {
+      expect(convertSchema({
+        properties: {
+          cell: { $ref: '#/properties/row/items' },
+          notCell: { not: { $ref: '#/properties/row/items' } },
+          row: { items: { type: 'integer' }, prefixItems: [{ type: 'string' }], type: 'array' },
+        },
+      })).toEqual({
+        properties: {
+          cell: { type: 'integer' },
+          notCell: { not: { type: 'integer' } },
+          row: { items: {}, type: 'array' },
+        },
+      })
+    })
+  })
+
+  describe('never tightening what validates', () => {
+    it.each([
+      ['drops a not whose operand lost a keyword', { not: { patternProperties: { a: {} } } }, {}],
+      ['drops a not whose operand is loosened deeper down', { not: { properties: { a: { if: {} } } } }, {}],
+      ['drops a not whose operand is a cut recursion', { $defs: { a: { not: { $ref: '#/$defs/a' } } }, $ref: '#/$defs/a' }, { allOf: [{}] }],
+      ['drops a not whose operand had an empty enum', { not: { enum: [] } }, {}],
+      ['drops a not whose null-only type has a malformed enum', { not: { enum: 'junk', type: 'null' } }, {}],
+      ['drops a not whose const falls outside its enum', { not: { const: 1, enum: [2] } }, {}],
+      ['keeps a not whose const lies inside its enum', { not: { const: 1, enum: [1, 2] } }, { not: { enum: [1] } }],
+      ['keeps a not whose operand converts exactly', { not: { type: ['string', 'null'] } }, { not: { nullable: true, type: 'string' } }],
+      ['keeps a not whose null-only operand matches nothing exactly', { not: { const: 'a', type: 'null' } }, { not: { enum: ['a'], not: {} } }],
+      ['drops both nots of a loosened double negation', { not: { not: { prefixItems: [] } } }, {}],
+      [
+        'turns a oneOf with a loosened branch into anyOf',
+        { oneOf: [{ prefixItems: [] }, { type: 'string' }] },
+        { anyOf: [{}, { type: 'string' }] },
+      ],
+      [
+        'nests that anyOf in allOf beside an existing anyOf',
+        { anyOf: [{ type: 'string' }], oneOf: [{ unevaluatedProperties: false }] },
+        { allOf: [{ anyOf: [{}] }], anyOf: [{ type: 'string' }] },
+      ],
+      [
+        'propagates loosening through items, additionalProperties, allOf, and anyOf',
+        { not: { allOf: [{ anyOf: [{ additionalProperties: { items: { contains: {} } } }] }] } },
+        {},
+      ],
+    ])('%s', (_name, input, expected) => {
+      expect(convertSchema(input)).toEqual(expected)
+    })
+
+    it('treats a cycle of the input graph as loosened under not and oneOf', () => {
+      const negated: any = { not: { properties: {} }, patternProperties: { '^x': { type: 'string' } } }
+      negated.not.properties.p = negated
+      expect(convertSchema(negated)).toEqual({})
+      const tree: any = { oneOf: [{ required: ['value'], type: 'object' }], unevaluatedProperties: false }
+      tree.oneOf.push({ properties: { children: { items: tree, type: 'array' } }, type: 'object' })
+      const out = convertSchema(tree) as any
+      expect(out.oneOf).toBeUndefined()
+      expect(out.anyOf[1].properties.children.items).toBe(out)
     })
   })
 
