@@ -202,6 +202,24 @@ describe('downgradeSpecV31ToV30', () => {
       ).toEqual({ '/a': { ...inlined, description: 'alias', summary: 'Own' } })
     })
 
+    it('inlines an entry that references an external file', () => {
+      expect(
+        convertWithPathItems(
+          {
+            '/pets': { $ref: '#/components/pathItems/Pets' },
+            '/pets/{id}': { $ref: '#/components/pathItems/Pet', summary: 'Own' },
+          },
+          {
+            Pet: { $ref: './paths/pet.yaml' },
+            Pets: { $ref: './paths/pets.yaml' },
+          },
+        ).paths,
+      ).toEqual({
+        '/pets': { $ref: './paths/pets.yaml' },
+        '/pets/{id}': { $ref: './paths/pet.yaml', summary: 'Own' },
+      })
+    })
+
     it('inlines references inside callbacks', () => {
       expect(
         convertWithPathItems(
@@ -2212,6 +2230,23 @@ describe('downgradeSchemaV31ToV30', () => {
         $ref: '#/$defs/node',
       })).toEqual({ allOf: [{ properties: { next: {} }, type: 'object' }] })
       expect(convertSchema({ $defs: { a: { type: 'string' } }, items: { $ref: '#/$defs/a' }, type: 'array' })).toEqual({ items: { type: 'string' }, type: 'array' })
+    })
+
+    it('inlines $refs into $defs entries that reference an external file', () => {
+      expect(convertSchema({
+        $defs: { pet: { $ref: './schemas/pet.yaml' } },
+        properties: { pet: { $ref: '#/$defs/pet' } },
+      })).toEqual({ properties: { pet: { $ref: './schemas/pet.yaml' } } })
+      expect(dig(convertSpec({
+        components: {
+          schemas: {
+            Owner: {
+              $defs: { pet: { $ref: './schemas/pet.yaml' } },
+              properties: { pet: { $ref: '#/components/schemas/Owner/$defs/pet' } },
+            },
+          },
+        },
+      }), 'components', 'schemas')).toEqual({ Owner: { properties: { pet: { $ref: './schemas/pet.yaml' } } } })
     })
 
     it('inlines a $ref to items removed beside prefixItems instead of the items placeholder', () => {

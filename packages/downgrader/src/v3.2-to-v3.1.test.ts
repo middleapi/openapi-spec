@@ -1649,6 +1649,29 @@ describe('downgradeSpecV32ToV31', () => {
       ])
     })
 
+    it('inlines references into a shifted parameter list entry that references an external file', () => {
+      const result = convertSpec({
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { in: 'querystring', name: 'qs' },
+                { $ref: './parameters/limit.yaml' },
+                { in: 'header', name: 'secret' },
+              ],
+              responses: {},
+            },
+          },
+          '/b': { get: { parameters: [{ $ref: '#/paths/~1a/get/parameters/1' }], responses: {} } },
+        },
+      })
+      expect(dig(result, 'paths', '/a', 'get', 'parameters')).toEqual([
+        { $ref: './parameters/limit.yaml' },
+        { in: 'header', name: 'secret' },
+      ])
+      expect(dig(result, 'paths', '/b', 'get', 'parameters')).toEqual([{ $ref: './parameters/limit.yaml' }])
+    })
+
     it('removes parameter and header references that resolve to removed ones through any pointer', () => {
       expect(
         convertSpec({

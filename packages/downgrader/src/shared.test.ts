@@ -618,6 +618,31 @@ describe('downgrade', () => {
     })
   })
 
+  it('inlines references whose target is itself a reference that cannot be followed', () => {
+    expect(convertDocument({
+      items: [{ drop: true }, { $ref: './item.yaml' }, { value: 'next' }],
+      named: {
+        external: { $ref: '#/removed/external' },
+        missing: { $ref: '#/removed/missing' },
+        shifted: { $ref: '#/items/1' },
+      },
+      removed: { external: { $ref: 'other.json#/a' }, missing: { $ref: '#/removed/gone' } },
+    }).out).toEqual({
+      items: [{ $ref: './item.yaml' }, { value: 'next' }],
+      named: {
+        external: { $ref: 'other.json#/a' },
+        missing: { $ref: '#/removed/gone' },
+        shifted: { $ref: './item.yaml' },
+      },
+    })
+  })
+
+  it('keeps a reference into a removed loop of aliases as written', () => {
+    const items = [{ $ref: '#/removed/a' }]
+    const removed = { a: { $ref: '#/removed/b' }, b: { $ref: '#/removed/a' } }
+    expect(convertDocument({ items, removed }, ['#/removed/']).out).toEqual({ items })
+  })
+
   it('leaves missing, external, anchor, and malformed references as written', () => {
     const items = [{ $ref: '#/missing' }, { $ref: 'other.json#/a' }, { $ref: '#anchor' }, { $ref: '#/%E0%A4%A' }]
     expect(convertDocument({ items }).out).toEqual({ items })
