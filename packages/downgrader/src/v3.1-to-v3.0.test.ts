@@ -202,6 +202,15 @@ describe('downgradeSpecV31ToV30', () => {
       ).toEqual({ '/a': { ...inlined, description: 'alias', summary: 'Own' } })
     })
 
+    it('inlines an entry that references an external file', () => {
+      expect(
+        convertWithPathItems(
+          { '/a': { $ref: '#/components/pathItems/External', summary: 'Own' } },
+          { External: { $ref: './paths/a.yaml' } },
+        ).paths,
+      ).toEqual({ '/a': { $ref: './paths/a.yaml', summary: 'Own' } })
+    })
+
     it('inlines references inside callbacks', () => {
       expect(
         convertWithPathItems(
@@ -2212,6 +2221,13 @@ describe('downgradeSchemaV31ToV30', () => {
         $ref: '#/$defs/node',
       })).toEqual({ allOf: [{ properties: { next: {} }, type: 'object' }] })
       expect(convertSchema({ $defs: { a: { type: 'string' } }, items: { $ref: '#/$defs/a' }, type: 'array' })).toEqual({ items: { type: 'string' }, type: 'array' })
+    })
+
+    it('inlines $refs into $defs entries that reference an external file', () => {
+      expect(convertSchema({
+        $defs: { pet: { $ref: './schemas/pet.yaml' } },
+        properties: { pet: { $ref: '#/$defs/pet' } },
+      })).toEqual({ properties: { pet: { $ref: './schemas/pet.yaml' } } })
     })
 
     it('inlines a $ref to items removed beside prefixItems instead of the items placeholder', () => {

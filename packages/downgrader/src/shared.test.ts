@@ -618,6 +618,13 @@ describe('downgrade', () => {
     })
   })
 
+  it('inlines a reference whose target is itself an external reference', () => {
+    expect(convertDocument({
+      items: [{ $ref: '#/removed/a' }],
+      removed: { a: { $ref: 'other.json#/a' } },
+    }).out).toEqual({ items: [{ $ref: 'other.json#/a' }] })
+  })
+
   it('leaves missing, external, anchor, and malformed references as written', () => {
     const items = [{ $ref: '#/missing' }, { $ref: 'other.json#/a' }, { $ref: '#anchor' }, { $ref: '#/%E0%A4%A' }]
     expect(convertDocument({ items }).out).toEqual({ items })
@@ -669,9 +676,11 @@ describe('downgrade', () => {
     })
   })
 
-  it('keeps a loop of aliases as written', () => {
+  it('keeps a loop of aliases as written, even in a removed part', () => {
+    const items = [{ $ref: '#/named/a' }, { $ref: '#/removed/a' }]
     const named = { a: { $ref: '#/named/b' }, b: { $ref: '#/named/a' } }
-    expect(convertDocument({ items: [{ $ref: '#/named/a' }], named }).out).toEqual({ items: [{ $ref: '#/named/a' }], named })
+    const removed = { a: { $ref: '#/removed/b' }, b: { $ref: '#/removed/a' } }
+    expect(convertDocument({ items, named, removed }, ['#/removed/']).out).toEqual({ items, named })
   })
 
   it('removes references to removed targets, cascading through aliases', () => {

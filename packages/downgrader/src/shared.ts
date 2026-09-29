@@ -417,9 +417,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     return end
   }
   const isInlinable = (ref: string): boolean => {
-    const end = aliasEnd(ref)
-    const target = end === undefined ? undefined : resolveRef(end)
-    return isRecord(target) || typeof target === 'boolean'
+    const target = resolveRef(ref)
+    return (isRecord(target) || typeof target === 'boolean') && aliasEnd(ref) !== undefined
   }
   const dangling = new Set<string>()
   const isRemovedPart = (ref: string): boolean => removed.some(prefix => ref.startsWith(prefix))
