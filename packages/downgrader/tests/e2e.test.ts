@@ -387,6 +387,50 @@ describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {
     expect(doc).toEqual(before)
   })
 
+  it('keeps schema identifiers unique when it inlines a schema in several places', async () => {
+    const doc: OpenAPIV3_2.OpenAPIObject = {
+      components: {
+        mediaTypes: {
+          Pet: {
+            schema: {
+              $id: 'https://example.com/pet',
+              properties: { name: { $anchor: 'name', type: 'string' } },
+              type: 'object',
+            },
+          },
+        },
+      },
+      info: { title: 'Identifiers', version: '1.0.0' },
+      openapi: '3.2.0',
+      paths: {
+        '/pets': {
+          get: {
+            responses: { 200: { content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } }, description: 'Pet' } },
+          },
+          post: {
+            requestBody: { content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } } },
+            responses: {
+              201: {
+                content: { 'application/json': { schema: { $ref: '#/components/mediaTypes/Pet/schema/properties/name' } } },
+                description: 'Name',
+              },
+            },
+          },
+        },
+      },
+    }
+    const before = structuredClone(doc)
+
+    const v31 = downgradeSpecV32ToV31(doc)
+    const serialized = JSON.stringify(v31)
+    expect(serialized.match(/"\$id"/g)).toHaveLength(1)
+    expect(serialized.match(/"\$anchor"/g)).toHaveLength(1)
+    await expectValidAs(v31, '3.1')
+
+    await expectValidAs(downgradeSpecV31ToV30(v31), '3.0')
+    expect(doc).toEqual(before)
+  })
+
   it('converts the 3.2 mega document, removing the discriminator defaultMapping from the schema', async () => {
     const before = structuredClone(mega32)
     const v31 = downgradeSpecV32ToV31(mega32)

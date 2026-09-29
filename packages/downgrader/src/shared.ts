@@ -10,6 +10,7 @@ export interface Context {
   readonly markDangling: (ref: string) => void
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
+  readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, unknown>>
   readonly inlining: Set<unknown>
   readonly removals: Map<string, boolean | undefined>
@@ -217,10 +218,13 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   if (cache.has(target)) {
     return cache.get(target)
   }
+  const identified = ctx.identified.size
   ctx.inlining.add(target)
   const out = convert(target, { ...ctx, seen: new Map() })
   ctx.inlining.delete(target)
-  cache.set(target, out)
+  if (ctx.identified.size === identified) {
+    cache.set(target, out)
+  }
   return out
 }
 
@@ -229,7 +233,7 @@ function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
     return ctx.removals.get(ref) === true
   }
   ctx.removals.set(ref, undefined)
-  const removed = inline(ref, { ...ctx, converting: [], inlined: new Map(), inlining: new Set(), seen: new Map() }, convert) === DROP
+  const removed = inline(ref, { ...ctx, converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), seen: new Map() }, convert) === DROP
   ctx.removals.set(ref, removed)
   return removed
 }
@@ -440,6 +444,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         }
         return dangling.has(ref)
       },
+      identified: new Set(),
       inlined: new Map(),
       inlining: new Set(),
       isRemovedPart,

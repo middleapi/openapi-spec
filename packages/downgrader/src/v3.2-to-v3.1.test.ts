@@ -1870,6 +1870,63 @@ describe('downgradeSpecV32ToV31', () => {
       expect(dig(result, 'components', 'schemas', 'S')).toEqual({ allOf: [{ type: 'string' }], description: 'b' })
     })
 
+    it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {
+      const pet = { $id: 'https://example.com/pet', properties: { name: { $anchor: 'name', type: 'string' } }, type: 'object' }
+      const result = convertSpec({
+        components: {
+          mediaTypes: { Pet: { schema: pet } },
+          schemas: { Named: { $ref: '#/components/mediaTypes/Pet/schema', description: 'named' } },
+        },
+        paths: {
+          '/a': {
+            get: {
+              responses: {
+                200: {
+                  content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } },
+                  description: 'ok',
+                },
+              },
+            },
+          },
+        },
+      })
+      expect(dig(result, 'components', 'schemas', 'Named')).toEqual({ allOf: [pet], description: 'named' })
+      expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'content')).toEqual({
+        'application/json': { schema: { properties: { name: { type: 'string' } }, type: 'object' } },
+      })
+    })
+
+    it('keeps identifiers on a moved or shifted original rather than on the copies inlined from it', () => {
+      expect(convertPathItem({
+        get: {
+          parameters: [
+            { content: { 'text/plain': {} }, in: 'querystring', name: 'q' },
+            { in: 'query', name: 'p', schema: { $dynamicAnchor: 'p', type: 'string' } },
+          ],
+          responses: {
+            200: { content: { 'application/jsonl': { itemSchema: { $id: 'https://example.com/item' } } }, description: 'ok' },
+          },
+        },
+        post: {
+          parameters: [{ $ref: '#/paths/~1a/get/parameters/1' }],
+          requestBody: {
+            content: { 'application/json': { schema: { $ref: '#/paths/~1a/get/responses/200/content/application~1jsonl/itemSchema' } } },
+          },
+        },
+      })).toEqual({
+        get: {
+          parameters: [{ in: 'query', name: 'p', schema: { $dynamicAnchor: 'p', type: 'string' } }],
+          responses: {
+            200: { content: { 'application/jsonl': { schema: { items: { $id: 'https://example.com/item' }, type: 'array' } } }, description: 'ok' },
+          },
+        },
+        post: {
+          parameters: [{ in: 'query', name: 'p', schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: {} } } },
+        },
+      })
+    })
+
     it('inlines a path item $ref that points into a removed operation, keeping own fields', () => {
       const callbacks = { c: { '{$url}': { description: 'inlined', summary: 'Inlined' } } }
       const result = convertSpec({
@@ -1978,7 +2035,7 @@ describe('downgradeSpecV32ToV31', () => {
     })
 
     it('copies a dereferenced schema shared across the document once', () => {
-      const pet = { properties: { name: { type: 'string' } }, type: 'object' }
+      const pet = { $anchor: 'pet', $id: 'https://example.com/pet', properties: { name: { type: 'string' } }, type: 'object' }
       const result = convertSpec({
         components: { schemas: { Pet: pet } },
         paths: { '/pets': { get: { responses: { 200: { content: { 'application/json': { schema: pet } }, description: 'ok' } } } } },
