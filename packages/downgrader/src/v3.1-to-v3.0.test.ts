@@ -1422,6 +1422,139 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  describe('form request body parts', () => {
+    const octetStream = { contentType: 'application/octet-stream' }
+
+    function convertForm(mediaType: unknown, type = 'multipart/form-data'): unknown {
+      const result = convertSpec({
+        components: {
+          requestBodies: { X: { content: { [type]: mediaType } } },
+          schemas: { Form: { allOf: [{ properties: { a: {} } }], properties: { b: {} } }, Pet: { type: 'object' }, Raw: {} },
+        },
+      })
+      return dig(result, 'components', 'requestBodies', 'X', 'content', type)
+    }
+
+    it.each([
+      ['a schema without type', {}],
+      ['a true schema', true],
+      ['a string with a contentEncoding that no 3.0 format expresses', { contentEncoding: 'base64url', type: 'string' }],
+      ['an array of untyped items', { items: {}, type: 'array' }],
+      ['an array without items', { type: 'array' }],
+      ['untyped anyOf branches', { anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }] }],
+      ['a reference to an untyped schema', { $ref: '#/components/schemas/Raw' }],
+    ])('sets contentType: application/octet-stream, the 3.1 default, on %s', (_name, part) => {
+      expect(convertForm({ schema: { properties: { part } } })).toEqual({
+        encoding: { part: octetStream },
+        schema: { properties: { part: expect.anything() } },
+      })
+    })
+
+    it.each([
+      ['a string', { format: 'uuid', type: 'string' }],
+      ['an object', { type: 'object' }],
+      ['raw binary, which becomes format binary', { contentMediaType: 'image/png' }],
+      ['base64, which becomes format byte', { contentEncoding: 'base64', type: 'string' }],
+      ['an array of raw binary', { items: { contentMediaType: 'image/png' }, type: 'array' }],
+      ['a type found through allOf', { allOf: [{ $ref: '#/components/schemas/Pet' }] }],
+      ['a null type', { type: 'null' }],
+      ['several types', { type: ['string', 'integer'] }],
+      ['typed prefixItems', { prefixItems: [{ type: 'string' }], type: 'array' }],
+      ['nested arrays, which have no multipart form', { items: { items: {}, type: 'array' }, type: 'array' }],
+      ['an external reference', { $ref: 'other.yaml#/File' }],
+      ['a missing reference', { $ref: '#/components/schemas/Missing' }],
+      ['a false schema', false],
+    ])('adds no Encoding Object for %s', (_name, part) => {
+      expect(convertForm({ schema: { properties: { part } } })).not.toHaveProperty('encoding')
+    })
+
+    it('adds no Encoding Object for an array whose items loop back to it', () => {
+      const part: Record<string, unknown> = { type: 'array' }
+      part.items = part
+      expect(convertForm({ schema: { properties: { part } } })).not.toHaveProperty('encoding')
+    })
+
+    it('keeps Encoding Objects that set contentType or RFC6570-style fields, and adds contentType beside headers', () => {
+      const headers = { 'X-Id': { schema: { type: 'string' } } }
+      expect(
+        convertForm({
+          encoding: {
+            exploded: { explode: true },
+            explicit: { contentType: 'image/png' },
+            headed: { headers },
+            junk: 'junk',
+            reserved: { allowReserved: true },
+            styled: { style: 'form' },
+          },
+          schema: { properties: { exploded: {}, explicit: {}, headed: {}, junk: {}, reserved: {}, styled: {} } },
+        }),
+      ).toEqual({
+        encoding: {
+          exploded: { explode: true },
+          explicit: { contentType: 'image/png' },
+          headed: { ...octetStream, headers },
+          junk: 'junk',
+          reserved: { allowReserved: true },
+          styled: { style: 'form' },
+        },
+        schema: { properties: { exploded: {}, explicit: {}, headed: {}, junk: {}, reserved: {}, styled: {} } },
+      })
+    })
+
+    it('finds parts through references and allOf in the body schema, including keys named like Object.prototype members', () => {
+      expect(convertForm({ schema: { $ref: '#/components/schemas/Form' } })).toEqual({
+        encoding: { a: octetStream, b: octetStream },
+        schema: { $ref: '#/components/schemas/Form' },
+      })
+      const encoding = dig(convertForm({ schema: { properties: JSON.parse('{"__proto__":{}}') } }), 'encoding') as object
+      expect(Object.getPrototypeOf(encoding)).toBe(Object.prototype)
+      expect(Object.hasOwn(encoding, '__proto__')).toBe(true)
+    })
+
+    it('applies to multipart and URL-encoded request bodies only', () => {
+      const mediaType = { schema: { properties: { file: {} } } }
+      for (const type of ['multipart/mixed', 'Application/X-WWW-Form-Urlencoded; charset=utf-8']) {
+        expect(convertForm(mediaType, type)).toEqual({ ...mediaType, encoding: { file: octetStream } })
+      }
+      for (const type of ['application/json', 'application/x-www-form-urlencoded-v2']) {
+        expect(convertForm(mediaType, type)).toEqual(mediaType)
+      }
+      const content = { 'multipart/form-data': mediaType }
+      expect(convertComponent('responses', { content, description: 'd' })).toEqual({ content, description: 'd' })
+      expect(convertComponent('parameters', { content, in: 'query', name: 'q' })).toEqual({ content, in: 'query', name: 'q' })
+    })
+
+    it('converts a media type shared between a form body and a response as each', () => {
+      const mediaType = { schema: { properties: { file: {} } } }
+      const result = convertSpec({
+        components: {
+          requestBodies: { B: { content: { 'multipart/form-data': mediaType } } },
+          responses: { R: { content: { 'multipart/form-data': mediaType }, description: 'd' } },
+        },
+      })
+      expect(dig(result, 'components', 'requestBodies', 'B', 'content', 'multipart/form-data')).toEqual({ ...mediaType, encoding: { file: octetStream } })
+      expect(dig(result, 'components', 'responses', 'R', 'content', 'multipart/form-data')).toEqual(mediaType)
+    })
+
+    it('leaves an Encoding Object shared with another part unchanged', () => {
+      const entry = { headers: { 'X-Id': { schema: { type: 'string' } } } }
+      const content = {
+        'multipart/form-data': { encoding: { part: entry }, schema: { properties: { part: {} } } },
+        'multipart/mixed': { encoding: { part: entry }, schema: { properties: { part: { type: 'string' } } } },
+      }
+      const result = dig(convertComponent('requestBodies', { content }), 'content')
+      expect(dig(result, 'multipart/form-data', 'encoding', 'part')).toEqual({ ...entry, ...octetStream })
+      expect(dig(result, 'multipart/mixed', 'encoding', 'part')).toEqual(entry)
+    })
+
+    it('leaves a malformed encoding value alone', () => {
+      expect(convertForm({ encoding: 'junk', schema: { properties: { file: {} } } })).toEqual({
+        encoding: 'junk',
+        schema: { properties: { file: {} } },
+      })
+    })
+  })
+
   describe('components', () => {
     it('removes pathItems and keeps the other component maps', () => {
       const result = convertSpec({

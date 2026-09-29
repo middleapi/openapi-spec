@@ -109,14 +109,14 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   return result
 }
 
-export function map(convert: Convert, isEntry: (key: string) => boolean = () => true): Convert {
+export function map(convert: (value: unknown, ctx: Context, key: string) => unknown, isEntry: (key: string) => boolean = () => true): Convert {
   return (value, ctx) => {
     if (!isRecord(value)) {
       return clone(value, ctx)
     }
     const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value)) {
-      const converted = isEntry(key) ? convert(item, ctx) : clone(item, ctx)
+      const converted = isEntry(key) ? convert(item, ctx, key) : clone(item, ctx)
       if (converted !== DROP) {
         setOwn(out, key, converted)
       }

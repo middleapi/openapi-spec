@@ -258,6 +258,50 @@ describe('3.1 example documents downgraded to 3.0', () => {
     await expectValidAs(converted, '3.0')
     expect(doc).toEqual(before)
   })
+
+  it('keeps untyped multipart parts sent as application/octet-stream', async () => {
+    const schema: OpenAPIV3_1.SchemaObject = {
+      properties: {
+        addresses: { items: { type: 'object' }, type: 'array' },
+        file: { items: {}, type: 'array' },
+        id: { format: 'uuid', type: 'string' },
+        profileImage: {},
+      },
+      type: 'object',
+    }
+    const headers = { 'X-Rate-Limit-Limit': { schema: { type: 'integer' } } } as const
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      info: { title: 'Uploads', version: '1.0.0' },
+      openapi: '3.1.0',
+      paths: {
+        '/profile': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': { encoding: { profileImage: { headers } }, schema },
+              },
+            },
+            responses: { 204: { description: 'saved' } },
+          },
+        },
+      },
+    }
+    const before = structuredClone(doc)
+    const converted = downgradeSpecV31ToV30(doc)
+    expect(converted.paths['/profile']?.post?.requestBody).toEqual({
+      content: {
+        'multipart/form-data': {
+          encoding: {
+            file: { contentType: 'application/octet-stream' },
+            profileImage: { contentType: 'application/octet-stream', headers },
+          },
+          schema,
+        },
+      },
+    })
+    await expectValidAs(converted, '3.0')
+    expect(doc).toEqual(before)
+  })
 })
 
 describe('3.2 example documents downgraded to 3.1 and chained to 3.0', () => {

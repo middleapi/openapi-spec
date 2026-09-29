@@ -415,6 +415,10 @@ describe('map', () => {
     expect(keys).toEqual(['a', 'b', 'raw'])
   })
 
+  it('passes each entry key to the converter', () => {
+    expect(map((item, _ctx, key) => `${key}=${item}`)({ a: 1, b: 2 }, createContext())).toEqual({ a: 'a=1', b: 'b=2' })
+  })
+
   it('leaves out entries whose converter returns DROP', () => {
     expect(map(item => (item === 2 ? DROP : item))({ a: 1, b: 2, c: 3 }, createContext())).toEqual({ a: 1, c: 3 })
   })
