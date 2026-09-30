@@ -23,7 +23,7 @@ export type Field = (value: unknown, ctx: Context, parent: Record<string, unknow
 
 export type Fields = ReadonlyMap<string, Field | typeof DROP>
 
-export type Finish = (out: Record<string, unknown>, source: Record<string, unknown>, ctx: Context) => unknown
+export type Finish = (out: Record<string, unknown>, source: Record<string, unknown>, ctx: Context) => void
 
 export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
@@ -102,12 +102,9 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
       setOwn(out, key, converted)
     }
   }
-  const result = finish === undefined ? out : finish(out, value, ctx)
+  finish?.(out, value, ctx)
   ctx.converting.pop()
-  if (result !== out) {
-    seen.set(value, result)
-  }
-  return result
+  return out
 }
 
 export function map(convert: (value: unknown, ctx: Context, key: string) => unknown, isEntry: (key: string) => boolean = () => true): Convert {
@@ -286,8 +283,10 @@ function isGone(ref: string, ctx: Context): boolean {
   return ctx.isRemovedPart(ref) || ctx.dangles(ref)
 }
 
-export function convertMappingRef(value: unknown, ctx: Context): unknown {
-  return typeof value === 'string' && isGone(value, ctx) ? DROP : clone(value)
+export function hasDanglingMapping(discriminator: unknown, ctx: Context): boolean {
+  return isRecord(discriminator)
+    && isRecord(discriminator.mapping)
+    && Object.values(discriminator.mapping).some(ref => typeof ref === 'string' && isGone(ref, ctx))
 }
 
 export function hasDanglingOperationRef(link: unknown, ctx: Context): boolean {
@@ -316,12 +315,10 @@ function isPathItemPointer(tokens: readonly string[]): boolean {
     && (tokens.length === 4 ? first === 'components' : isOperationPointer(tokens.slice(0, -3)))
 }
 
-function mergeMissing(out: Record<string, unknown>, target: unknown): void {
-  if (isRecord(target)) {
-    for (const [key, item] of Object.entries(target)) {
-      if (!Object.hasOwn(out, key)) {
-        setOwn(out, key, item)
-      }
+function mergeMissing(out: Record<string, unknown>, target: Record<string, unknown>): void {
+  for (const [key, item] of Object.entries(target)) {
+    if (!Object.hasOwn(out, key)) {
+      setOwn(out, key, item)
     }
   }
 }
@@ -332,32 +329,29 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
 }
 
 export function mergeRef(convert: Convert): Finish {
+  const convertOwn: Convert = (value, ctx) => {
+    const { $ref: _, ...own } = value as Record<string, unknown>
+    return convert(own, ctx)
+  }
   return (out, source, ctx) => {
     let ref = getRef(source)
     if (!followsPathItem(ref, ctx)) {
-      return out
+      return
     }
     delete out.$ref
-    const hops: unknown[] = []
     for (;;) {
-      const target = ctx.resolve(ref)
-      const next = getRef(target)
-      if (!followsPathItem(next, ctx)) {
-        mergeMissing(out, inline(ref, ctx, convert))
-        break
+      const next = getRef(ctx.resolve(ref))
+      const hop = followsPathItem(next, ctx)
+      const target = inline(ref, ctx, hop ? convertOwn : convert)
+      if (!isRecord(target)) {
+        return
       }
-      if (!ctx.inlining.has(target) && !ctx.converting.includes(target)) {
-        const { $ref: _, ...own } = target as Record<string, unknown>
-        ctx.inlining.add(target)
-        hops.push(target)
-        mergeMissing(out, convert(own, { ...ctx, seen: new Map() }))
+      mergeMissing(out, target)
+      if (!hop) {
+        return
       }
       ref = next
     }
-    for (const hop of hops) {
-      ctx.inlining.delete(hop)
-    }
-    return out
   }
 }
 
@@ -435,7 +429,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
-          if ((isRemovedPart(ref) || (previous !== root && danglesIn(previous, root, parsePointer(ref)))) && isInlinable(ref)) {
+          if ((isRemovedPart(ref) || danglesIn(previous, root, parsePointer(ref))) && isInlinable(ref)) {
             dangling.add(ref)
           }
           else {

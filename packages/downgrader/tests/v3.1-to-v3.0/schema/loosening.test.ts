@@ -1,5 +1,6 @@
 // Removing a keyword with no 3.0 form (see removed-keywords.test.ts) makes a
-// schema accept more values: it is "loosened". A looser schema never rejects
+// schema accept more values: it is "loosened". So does keeping `nullable`,
+// which 3.1 ignores but 3.0 applies, as in documents migrated by hand. A looser schema never rejects
 // a value the original accepted, which is the safe direction for a
 // conversion. Two applicators flip that direction:
 // - `not` rejects what its operand accepts, so a looser operand rejects
@@ -35,6 +36,7 @@ describe('not', () => {
     ['keeps a not whose operand converts exactly', { not: { type: ['string', 'null'] } }, { not: { nullable: true, type: 'string' } }],
     ['keeps a not whose null-only operand matches nothing exactly', { not: { const: 'a', type: 'null' } }, { not: { enum: ['a'], not: {} } }],
     ['keeps a not over a boolean schema', { not: false }, { not: { not: {} } }],
+    ['removes a not whose operand keeps a nullable that 3.1 ignored', { not: { nullable: true, type: 'string' } }, {}],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
   })
@@ -47,6 +49,11 @@ describe('oneOf', () => {
       'nests that anyOf in allOf beside an existing anyOf',
       { anyOf: [{ type: 'string' }], oneOf: [{ unevaluatedProperties: false }] },
       { allOf: [{ anyOf: [{}] }], anyOf: [{ type: 'string' }] },
+    ],
+    [
+      'turns a oneOf with a nullable that 3.1 ignored into anyOf',
+      { oneOf: [{ nullable: true, type: 'string' }, { type: 'null' }] },
+      { anyOf: [{ nullable: true, type: 'string' }, { enum: [null] }] },
     ],
     ['keeps a oneOf whose branches convert exactly', { oneOf: [{ type: ['integer', 'null'] }, { type: 'string' }] }, { oneOf: [{ nullable: true, type: 'integer' }, { type: 'string' }] }],
   ])('%s', (_name, input, expected) => {

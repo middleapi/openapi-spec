@@ -240,8 +240,8 @@ describe('reference Objects', () => {
   // Removing a `querystring` parameter shifts the indices of the entries
   // after it, so `#/paths/~1a/get/parameters/2` would silently point at a
   // different parameter, or at nothing. References into such a list are
-  // inlined, even though the list itself survives. References to entries
-  // that kept their index, and external references, stay as written.
+  // inlined, even though the list itself survives. References into lists
+  // that kept every entry, and external references, stay as written.
   it('inlines references into a parameter list that lost entries, since its indices shift', () => {
     const result = convertSpec({
       components: {
@@ -320,8 +320,10 @@ describe('links and discriminator mappings', () => {
   // references too: https://spec.openapis.org/oas/v3.1.2.html#link-operation-ref
   // https://spec.openapis.org/oas/v3.1.2.html#discriminator-mapping
   // One that points into a removed part cannot be inlined (a Link needs an
-  // operation to point at), so it is removed.
-  it('removes links and discriminator mappings that point into removed parts', () => {
+  // operation to point at), so the Link or discriminator is removed. Removing
+  // only the mapping entry would let the value map implicitly to a component
+  // schema of the same name instead.
+  it('removes links and discriminators that point into removed parts', () => {
     const result = convertSpec({
       components: {
         links: { gone: { operationRef: '#/paths/~1a/query' }, kept: { operationRef: '#/paths/~1a/get' } },
@@ -329,13 +331,14 @@ describe('links and discriminator mappings', () => {
         schemas: {
           Pet: {
             discriminator: { mapping: { cat: '#/components/schemas/Cat', item: '#/components/mediaTypes/M/schema' }, propertyName: 'kind' },
+            oneOf: [{ $ref: '#/components/schemas/Cat' }],
           },
         },
       },
       paths: { '/a': { get: {}, query: {} } },
     })
     expect(dig(result, 'components', 'links')).toEqual({ kept: { operationRef: '#/paths/~1a/get' } })
-    expect(dig(result, 'components', 'schemas', 'Pet', 'discriminator')).toEqual({ mapping: { cat: '#/components/schemas/Cat' }, propertyName: 'kind' })
+    expect(dig(result, 'components', 'schemas', 'Pet')).toEqual({ oneOf: [{ $ref: '#/components/schemas/Cat' }] })
   })
 })
 

@@ -6,13 +6,13 @@ import {
   allOfItems,
   child,
   clone,
-  convertMappingRef,
   convertObject,
   convertXml,
   defineFields,
   downgrade,
   DROP,
   getRef,
+  hasDanglingMapping,
   hasDanglingOperationRef,
   hasType,
   HTTP_METHODS,
@@ -79,10 +79,6 @@ const convertRequestBodyRef = refOr(convertRequestBody, reference)
 const convertResponseRef = refOr(convertResponse, reference)
 const convertSecuritySchemeRef = refOr(convertSecurityScheme, reference)
 
-const DISCRIMINATOR_FIELDS = defineFields({
-  mapping: map(convertMappingRef),
-})
-
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
@@ -95,7 +91,7 @@ const SCHEMA_FIELDS = defineFields({
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
   const: DROP,
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  discriminator: (item, ctx) => (hasDanglingMapping(item, ctx) ? DROP : clone(item)),
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
@@ -125,6 +121,8 @@ const MEDIA_TYPE_FIELDS = defineFields({
   schema: convertSchema,
 })
 
+// A separate table, since conversions are cached per table: a Media Type
+// Object shared by a form body and a response converts once for each.
 const FORM_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
 
 const ENCODING_FIELDS = defineFields({
@@ -207,6 +205,7 @@ function loosened(out: object): object {
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
   return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
+    || schema.nullable === true
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
     || hasLoose(out.properties)
@@ -276,7 +275,7 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
   return false
 }
 
-function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): void {
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
   }
@@ -319,7 +318,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (out.type === 'array' && out.items === undefined) {
     out.items = placeholder()
   }
-  return loose ? loosened(out) : out
+  if (loose) {
+    LOOSE.add(out)
+  }
 }
 
 function convertSchema(value: unknown, ctx: Context): unknown {
@@ -335,11 +336,10 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }
 
-function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): unknown {
+function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
   if (parameter.in === 'path') {
     out.required = true
   }
-  return out
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
@@ -401,10 +401,10 @@ function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem
   return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
 }
 
-function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
+function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): void {
   const encoding = out.encoding ?? {}
   if (!isRecord(encoding)) {
-    return out
+    return
   }
   for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
     const entry = child(encoding, name) ?? {}
@@ -417,7 +417,6 @@ function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<str
       out.encoding = encoding
     }
   }
-  return out
 }
 
 function convertRequestMediaType(value: unknown, ctx: Context, type: string): unknown {
@@ -442,9 +441,8 @@ function convertLink(value: unknown, ctx: Context): unknown {
   return hasDanglingOperationRef(value, ctx) ? DROP : clone(value)
 }
 
-function finishOperation(out: Record<string, unknown>): unknown {
+function finishOperation(out: Record<string, unknown>): void {
   out.responses ??= { default: { description: '' } }
-  return out
 }
 
 function convertOperation(value: unknown, ctx: Context): unknown {
@@ -492,10 +490,9 @@ function convertSecurity(value: unknown, ctx: Context): unknown {
   return Array.isArray(value) && value.length > 0 && (out as unknown[]).length === 0 ? DROP : out
 }
 
-function finishDocument(out: Record<string, unknown>): unknown {
+function finishDocument(out: Record<string, unknown>): void {
   out.openapi = '3.0.4'
   out.paths ??= {}
-  return out
 }
 
 function convertDocument(value: unknown, ctx: Context): unknown {

@@ -3,8 +3,8 @@
 // https://spec.openapis.org/oas/v3.0.4.html#discriminator-mapping
 // One that points into `webhooks` or `components.pathItems` cannot be kept,
 // since its target is removed, and cannot be inlined either, since both
-// fields must hold a pointer. So it is removed, along with any Reference
-// Object that resolves to such a Link.
+// fields must hold a pointer. So the Link or discriminator is removed, along
+// with any Reference Object that resolves to such a Link.
 
 import { dig } from '../../helpers'
 import { convertSpec, item, removedPointer } from './helpers'
@@ -107,29 +107,31 @@ describe('links', () => {
 
 describe('discriminator mappings', () => {
   // A mapping value is either a schema name or a reference. Names and
-  // references that stay valid are kept.
-  it('removes mapping entries that point into the removed parts', () => {
+  // references that stay valid are kept. Removing only the entry would not
+  // do: a value without an entry maps implicitly to the component schema of
+  // the same name (https://spec.openapis.org/oas/v3.0.4.html#discriminator-object),
+  // which may be a different schema. A discriminator is only a hint beside
+  // `oneOf` or `anyOf`, which still validate on their own, so it is removed.
+  it('removes a discriminator whose mapping points into the removed parts', () => {
+    const pet = (dog: string) => ({
+      discriminator: { mapping: { cat: '#/components/schemas/Cat', dog, fish: 'Fish' }, propertyName: 'kind' },
+      oneOf: [{ $ref: '#/components/schemas/Cat' }],
+    })
     expect(convertSpec({
       components: {
         schemas: {
           Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
-          Pet: {
-            discriminator: {
-              mapping: {
-                cat: '#/components/schemas/Cat',
-                dog: '#/webhooks/newPet/post/requestBody/content/application~1json/schema',
-                fish: 'Fish',
-                hamster: '#/components/pathItems/Item',
-              },
-              propertyName: 'kind',
-            },
-          },
+          Kept: pet('#/components/schemas/Dog'),
+          PathItem: pet('#/components/pathItems/Item'),
+          Webhook: pet('#/webhooks/newPet/post/requestBody/content/application~1json/schema'),
         },
       },
     }).components).toEqual({
       schemas: {
         Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
-        Pet: { discriminator: { mapping: { cat: '#/components/schemas/Cat', fish: 'Fish' }, propertyName: 'kind' } },
+        Kept: pet('#/components/schemas/Dog'),
+        PathItem: { oneOf: [{ $ref: '#/components/schemas/Cat' }] },
+        Webhook: { oneOf: [{ $ref: '#/components/schemas/Cat' }] },
       },
     })
   })

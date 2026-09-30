@@ -172,9 +172,10 @@ describe('recursion', () => {
   })
 
   // `A` is both a hop of the chain and the Path Item being inlined. Where the
-  // inner reference re-enters it, `A` contributes nothing, neither its
-  // operations nor its plain fields, and only the later hop `T` is merged.
-  it('cuts a hop that the chain re-enters, merging only the hops after it', () => {
+  // inner reference re-enters it, the chain is cut there, and the later hop
+  // `T` is not merged either: `A` overrides T's `post`, so merging `T` alone
+  // would describe an operation that never exists at that location.
+  it('cuts a chain where it re-enters a hop, without merging the hops after it', () => {
     const responses = { 200: { description: 'ok' } }
     const result = convertSpec({
       components: {
@@ -184,13 +185,13 @@ describe('recursion', () => {
             description: 'a',
             post: { callbacks: { c: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses },
           },
-          T: { summary: 't' },
+          T: { post: { description: 't', responses }, summary: 't' },
         },
       },
       paths: { '/p': { $ref: '#/components/pathItems/A' } },
     })
     expect(result.paths).toEqual({
-      '/p': { description: 'a', post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
+      '/p': { description: 'a', post: { callbacks: { c: { '{$url}': {} } }, responses }, summary: 't' },
     })
   })
 })

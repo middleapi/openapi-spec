@@ -231,6 +231,24 @@ describe('schema references', () => {
     expect(node).toEqual({ nullable: true, type: 'string' })
   })
 
+  // Here each target is itself a Path Item `$ref` with fields of its own,
+  // which are merged on the way to the end of the chain.
+  it('converts path items with their own $ref reached through many references once', () => {
+    const webhooks: Record<string, unknown> = { end: { summary: 'end' }, w30: { $ref: '#/webhooks/end' } }
+    for (let index = 0; index < 30; index++) {
+      const next = `#/webhooks/w${index + 1}`
+      webhooks[`w${index}`] = { $ref: '#/webhooks/end', get: { callbacks: { a: { expr: { $ref: next } }, b: { expr: { $ref: next } } }, responses: {} } }
+    }
+    let pathItem = dig(convertSpec({ paths: { '/a': { $ref: '#/webhooks/w0' } }, webhooks }), 'paths', '/a')
+    for (let index = 0; index < 30; index++) {
+      const callbacks = dig(pathItem, 'get', 'callbacks')
+      expect(dig(callbacks, 'a', 'expr', 'get')).toBe(dig(callbacks, 'b', 'expr', 'get'))
+      pathItem = dig(callbacks, 'a', 'expr')
+      expect(dig(pathItem, 'summary')).toBe('end')
+    }
+    expect(pathItem).toEqual({ summary: 'end' })
+  })
+
   it('converts path items and headers reached through many references once', () => {
     const webhooks: Record<string, unknown> = { w30: { 'get': { responses: {} }, 'x-header': { schema: { type: 'string' } } } }
     for (let index = 0; index < 30; index++) {
@@ -303,11 +321,22 @@ describe('reference chains', () => {
   // Chains are followed with loops rather than recursion, so their length is
   // not bounded by the call stack.
   it('follows long chains without growing the stack', () => {
-    const webhooks: Record<string, unknown> = { w10000: { get: { responses: {} } } }
+    const webhooks: Record<string, unknown> = {
+      s10000: { 'x-parameter': { in: 'query', name: 'q' }, 'x-schema': { type: ['string', 'null'] } },
+      w10000: { get: { responses: {} } },
+    }
     for (let index = 0; index < 10_000; index++) {
+      const next = `#/webhooks/s${index + 1}`
+      webhooks[`s${index}`] = { 'x-parameter': { $ref: `${next}/x-parameter` }, 'x-schema': { $ref: `${next}/x-schema` } }
       webhooks[`w${index}`] = { $ref: `#/webhooks/w${index + 1}` }
     }
-    expect(convertSpec({ paths: { '/a': { $ref: '#/webhooks/w0' } }, webhooks }).paths).toEqual({ '/a': { get: { responses: {} } } })
+    const result = convertSpec({
+      components: { parameters: { P: { $ref: '#/webhooks/s0/x-parameter' } }, schemas: { S: { $ref: '#/webhooks/s0/x-schema' } } },
+      paths: { '/a': { $ref: '#/webhooks/w0' } },
+      webhooks,
+    })
+    expect(result.paths).toEqual({ '/a': { get: { responses: {} } } })
+    expect(result.components).toEqual({ parameters: { P: { in: 'query', name: 'q' } }, schemas: { S: { nullable: true, type: 'string' } } })
   })
 
   it('removes thousands of aliases chained to a removed security scheme', () => {

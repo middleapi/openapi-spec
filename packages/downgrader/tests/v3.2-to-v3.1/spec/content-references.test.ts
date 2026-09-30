@@ -6,7 +6,9 @@
 // (https://spec.openapis.org/oas/v3.1.2.html#request-body-content), so each
 // reference is replaced by the converted Media Type Object it resolves to.
 // A reference that cannot be resolved inside the document (external,
-// missing, or looping) cannot be kept either, so its entry is removed.
+// missing, or looping) cannot be kept either. Its entry becomes an empty
+// Media Type Object instead, which keeps the media type and loses only what
+// the reference described.
 
 import { dig, expectAcyclic } from '../../helpers'
 import { convertContent, convertPathItem, convertSpec } from './helpers'
@@ -45,9 +47,9 @@ describe('inlining', () => {
     )).toEqual({ 'application/json': { schema: { type: 'number' } } })
   })
 
-  it('follows long acyclic chains', () => {
-    const links = Array.from({ length: 40 }, (_, index) => [`m${index}`, { $ref: `#/components/mediaTypes/m${index + 1}` }])
-    const mediaTypes = Object.fromEntries([...links, ['m40', { schema: { type: 'string' } }]])
+  it('follows long acyclic chains without growing the stack', () => {
+    const links = Array.from({ length: 10_000 }, (_, index) => [`m${index}`, { $ref: `#/components/mediaTypes/m${index + 1}` }])
+    const mediaTypes = Object.fromEntries([...links, ['m10000', { schema: { type: 'string' } }]])
     expect(convertContent({ 'application/json': { $ref: '#/components/mediaTypes/m0' } }, { mediaTypes })).toEqual({
       'application/json': { schema: { type: 'string' } },
     })
@@ -88,7 +90,7 @@ describe('inlining', () => {
 })
 
 describe('references that cannot be inlined', () => {
-  it('removes entries whose chain loops', () => {
+  it('keeps entries whose chain loops as empty media types', () => {
     expect(convertContent(
       {
         'application/json': { $ref: '#/components/mediaTypes/Loop' },
@@ -101,10 +103,10 @@ describe('references that cannot be inlined', () => {
           Pong: { $ref: '#/components/mediaTypes/Ping' },
         },
       },
-    )).toEqual({})
+    )).toEqual({ 'application/json': {}, 'application/xml': {} })
   })
 
-  it('removes entries with external, missing, and unparseable references', () => {
+  it('keeps entries with external, missing, and unparseable references as empty media types', () => {
     expect(convertContent(
       {
         'a/1': { $ref: '#/components/schemas/Foo' },
@@ -115,115 +117,56 @@ describe('references that cannot be inlined', () => {
         'a/6': { $ref: '#/components/mediaTypes/Known' },
       },
       { mediaTypes: { Known: { example: 1 } } },
-    )).toEqual({ 'a/6': { example: 1 } })
+    )).toEqual({ 'a/1': {}, 'a/2': {}, 'a/3': {}, 'a/4': {}, 'a/5': {}, 'a/6': { example: 1 } })
   })
 
   it('does not resolve names through the prototype chain', () => {
-    expect(convertContent({ 'application/json': { $ref: '#/components/mediaTypes/hasOwnProperty' } }, { mediaTypes: {} })).toEqual({})
+    expect(convertContent({ 'application/json': { $ref: '#/components/mediaTypes/hasOwnProperty' } }, { mediaTypes: {} })).toEqual({
+      'application/json': {},
+    })
   })
 
-  it('removes entries when components.mediaTypes is missing or malformed', () => {
+  it('keeps empty media types when components.mediaTypes is missing or malformed', () => {
     const content = { 'application/json': { $ref: '#/components/mediaTypes/A' } }
-    expect(convertContent(content)).toEqual({})
-    expect(convertContent(content, { mediaTypes: 'junk' })).toEqual({})
+    expect(convertContent(content)).toEqual({ 'application/json': {} })
+    expect(convertContent(content, { mediaTypes: 'junk' })).toEqual({ 'application/json': {} })
   })
 
   it('clones a non-object content value through', () => {
     expect(convertContent('junk')).toBe('junk')
   })
-})
 
-describe('parameters and headers left without content', () => {
   // With `content`, a parameter or header MUST hold exactly one entry
-  // (https://spec.openapis.org/oas/v3.1.2.html#parameter-content), and it
-  // has no `schema` to fall back on. Once its only entry is removed it no
-  // longer describes anything, so it is removed as well.
-  const missing = { 'application/json': { $ref: '#/components/mediaTypes/Missing' } }
-
-  it('removes a parameter whose only content entry could not be inlined', () => {
-    expect(convertPathItem({
-      get: {
-        parameters: [{ content: missing, in: 'query', name: 'q' }, { in: 'query', name: 'keep', schema: {} }],
-        responses: {},
-      },
-    })).toEqual({
-      get: { parameters: [{ in: 'query', name: 'keep', schema: {} }], responses: {} },
-    })
-  })
-
-  it('keeps a parameter when part of its content could be inlined', () => {
-    expect(convertPathItem(
-      {
-        get: {
-          parameters: [{ content: { ...missing, 'application/xml': { $ref: '#/components/mediaTypes/Known' } }, in: 'query', name: 'q' }],
-          responses: {},
-        },
-      },
-      { mediaTypes: { Known: { example: 1 } } },
-    )).toEqual({
-      get: { parameters: [{ content: { 'application/xml': { example: 1 } }, in: 'query', name: 'q' }], responses: {} },
-    })
-  })
-
-  it('removes headers and component parameters whose entire content could not be inlined', () => {
+  // (https://spec.openapis.org/oas/v3.1.2.html#parameter-content), and a
+  // path parameter MUST be defined for every template expression
+  // (https://spec.openapis.org/oas/v3.1.2.html#path-templating). Keeping the
+  // entry keeps both true, and keeps references to the parameter valid.
+  it('keeps parameters and headers whose content could not be inlined', () => {
+    const missing = { 'application/json': { $ref: '#/components/mediaTypes/Missing' } }
     const result = convertSpec({
       components: {
-        headers: { Broken: { content: missing }, Keep: { schema: {} } },
-        parameters: { Broken: { content: missing, in: 'query', name: 'q' } },
+        headers: { H: { content: missing } },
+        parameters: { P: { content: missing, in: 'query', name: 'q' } },
       },
       paths: {
-        '/a': {
-          get: { responses: { 200: { description: 'ok', headers: { 'X-Broken': { content: missing }, 'X-Keep': { schema: {} } } } } },
-        },
-      },
-    })
-    expect(result.components).toEqual({ headers: { Keep: { schema: {} } }, parameters: {} })
-    expect(result.paths).toEqual({
-      '/a': { get: { responses: { 200: { description: 'ok', headers: { 'X-Keep': { schema: {} } } } } } },
-    })
-  })
-
-  it('removes references to removed parameters and headers, following alias chains', () => {
-    const result = convertSpec({
-      components: {
-        headers: {
-          Broken: { content: { 'text/plain': { $ref: '#/components/mediaTypes/Loop' } } },
-          BrokenAlias: { $ref: '#/components/headers/Broken' },
-        },
-        mediaTypes: { Loop: { $ref: '#/components/mediaTypes/Loop' } },
-        parameters: {
-          Broken: { content: missing, in: 'query', name: 'q' },
-          BrokenAlias: { $ref: '#/components/parameters/Broken' },
-        },
-      },
-      paths: {
-        '/a': {
+        '/a/{id}': {
           get: {
-            parameters: [{ $ref: '#/components/parameters/Broken' }, { $ref: '#/components/parameters/BrokenAlias' }],
-            responses: {
-              200: {
-                description: 'ok',
-                headers: {
-                  'X-Broken': { $ref: '#/components/headers/Broken' },
-                  'X-BrokenAlias': { $ref: '#/components/headers/BrokenAlias' },
-                },
-              },
-            },
+            parameters: [{ content: missing, in: 'path', name: 'id', required: true }, { $ref: '#/components/parameters/P' }],
+            responses: { 200: { description: 'ok', headers: { 'X-H': { $ref: '#/components/headers/H' } } } },
           },
         },
       },
     })
-    expect(result.components).toEqual({ headers: {}, parameters: {} })
+    const empty = { 'application/json': {} }
+    expect(result.components).toEqual({ headers: { H: { content: empty } }, parameters: { P: { content: empty, in: 'query', name: 'q' } } })
     expect(result.paths).toEqual({
-      '/a': { get: { parameters: [], responses: { 200: { description: 'ok', headers: {} } } } },
+      '/a/{id}': {
+        get: {
+          parameters: [{ content: empty, in: 'path', name: 'id', required: true }, { $ref: '#/components/parameters/P' }],
+          responses: { 200: { description: 'ok', headers: { 'X-H': { $ref: '#/components/headers/H' } } } },
+        },
+      },
     })
-  })
-
-  it('removes a reference to such a header through any pointer', () => {
-    expect(convertSpec({
-      components: { headers: { H: { $ref: '#/paths/~1a/get/responses/200/headers/X-Broken' } } },
-      paths: { '/a': { get: { responses: { 200: { description: 'ok', headers: { 'X-Broken': { content: missing } } } } } } },
-    }).components).toEqual({ headers: {} })
   })
 })
 

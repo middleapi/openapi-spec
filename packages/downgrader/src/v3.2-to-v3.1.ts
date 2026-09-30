@@ -5,13 +5,13 @@ import type { Context } from './shared'
 import {
   allOfItems,
   clone,
-  convertMappingRef,
   convertObject,
   convertXml,
   defineFields,
   downgrade,
   DROP,
   getRef,
+  hasDanglingMapping,
   hasDanglingOperationRef,
   HTTP_METHODS,
   inline,
@@ -54,7 +54,6 @@ const TAG_FIELDS = defineFields({
 
 const DISCRIMINATOR_FIELDS = defineFields({
   defaultMapping: DROP,
-  mapping: map(convertMappingRef),
 })
 
 const SCHEMA_FIELDS = defineFields({
@@ -66,7 +65,7 @@ const SCHEMA_FIELDS = defineFields({
   contains: convertSchema,
   contentSchema: convertSchema,
   dependentSchemas: map(convertSchema),
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  discriminator: (item, ctx) => (hasDanglingMapping(item, ctx) ? DROP : convertObject(item, ctx, DISCRIMINATOR_FIELDS)),
   else: convertSchema,
   if: convertSchema,
   items: convertSchema,
@@ -187,7 +186,7 @@ function convertTag(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, TAG_FIELDS)
 }
 
-function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
+function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): void {
   if (ctx.identified.has(schema)) {
     delete out.$id
     delete out.$anchor
@@ -202,7 +201,6 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
       out.allOf = [...allOfItems(out.allOf), target]
     }
   }
-  return out
 }
 
 function convertSchema(value: unknown, ctx: Context): unknown {
@@ -213,7 +211,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   return out === DROP ? {} : out
 }
 
-function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): unknown {
+function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): void {
   if (!('value' in example || 'externalValue' in example)) {
     if ('dataValue' in example) {
       out.value = clone(example.dataValue)
@@ -222,23 +220,17 @@ function finishExample(out: Record<string, unknown>, example: Record<string, unk
       out.value = clone(example.serializedValue)
     }
   }
-  return out
 }
 
 function convertExample(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, EXAMPLE_FIELDS, finishExample)
 }
 
-function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): unknown {
-  if (!isRecord(parameter.content)) {
-    return out
+function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
+  if (isRecord(parameter.content)) {
+    delete out.example
+    delete out.examples
   }
-  if (Object.keys(out.content as object).length === 0) {
-    return Object.keys(parameter.content).length > 0 ? DROP : out
-  }
-  delete out.example
-  delete out.examples
-  return out
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
@@ -252,11 +244,10 @@ function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
 }
 
-function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
+function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): void {
   if ('itemSchema' in mediaType && !('schema' in mediaType)) {
     out.schema = { items: convertSchema(mediaType.itemSchema, ctx), type: 'array' }
   }
-  return out
 }
 
 function convertMediaType(value: unknown, ctx: Context): unknown {
@@ -265,18 +256,21 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
 
 function convertContentEntry(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref === undefined ? convertMediaType(value, ctx) : inline(skipAliases(ref, ctx, () => true), ctx, convertContentEntry)
+  if (ref === undefined) {
+    return convertMediaType(value, ctx)
+  }
+  const out = inline(skipAliases(ref, ctx, () => true), ctx, convertContentEntry)
+  return out === DROP ? {} : out
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, REQUEST_BODY_FIELDS)
 }
 
-function finishResponse(out: Record<string, unknown>, response: Record<string, unknown>): unknown {
+function finishResponse(out: Record<string, unknown>, response: Record<string, unknown>): void {
   if (!('description' in out)) {
     out.description = typeof response.summary === 'string' ? response.summary : ''
   }
-  return out
 }
 
 function convertResponse(value: unknown, ctx: Context): unknown {
@@ -299,9 +293,8 @@ function convertPathItem(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, PATH_ITEM_FIELDS, finishPathItem)
 }
 
-function finishDocument(out: Record<string, unknown>): unknown {
+function finishDocument(out: Record<string, unknown>): void {
   out.openapi = '3.1.2'
-  return out
 }
 
 function convertDocument(value: unknown, ctx: Context): unknown {
