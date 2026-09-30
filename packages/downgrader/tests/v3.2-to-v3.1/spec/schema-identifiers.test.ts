@@ -1,0 +1,124 @@
+// `$id`, `$anchor`, and `$dynamicAnchor` give a schema a URI. JSON Schema
+// forbids two schemas from claiming the same one: "there is no way for a URI
+// to identify more than one schema":
+// https://json-schema.org/draft/2020-12/json-schema-core#section-9.1.2
+// Inlining a schema in several places would copy its identifiers, so only
+// the first copy keeps them. A copy that loses its `$id` resolves its own
+// relative `$ref`s against the enclosing base instead (a known limitation
+// listed in the README).
+
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
+
+import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
+
+import { dig } from '../../helpers'
+import { expectValidAs } from '../../validate'
+import { convertPathItem, convertSpec } from './helpers'
+
+it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {
+  const pet = { $id: 'https://example.com/pet', properties: { name: { $anchor: 'name', type: 'string' } }, type: 'object' }
+  const result = convertSpec({
+    components: {
+      mediaTypes: { Pet: { schema: pet } },
+      schemas: { Named: { $ref: '#/components/mediaTypes/Pet/schema', description: 'named' } },
+    },
+    paths: {
+      '/a': { get: { responses: { 200: { content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } }, description: 'ok' } } } },
+    },
+  })
+  expect(dig(result, 'components', 'schemas', 'Named')).toEqual({ allOf: [pet], description: 'named' })
+  expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'content')).toEqual({
+    'application/json': { schema: { properties: { name: { type: 'string' } }, type: 'object' } },
+  })
+})
+
+// When the original survives (moved into `schema.items`, or shifted in a
+// parameter list), it keeps its identifiers and the inlined copies lose them.
+it('keeps identifiers on a moved or shifted original rather than on the copies inlined from it', () => {
+  expect(convertPathItem({
+    get: {
+      parameters: [
+        { content: { 'text/plain': {} }, in: 'querystring', name: 'q' },
+        { in: 'query', name: 'p', schema: { $dynamicAnchor: 'p', type: 'string' } },
+      ],
+      responses: {
+        200: { content: { 'application/jsonl': { itemSchema: { $id: 'https://example.com/item' } } }, description: 'ok' },
+      },
+    },
+    post: {
+      parameters: [{ $ref: '#/paths/~1a/get/parameters/1' }],
+      requestBody: {
+        content: { 'application/json': { schema: { $ref: '#/paths/~1a/get/responses/200/content/application~1jsonl/itemSchema' } } },
+      },
+    },
+  })).toEqual({
+    get: {
+      parameters: [{ in: 'query', name: 'p', schema: { $dynamicAnchor: 'p', type: 'string' } }],
+      responses: {
+        200: { content: { 'application/jsonl': { schema: { items: { $id: 'https://example.com/item' }, type: 'array' } } }, description: 'ok' },
+      },
+    },
+    post: {
+      parameters: [{ in: 'query', name: 'p', schema: { type: 'string' } }],
+      requestBody: { content: { 'application/json': { schema: {} } } },
+    },
+  })
+})
+
+it('produces a valid 3.1 document with unique identifiers', async () => {
+  const doc: OpenAPIV3_2.OpenAPIObject = {
+    components: {
+      mediaTypes: {
+        Pet: {
+          schema: {
+            $id: 'https://example.com/pet',
+            properties: { name: { $anchor: 'name', type: 'string' } },
+            type: 'object',
+          },
+        },
+      },
+    },
+    info: { title: 'Identifiers', version: '1.0.0' },
+    openapi: '3.2.0',
+    paths: {
+      '/pets': {
+        get: {
+          responses: { 200: { content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } }, description: 'Pet' } },
+        },
+        post: {
+          requestBody: { content: { 'application/json': { $ref: '#/components/mediaTypes/Pet' } } },
+          responses: {
+            201: {
+              content: { 'application/json': { schema: { $ref: '#/components/mediaTypes/Pet/schema/properties/name' } } },
+              description: 'Name',
+            },
+          },
+        },
+      },
+    },
+  }
+  const v31 = downgradeSpecV32ToV31(doc)
+  const serialized = JSON.stringify(v31)
+  expect(serialized.match(/"\$id"/g)).toHaveLength(1)
+  expect(serialized.match(/"\$anchor"/g)).toHaveLength(1)
+  await expectValidAs(v31, '3.1')
+})
+
+// Only the first copy is special. The copies after it are identical, so they
+// share one converted object, like any other target inlined several times.
+it('shares one identifier-free copy among the places after the first', () => {
+  const pet = { $id: 'https://example.com/pet', type: 'object' }
+  const result = convertSpec({
+    components: {
+      mediaTypes: { Pet: { schema: pet } },
+      schemas: {
+        A: { $ref: '#/components/mediaTypes/Pet/schema' },
+        B: { $ref: '#/components/mediaTypes/Pet/schema' },
+        C: { $ref: '#/components/mediaTypes/Pet/schema' },
+      },
+    },
+  })
+  const schemas = dig(result, 'components', 'schemas')
+  expect(schemas).toEqual({ A: pet, B: { type: 'object' }, C: { type: 'object' } })
+  expect(dig(schemas, 'C')).toBe(dig(schemas, 'B'))
+})

@@ -1,11 +1,11 @@
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { doc as exampleQueryV32 } from '../../types/tests/examples/3-2-query-example'
-import { doc as exampleTagsV32 } from '../../types/tests/examples/3-2-tags-example'
+import { doc as exampleQueryExampleV32 } from '../../types/tests/examples/3-2-query-example'
+import { doc as exampleTagsExampleV32 } from '../../types/tests/examples/3-2-tags-example'
 import { doc as exampleNonOauthScopesV31 } from '../../types/tests/examples/non-oauth-scopes-3-1'
 import { doc as exampleTictactoeV31 } from '../../types/tests/examples/tictactoe-3-1'
-import { doc as exampleWebhookV31 } from '../../types/tests/examples/webhook-example-3-1'
+import { doc as exampleWebhookExampleV31 } from '../../types/tests/examples/webhook-example-3-1'
 import { doc as callbackObjectExamplesV31 } from '../../types/tests/schema-tests-3.1/callback-object-examples'
 import { doc as compPathitemsV31 } from '../../types/tests/schema-tests-3.1/comp-pathitems'
 import { doc as componentsObjectExampleV31 } from '../../types/tests/schema-tests-3.1/components-object-example'
@@ -75,18 +75,22 @@ import { doc as styleDefaultsV32 } from '../../types/tests/schema-tests-3.2/styl
 import { doc as tagObjectExampleV32 } from '../../types/tests/schema-tests-3.2/tag-object-example'
 import { doc as validSchemaTypesV32 } from '../../types/tests/schema-tests-3.2/valid-schema-types'
 import { doc as webhookExampleV32 } from '../../types/tests/schema-tests-3.2/webhook-example'
-import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '../src/index'
-import { expectNoNewDanglingRefs, expectValidAs } from './helpers'
 
-// Excluded: security-scheme-object-examples (external $ref the validator cannot resolve)
-// and style-defaults (x-comment in an Encoding Object, rejected by the official 3.0 schema).
-const corpus31: readonly (readonly [
-  name: string,
-  doc: OpenAPIV3_1.OpenAPIObject,
-])[] = [
+type Corpus<T> = readonly (readonly [name: string, doc: T])[]
+
+// The official documents, from OAI/learn.openapis.org and from the
+// `tests/schema/pass` folder of OAI/OpenAPI-Specification (see
+// packages/types/tests/README.md).
+
+// Left out:
+// - security-scheme-object-examples, whose external `$ref` the validator
+//   cannot resolve
+// - style-defaults, which puts an `x-comment` in an Encoding Object; the
+//   official 3.0 schema rejects extensions there
+export const corpusV31: Corpus<OpenAPIV3_1.OpenAPIObject> = [
   ['examples/non-oauth-scopes-3-1', exampleNonOauthScopesV31],
   ['examples/tictactoe-3-1', exampleTictactoeV31],
-  ['examples/webhook-example-3-1', exampleWebhookV31],
+  ['examples/webhook-example-3-1', exampleWebhookExampleV31],
   ['callback-object-examples', callbackObjectExamplesV31],
   ['comp-pathitems', compPathitemsV31],
   ['components-object-example', componentsObjectExampleV31],
@@ -105,10 +109,7 @@ const corpus31: readonly (readonly [
   ['non-oauth-scopes', nonOauthScopesV31],
   ['operation-object-example', operationObjectExampleV31],
   ['parameter-object-examples', parameterObjectExamplesV31],
-  [
-    'parameter-object-query-allow-reserved',
-    parameterObjectQueryAllowReservedV31,
-  ],
+  ['parameter-object-query-allow-reserved', parameterObjectQueryAllowReservedV31],
   ['path-item-object-example', pathItemObjectExampleV31],
   ['path-item-servers-parameters', pathItemServersParametersV31],
   ['path-no-response', pathNoResponseV31],
@@ -116,11 +117,8 @@ const corpus31: readonly (readonly [
   ['paths-object-example', pathsObjectExampleV31],
   ['request-body-examples', requestBodyExamplesV31],
   ['response-object-examples', responseObjectExamplesV31],
+  ['schema-object-deprecated-example-keyword', schemaObjectDeprecatedExampleKeywordV31],
   ['schema', schemaV31],
-  [
-    'schema-object-deprecated-example-keyword',
-    schemaObjectDeprecatedExampleKeywordV31,
-  ],
   ['servers', serversV31],
   ['specification-extensions', specificationExtensionsV31],
   ['tag-object-example', tagObjectExampleV31],
@@ -128,13 +126,11 @@ const corpus31: readonly (readonly [
   ['webhook-example', webhookExampleV31],
 ]
 
-// Excluded: security-scheme-object-examples (external $ref the validator cannot resolve).
-const corpus32: readonly (readonly [
-  name: string,
-  doc: OpenAPIV3_2.OpenAPIObject,
-])[] = [
-  ['examples/3-2-query-example', exampleQueryV32],
-  ['examples/3-2-tags-example', exampleTagsV32],
+// Left out: security-scheme-object-examples, whose external `$ref` the
+// validator cannot resolve.
+export const corpusV32: Corpus<OpenAPIV3_2.OpenAPIObject> = [
+  ['examples/3-2-query-example', exampleQueryExampleV32],
+  ['examples/3-2-tags-example', exampleTagsExampleV32],
   ['callback-object-examples', callbackObjectExamplesV32],
   ['comp-pathitems', compPathitemsV32],
   ['components-object-example', componentsObjectExampleV32],
@@ -152,19 +148,10 @@ const corpus32: readonly (readonly [
   ['minimal-paths', minimalPathsV32],
   ['non-oauth-scopes', nonOauthScopesV32],
   ['operation-object-example', operationObjectExampleV32],
-  [
-    'parameter-object-cookie-form-allow-reserved',
-    parameterObjectCookieFormAllowReservedV32,
-  ],
+  ['parameter-object-cookie-form-allow-reserved', parameterObjectCookieFormAllowReservedV32],
   ['parameter-object-examples', parameterObjectExamplesV32],
-  [
-    'parameter-object-path-allow-reserved',
-    parameterObjectPathAllowReservedV32,
-  ],
-  [
-    'parameter-object-query-allow-reserved',
-    parameterObjectQueryAllowReservedV32,
-  ],
+  ['parameter-object-path-allow-reserved', parameterObjectPathAllowReservedV32],
+  ['parameter-object-query-allow-reserved', parameterObjectQueryAllowReservedV32],
   ['path-item-object-example', pathItemObjectExampleV32],
   ['path-item-servers-parameters', pathItemServersParametersV32],
   ['path-no-response', pathNoResponseV32],
@@ -172,11 +159,8 @@ const corpus32: readonly (readonly [
   ['paths-object-example', pathsObjectExampleV32],
   ['request-body-examples', requestBodyExamplesV32],
   ['response-object-examples', responseObjectExamplesV32],
+  ['schema-object-deprecated-example-keyword', schemaObjectDeprecatedExampleKeywordV32],
   ['schema', schemaV32],
-  [
-    'schema-object-deprecated-example-keyword',
-    schemaObjectDeprecatedExampleKeywordV32,
-  ],
   ['servers', serversV32],
   ['specification-extensions', specificationExtensionsV32],
   ['style-defaults', styleDefaultsV32],
@@ -184,37 +168,3 @@ const corpus32: readonly (readonly [
   ['valid-schema-types', validSchemaTypesV32],
   ['webhook-example', webhookExampleV32],
 ]
-
-describe('3.1 corpus downgraded to 3.0', () => {
-  it.each(corpus31)(
-    'converts %s to a valid 3.0 document without new dangling references or mutating the input',
-    async (_name, doc) => {
-      await expectValidAs(doc, '3.1')
-      const before = structuredClone(doc)
-      const v30 = downgradeSpecV31ToV30(doc)
-      expect(v30.openapi).toBe('3.0.4')
-      await expectValidAs(v30, '3.0')
-      expectNoNewDanglingRefs(doc, v30)
-      expect(doc).toEqual(before)
-    },
-  )
-})
-
-describe('3.2 corpus downgraded to 3.1 and chained to 3.0', () => {
-  it.each(corpus32)(
-    'converts %s to valid 3.1 and 3.0 documents without new dangling references or mutating the input',
-    async (_name, doc) => {
-      await expectValidAs(doc, '3.2')
-      const before = structuredClone(doc)
-      const v31 = downgradeSpecV32ToV31(doc)
-      expect(v31.openapi).toBe('3.1.2')
-      await expectValidAs(v31, '3.1')
-      expectNoNewDanglingRefs(doc, v31)
-      const v30 = downgradeSpecV31ToV30(v31)
-      expect(v30.openapi).toBe('3.0.4')
-      await expectValidAs(v30, '3.0')
-      expectNoNewDanglingRefs(v31, v30)
-      expect(doc).toEqual(before)
-    },
-  )
-})
