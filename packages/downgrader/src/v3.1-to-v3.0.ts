@@ -60,10 +60,15 @@ const ANNOTATION_KEYWORDS = [
   'examples',
 ]
 
+const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?:;|$))/i
+
+const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
+
 const LOOSE = new WeakSet<object>()
 
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
+const convertRequestContent = map(convertRequestMediaType)
 const convertRequirements = list(convertRequirement)
 const finishPathItem = mergeRef(convertPathItem)
 const convertCallbackRef = refOr(convertCallback, reference)
@@ -120,12 +125,14 @@ const MEDIA_TYPE_FIELDS = defineFields({
   schema: convertSchema,
 })
 
+const FORM_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+
 const ENCODING_FIELDS = defineFields({
   headers: map(convertParameterRef),
 })
 
 const REQUEST_BODY_FIELDS = defineFields({
-  content: convertContent,
+  content: convertRequestContent,
 })
 
 const RESPONSE_FIELDS = defineFields({
@@ -341,6 +348,82 @@ function convertParameter(value: unknown, ctx: Context): unknown {
 
 function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
+}
+
+function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
+  const nodes = new Set(schemas)
+  for (const node of nodes) {
+    if (isRecord(node)) {
+      const ref = getRef(node)
+      if (ref !== undefined) {
+        nodes.add(ctx.resolve(ref))
+      }
+      for (const key of ['allOf', 'anyOf', 'oneOf']) {
+        for (const item of Array.isArray(node[key]) ? node[key] : []) {
+          nodes.add(item)
+        }
+      }
+    }
+  }
+  return nodes
+}
+
+function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
+  const parts = new Map<string, unknown[]>()
+  for (const node of subschemas([schema], ctx)) {
+    if (isRecord(node) && isRecord(node.properties)) {
+      for (const [name, property] of Object.entries(node.properties)) {
+        parts.set(name, [...parts.get(name) ?? [], property])
+      }
+    }
+  }
+  return parts
+}
+
+function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem = false): boolean {
+  const nodes = [...subschemas(schemas, ctx)]
+  if (!nodes.every(node => isRecord(node) || node === true)) {
+    return false
+  }
+  const records = nodes.filter(isRecord)
+  const types = records.flatMap(node => [node.type ?? []].flat())
+  const kinds = new Set(types.filter(type => type !== 'null'))
+  if (types.length === 0) {
+    return true
+  }
+  if (kinds.size !== 1) {
+    return false
+  }
+  if (kinds.has('string')) {
+    return records.some(node => node.contentEncoding !== undefined)
+  }
+  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
+  return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
+}
+
+function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
+  const encoding = out.encoding ?? {}
+  if (!isRecord(encoding)) {
+    return out
+  }
+  for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
+    const entry = child(encoding, name) ?? {}
+    if (
+      isRecord(entry)
+      && !CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))
+      && defaultsToOctetStream(schemas, ctx)
+    ) {
+      setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })
+      out.encoding = encoding
+    }
+  }
+  return out
+}
+
+function convertRequestMediaType(value: unknown, ctx: Context, type: string): unknown {
+  return FORM_MEDIA_TYPE.test(type)
+    ? convertObject(value, ctx, FORM_MEDIA_TYPE_FIELDS, finishFormMediaType)
+    : convertMediaType(value, ctx)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {

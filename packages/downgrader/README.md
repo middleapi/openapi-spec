@@ -90,13 +90,14 @@ Removed, with no 3.1 equivalent:
 
 Converted:
 
-| 3.1 construct                                              | 3.0 result                             |
-| ---------------------------------------------------------- | -------------------------------------- |
-| `openapi: 3.1.x`                                           | `openapi: 3.0.4`                       |
-| missing `paths`                                            | `{}`                                   |
-| missing operation `responses`                              | `{ "default": { "description": "" } }` |
-| path parameter without `required: true`                    | `required: true`                       |
-| security requirement scopes on `apiKey` and `http` schemes | `[]`                                   |
+| 3.1 construct                                                                             | 3.0 result                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi: 3.1.x`                                                                          | `openapi: 3.0.4`                                                                                                                 |
+| missing `paths`                                                                           | `{}`                                                                                                                             |
+| missing operation `responses`                                                             | `{ "default": { "description": "" } }`                                                                                           |
+| path parameter without `required: true`                                                   | `required: true`                                                                                                                 |
+| security requirement scopes on `apiKey` and `http` schemes                                | `[]`                                                                                                                             |
+| `multipart` or URL-encoded body part with no `type`, or a `string` with `contentEncoding` | `contentType: application/octet-stream`, the 3.1 default, unless its Encoding Object sets a content type or RFC6570-style fields |
 
 Removed, with no 3.0 equivalent:
 
