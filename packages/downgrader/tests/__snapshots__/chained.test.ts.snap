@@ -1,0 +1,141 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`official examples > converts the mega document 1`] = `
+{
+  "components": {
+    "schemas": {
+      "Foo": {
+        "properties": {
+          "type": {
+            "enum": [
+              "foo",
+            ],
+          },
+        },
+        "type": "object",
+      },
+    },
+    "securitySchemes": {},
+  },
+  "info": {
+    "license": {
+      "name": "Apache 2.0",
+    },
+    "title": "My API",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.4",
+  "paths": {
+    "/": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
+      },
+    },
+    "/{pathTest}": {},
+  },
+}
+`;
+
+exports[`official examples > converts the query example 1`] = `
+{
+  "info": {
+    "title": "Flight API",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.4",
+  "paths": {
+    "/flights/search": {},
+  },
+}
+`;
+
+exports[`official examples > converts the tags example 1`] = `
+{
+  "info": {
+    "title": "Flight API",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.4",
+  "paths": {
+    "/flights": {
+      "get": {
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
+        "summary": "List all flights",
+        "tags": [
+          "flights",
+        ],
+      },
+    },
+    "/flights/delayed": {
+      "get": {
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
+        "summary": "Get delayed flights",
+        "tags": [
+          "delays",
+        ],
+      },
+    },
+    "/flights/domestic": {
+      "get": {
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
+        "summary": "List domestic flights",
+        "tags": [
+          "domestic",
+        ],
+      },
+    },
+    "/flights/international": {
+      "get": {
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
+        "summary": "List international flights",
+        "tags": [
+          "international",
+        ],
+      },
+    },
+  },
+  "tags": [
+    {
+      "description": "Core flight operations",
+      "name": "flights",
+    },
+    {
+      "description": "Flights that cross country borders",
+      "name": "international",
+    },
+    {
+      "description": "Flights within a single country",
+      "name": "domestic",
+    },
+    {
+      "description": "Information about flight delays",
+      "externalDocs": {
+        "description": "Delay compensation policies",
+        "url": "https://docs.example.com/delay-policies",
+      },
+      "name": "delays",
+    },
+  ],
+}
+`;
