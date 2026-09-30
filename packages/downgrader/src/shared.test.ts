@@ -31,6 +31,7 @@ function createContext(root: unknown = {}): Context {
     converting: [],
     copies: new Map(),
     dangles: () => false,
+    identified: new Set(),
     inlined: new Map(),
     inlining: new Set(),
     isRemovedPart: () => false,
@@ -68,11 +69,11 @@ function convertItem(value: unknown, ctx: Context): unknown {
   return isRecord(value) && value.drop === true ? DROP : convertObject(value, ctx, ITEM_FIELDS)
 }
 
-function convertDocument(value: unknown, removed?: string[]): { out: any, passes: number } {
+function convertDocument(value: unknown, removed?: string[], fields = DOCUMENT_FIELDS): { out: any, passes: number } {
   let passes = 0
   const out = downgrade(value, (item, ctx) => {
     passes += 1
-    return convertObject(item, ctx, DOCUMENT_FIELDS)
+    return convertObject(item, ctx, fields)
   }, removed)
   return { out, passes }
 }
@@ -705,6 +706,19 @@ describe('downgrade', () => {
     })
     expect(out.items[0]).toBe(out.items[1])
     expect(out.items[0]).toBe(out.items[2])
+  })
+
+  it('converts a target again for a later place when its conversion identified a value', () => {
+    const fields = defineFields({
+      items: list(refOr((value, ctx) => {
+        const repeated = ctx.identified.has(value)
+        ctx.identified.add(value)
+        return { repeated }
+      })),
+    })
+    const { out } = convertDocument({ items: [{ $ref: '#/removed/a' }, { $ref: '#/removed/a' }, { $ref: '#/removed/a' }], removed: { a: {} } }, ['#/removed/'], fields)
+    expect(out.items).toEqual([{ repeated: false }, { repeated: true }, { repeated: true }])
+    expect(out.items[2]).toBe(out.items[1])
   })
 
   it('resolves references nested in inlined targets without a pass per level', () => {

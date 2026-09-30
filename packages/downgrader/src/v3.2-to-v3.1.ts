@@ -188,6 +188,14 @@ function convertTag(value: unknown, ctx: Context): unknown {
 }
 
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
+  if (ctx.identified.has(schema)) {
+    delete out.$id
+    delete out.$anchor
+    delete out.$dynamicAnchor
+  }
+  else if ('$id' in schema || '$anchor' in schema || '$dynamicAnchor' in schema) {
+    ctx.identified.add(schema)
+  }
   if (typeof schema.$ref === 'string' && !('$ref' in out)) {
     const target = inlineSchema(schema.$ref, ctx, convertSchema)
     if (target !== DROP) {
