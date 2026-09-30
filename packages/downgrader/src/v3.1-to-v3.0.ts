@@ -401,23 +401,16 @@ function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem
   return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
 }
 
-function defaultsToOctetStreamIn30(schema: unknown): boolean {
-  const part = isRecord(schema) && schema.type === 'array' ? schema.items : schema
-  return isRecord(part) && part.type === 'string' && (part.format === 'binary' || part.format === 'byte')
-}
-
 function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
   const encoding = out.encoding ?? {}
   if (!isRecord(encoding)) {
     return out
   }
-  const properties = child(out.schema, 'properties')
   for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
     const entry = child(encoding, name) ?? {}
     if (
       isRecord(entry)
       && !CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))
-      && !defaultsToOctetStreamIn30(child(properties, name))
       && defaultsToOctetStream(schemas, ctx)
     ) {
       setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })

@@ -1438,8 +1438,11 @@ describe('downgradeSpecV31ToV30', () => {
     it.each([
       ['a schema without type', {}],
       ['a true schema', true],
+      ['raw binary', { contentMediaType: 'image/png' }],
+      ['a base64 string', { contentEncoding: 'base64', type: 'string' }],
       ['a string with a contentEncoding that no 3.0 format expresses', { contentEncoding: 'base64url', type: 'string' }],
       ['an array of untyped items', { items: {}, type: 'array' }],
+      ['an array of raw binary', { items: { contentMediaType: 'image/png' }, type: 'array' }],
       ['an array without items', { type: 'array' }],
       ['untyped anyOf branches', { anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }] }],
       ['a reference to an untyped schema', { $ref: '#/components/schemas/Raw' }],
@@ -1450,12 +1453,24 @@ describe('downgradeSpecV31ToV30', () => {
       })
     })
 
+    it('writes the same Encoding Object whether the body schema is inline or a reference', () => {
+      const result = convertSpec({
+        components: {
+          requestBodies: {
+            Inline: { content: { 'multipart/form-data': { schema: { properties: { img: { contentMediaType: 'image/png' } } } } } },
+            Referenced: { content: { 'multipart/form-data': { schema: { $ref: '#/components/schemas/Upload' } } } },
+          },
+          schemas: { Upload: { properties: { img: { contentMediaType: 'image/png' } } } },
+        },
+      })
+      for (const name of ['Inline', 'Referenced']) {
+        expect(dig(result, 'components', 'requestBodies', name, 'content', 'multipart/form-data', 'encoding')).toEqual({ img: octetStream })
+      }
+    })
+
     it.each([
       ['a string', { format: 'uuid', type: 'string' }],
       ['an object', { type: 'object' }],
-      ['raw binary, which becomes format binary', { contentMediaType: 'image/png' }],
-      ['base64, which becomes format byte', { contentEncoding: 'base64', type: 'string' }],
-      ['an array of raw binary', { items: { contentMediaType: 'image/png' }, type: 'array' }],
       ['a type found through allOf', { allOf: [{ $ref: '#/components/schemas/Pet' }] }],
       ['a null type', { type: 'null' }],
       ['several types', { type: ['string', 'integer'] }],
