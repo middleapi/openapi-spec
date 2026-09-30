@@ -1,6 +1,7 @@
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
+import { convertSchema } from './helpers'
 
 // Converting a standalone schema removes nothing a `$ref` could point at:
 // `$defs`, `$id`, and `$anchor` all exist in 3.1. So every reference stays as
@@ -29,7 +30,7 @@ it('leaves references into converted keywords as written', () => {
     properties: { a: { $ref: '#/xml' }, b: { $ref: '#/discriminator/defaultMapping' } },
     xml: { nodeType: 'attribute' },
   }
-  expect(downgradeSchemaV32ToV31(schema as any)).toEqual({
+  expect(convertSchema(schema)).toEqual({
     ...schema,
     discriminator: { propertyName: 'kind' },
     xml: { attribute: true },

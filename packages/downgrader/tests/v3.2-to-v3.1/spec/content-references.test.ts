@@ -8,7 +8,7 @@
 // A reference that cannot be resolved inside the document (external,
 // missing, or looping) cannot be kept either, so its entry is removed.
 
-import { dig } from '../../helpers'
+import { dig, expectAcyclic } from '../../helpers'
 import { convertContent, convertPathItem, convertSpec } from './helpers'
 
 describe('inlining', () => {
@@ -124,10 +124,7 @@ describe('references that cannot be inlined', () => {
 
   it('removes entries when components.mediaTypes is missing or malformed', () => {
     const content = { 'application/json': { $ref: '#/components/mediaTypes/A' } }
-    expect(convertSpec({ paths: { '/a': { post: { requestBody: { content }, responses: {} } } } })).toEqual({
-      openapi: '3.1.2',
-      paths: { '/a': { post: { requestBody: { content: {} }, responses: {} } } },
-    })
+    expect(convertContent(content)).toEqual({})
     expect(convertContent(content, { mediaTypes: 'junk' })).toEqual({})
   })
 
@@ -253,7 +250,7 @@ describe('recursive media types', () => {
         },
       },
     })
-    expect(() => JSON.stringify(result)).not.toThrow()
+    expectAcyclic(result)
     expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toEqual({
       properties: { children: { items: {}, type: 'array' } },
       type: 'object',

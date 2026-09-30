@@ -447,7 +447,6 @@ describe('recursion', () => {
         },
       },
     })
-    expect(() => JSON.stringify(result)).not.toThrow()
     expect(result).toEqual({ items: { properties: { children: {} }, type: 'object' }, type: 'array' })
   })
 

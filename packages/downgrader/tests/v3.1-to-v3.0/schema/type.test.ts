@@ -6,11 +6,7 @@
 // The official guide shows the same mapping in the other direction:
 // https://learn.openapis.org/upgrading/v3.0-to-v3.1.html#replace-nullable-with-type-arrays
 
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 describe('a single type', () => {
   it.each([
@@ -19,7 +15,7 @@ describe('a single type', () => {
     ['deduplicates entries', { type: ['string', 'string'] }, { type: 'string' }],
     ['ignores non-string entries beside valid ones', { type: ['string', 42] }, { type: 'string' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -31,19 +27,13 @@ describe('only null', () => {
     ['turns type: ["null"] into a null enum', { type: ['null'] }, { enum: [null] }],
     ['narrows an existing enum that allows null', { enum: ['a', null], type: ['null'] }, { enum: [null] }],
     ['converts a null-only anyOf branch', { anyOf: [{ type: 'string' }, { type: 'null' }] }, { anyOf: [{ type: 'string' }, { enum: [null] }] }],
+    // Here the 3.1 schema accepts nothing at all: the value must be null and
+    // also one of the enum values, none of which is null. `not: {}` keeps
+    // that meaning, since `{}` accepts everything.
+    ['matches nothing when the enum of a null-only type excludes null', { enum: ['a'], type: ['null'] }, { enum: ['a'], not: {} }],
+    ['drops the type beside a malformed enum', { enum: 'junk', type: ['null'] }, { enum: 'junk' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
-  })
-
-  // Here the 3.1 schema accepts nothing at all: the value must be null and
-  // also one of the enum values, none of which is null. `not: {}` keeps
-  // that meaning, since `{}` accepts everything.
-  it('matches nothing when the enum of a null-only type excludes null', () => {
-    expect(convert({ enum: ['a'], type: ['null'] })).toEqual({ enum: ['a'], not: {} })
-  })
-
-  it('drops the type beside a malformed enum', () => {
-    expect(convert({ enum: 'junk', type: ['null'] })).toEqual({ enum: 'junk' })
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -57,14 +47,9 @@ describe('several types', () => {
       { type: ['string', 'integer', 'null'] },
       { anyOf: [{ nullable: true, type: 'string' }, { nullable: true, type: 'integer' }] },
     ],
-  ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
-  })
-
-  // 3.0 requires `items` wherever `type` is `"array"`, so the array branch
-  // takes the sibling `items`, or an empty one when there is none. Other
-  // types ignore `items`, so it moves rather than being copied.
-  it.each([
+    // 3.0 requires `items` wherever `type` is `"array"`, so the array branch
+    // takes the sibling `items`, or an empty one when there is none. Other
+    // types ignore `items`, so it moves rather than being copied.
     ['gives the array branch an empty items', { type: ['array', 'string'] }, { anyOf: [{ items: {}, type: 'array' }, { type: 'string' }] }],
     [
       'moves a sibling items into the array branch',
@@ -76,13 +61,8 @@ describe('several types', () => {
       { items: { type: 'integer' }, type: ['object', 'string'] },
       { anyOf: [{ type: 'object' }, { type: 'string' }], items: { type: 'integer' } },
     ],
-  ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
-  })
-
-  // An existing `anyOf` must keep applying too, so the type union joins
-  // `allOf` rather than replacing or merging into it.
-  it.each([
+    // An existing `anyOf` must keep applying too, so the type union joins
+    // `allOf` rather than replacing or merging into it.
     [
       'wraps the union into allOf when anyOf already exists',
       { anyOf: [{ minLength: 1 }], type: ['string', 'integer'] },
@@ -102,7 +82,7 @@ describe('several types', () => {
       },
     ],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 
   // Each level moves `items` into one branch instead of copying it into
@@ -114,7 +94,7 @@ describe('several types', () => {
       input = { items: input, type: ['array', 'object'] }
       expected = { anyOf: [{ items: expected, type: 'array' }, { type: 'object' }] }
     }
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -126,7 +106,7 @@ describe('arrays', () => {
     ['adds an empty items to an array without one', { type: 'array' }, { items: {}, type: 'array' }],
     ['adds an empty items to a nullable array without one', { type: ['array', 'null'] }, { items: {}, nullable: true, type: 'array' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -137,6 +117,6 @@ describe('malformed type values', () => {
     ['passes an object through', { type: { a: 1 } }, { type: { a: 1 } }],
     ['drops an empty array', { type: [] }, {}],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })

@@ -6,10 +6,9 @@
 // - on a Path Item, the inner reference keeps only its own fields
 // - anywhere else, the inner Reference Object is removed
 
-import { dig } from '../../helpers'
-import { convertSpec } from './helpers'
+import { dig, expectAcyclic } from '../../helpers'
+import { convertSpec, webhookSchemaPointer } from './helpers'
 
-const schemaPointer = '#/webhooks/newPet/post/requestBody/content/application~1json/schema'
 const responses = { 200: { description: 'ok' } }
 
 it('cuts recursion into {} for schemas and into own fields for path items, keeping the output acyclic', () => {
@@ -47,7 +46,7 @@ it('cuts recursion into {} for schemas and into own fields for path items, keepi
     pong: { '{$request.body#/url}': {} },
     self: { '{$request.body#/url}': {} },
   })
-  expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  expectAcyclic(result)
 })
 
 it('cuts callbacks that reach back into an enclosing callback', () => {
@@ -77,7 +76,7 @@ it('cuts callbacks that reach back into an enclosing callback', () => {
   })
   expect(dig(result, 'paths', '/self', 'post', 'callbacks', 'cb', '{$url}', 'post', 'callbacks')).toEqual({ again: {} })
   expect(dig(result, 'paths', '/item', 'post', 'callbacks', 'A', '{$url}', 'post', 'callbacks', 'toB', '{$url}', 'post', 'callbacks')).toEqual({ toA: {} })
-  expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  expectAcyclic(result)
 })
 
 it('cuts a callback that reaches back into the path item that contains it', () => {
@@ -103,7 +102,7 @@ it('cuts own fields that lead back into a path item still being converted', () =
   expect(dig(result, 'components', 'callbacks', 'C', '{$url}', 'get', 'callbacks', 'd', '{$url}', 'post', 'callbacks')).toEqual({
     c: { '{$url}': { summary: 't' } },
   })
-  expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  expectAcyclic(result)
 })
 
 describe('object cycles of the input', () => {
@@ -113,7 +112,7 @@ describe('object cycles of the input', () => {
   it('keeps an object cycle that an inlined target also reaches', () => {
     const a: Record<string, unknown> = { properties: {}, type: 'object' }
     const b = { properties: { back: a }, type: 'object' }
-    a.properties = { hook: { $ref: schemaPointer }, b }
+    a.properties = { hook: { $ref: webhookSchemaPointer }, b }
     const result = convertSpec({
       components: { schemas: { A: a } },
       webhooks: { newPet: { post: { requestBody: { content: { 'application/json': { schema: { properties: { b }, type: 'object' } } } } } } },
@@ -124,7 +123,7 @@ describe('object cycles of the input', () => {
   })
 
   it('cuts a reference that comes back to an object shared within the input', () => {
-    const shared: Record<string, unknown> = { properties: { a: { $ref: schemaPointer } }, type: 'object' }
+    const shared: Record<string, unknown> = { properties: { a: { $ref: webhookSchemaPointer } }, type: 'object' }
     expect(dig(convertSpec({
       components: { schemas: { S: shared } },
       webhooks: { newPet: { post: { requestBody: { content: { 'application/json': { schema: { properties: { b: shared }, type: 'object' } } } } } } },
@@ -136,7 +135,7 @@ describe('object cycles of the input', () => {
 
   it('inlines into a cyclic input graph, preserving its cycle', () => {
     const node: Record<string, unknown> = { type: 'object' }
-    node.properties = { hook: { $ref: schemaPointer }, self: node }
+    node.properties = { hook: { $ref: webhookSchemaPointer }, self: node }
     const result = convertSpec({
       components: { schemas: { Node: node } },
       webhooks: { newPet: { post: { requestBody: { content: { 'application/json': { schema: { properties: { name: { type: 'string' } }, type: 'object' } } } } } } },

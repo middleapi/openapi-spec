@@ -4,10 +4,8 @@
 // following the reference chain until it leaves the removed parts.
 
 import { dig } from '../../helpers'
-import { convertSpec } from './helpers'
+import { convertSpec, item, removedPointer, webhookSchemaPointer } from './helpers'
 
-const removedPointer = /#\/(?:webhooks|components\/pathItems)/
-const schemaPointer = '#/webhooks/newPet/post/requestBody/content/application~1json/schema'
 const hook = {
   post: {
     operationId: 'newPetHook',
@@ -16,16 +14,17 @@ const hook = {
     responses: { 200: { description: 'ok' } },
   },
 }
-const hookParameter = { description: 'orig', in: 'header', name: 'X-Hook', schema: { nullable: true, type: 'string' } }
-const item = {
-  get: { operationId: 'getItem', responses: { 200: { description: 'item' } } },
-  parameters: [{ in: 'query', name: 'q', schema: { const: 'x' } }],
+/** Points into the `full` webhook that several tests below inline from. */
+function full(path: string): string {
+  return `#/webhooks/full/post/${path}`
 }
+
+const hookParameter = { description: 'orig', in: 'header', name: 'X-Hook', schema: { nullable: true, type: 'string' } }
 
 describe('inlining', () => {
   it('inlines references into webhooks and components.pathItems without mutating the input', () => {
     const input = {
-      components: { pathItems: { Item: item }, schemas: { Pet: { $ref: schemaPointer } } },
+      components: { pathItems: { Item: item }, schemas: { Pet: { $ref: webhookSchemaPointer } } },
       paths: {
         '/a': {
           get: {
@@ -57,7 +56,6 @@ describe('inlining', () => {
   // a callback's path items get default responses, a parameter in the path
   // becomes required, schemas lose their 3.1-only keywords, and so on.
   it('converts each inlined target for its position, in every component map', () => {
-    const pointer = (path: string) => `#/webhooks/full/post/${path}`
     const response = {
       content: { 'application/json': { examples: { e: { value: 1 } } } },
       description: 'ok',
@@ -65,13 +63,13 @@ describe('inlining', () => {
     }
     const result = convertSpec({
       components: {
-        callbacks: { C: { $ref: pointer('callbacks/cb') } },
-        examples: { E: { $ref: pointer('responses/200/content/application~1json/examples/e') } },
-        headers: { H: { $ref: pointer('responses/200/headers/H') } },
-        parameters: { P: { $ref: pointer('parameters/0') } },
-        requestBodies: { B: { $ref: pointer('requestBody') } },
-        responses: { R: { $ref: pointer('responses/200') } },
-        securitySchemes: { S: { $ref: pointer('x-scheme') } },
+        callbacks: { C: { $ref: full('callbacks/cb') } },
+        examples: { E: { $ref: full('responses/200/content/application~1json/examples/e') } },
+        headers: { H: { $ref: full('responses/200/headers/H') } },
+        parameters: { P: { $ref: full('parameters/0') } },
+        requestBodies: { B: { $ref: full('requestBody') } },
+        responses: { R: { $ref: full('responses/200') } },
+        securitySchemes: { S: { $ref: full('x-scheme') } },
       },
       webhooks: {
         full: {
@@ -97,26 +95,25 @@ describe('inlining', () => {
   })
 
   it('inlines references in operation, path item, media type, parameter, and encoding positions', () => {
-    const pointer = (path: string) => `#/webhooks/full/post/${path}`
     expect(convertSpec({
       paths: {
         '/a': {
           get: {
-            parameters: [{ examples: { e: { $ref: pointer('x-example') } }, in: 'query', name: 'q' }],
-            requestBody: { $ref: pointer('requestBody') },
+            parameters: [{ examples: { e: { $ref: full('x-example') } }, in: 'query', name: 'q' }],
+            requestBody: { $ref: full('requestBody') },
             responses: {
               200: {
                 content: {
                   'application/json': {
-                    encoding: { f: { headers: { H: { $ref: pointer('x-header') } } } },
-                    examples: { e: { $ref: pointer('x-example') } },
+                    encoding: { f: { headers: { H: { $ref: full('x-header') } } } },
+                    examples: { e: { $ref: full('x-example') } },
                   },
                 },
                 description: 'ok',
               },
             },
           },
-          parameters: [{ $ref: pointer('x-parameter') }],
+          parameters: [{ $ref: full('x-parameter') }],
         },
       },
       webhooks: {

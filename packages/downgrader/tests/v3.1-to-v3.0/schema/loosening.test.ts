@@ -13,11 +13,8 @@
 // `additionalProperties`, `allOf`, and `anyOf`, and a cut recursion or an
 // object cycle counts as loosened too.
 
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { dig } from '../../helpers'
+import { convertSchema } from './helpers'
 
 describe('not', () => {
   it.each([
@@ -34,17 +31,12 @@ describe('not', () => {
       { not: { allOf: [{ anyOf: [{ additionalProperties: { items: { contains: {} } } }] }] } },
       {},
     ],
-  ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
-  })
-
-  it.each([
     ['keeps a not whose const lies inside its enum', { not: { const: 1, enum: [1, 2] } }, { not: { enum: [1] } }],
     ['keeps a not whose operand converts exactly', { not: { type: ['string', 'null'] } }, { not: { nullable: true, type: 'string' } }],
     ['keeps a not whose null-only operand matches nothing exactly', { not: { const: 'a', type: 'null' } }, { not: { enum: ['a'], not: {} } }],
     ['keeps a not over a boolean schema', { not: false }, { not: { not: {} } }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -58,7 +50,7 @@ describe('oneOf', () => {
     ],
     ['keeps a oneOf whose branches convert exactly', { oneOf: [{ type: ['integer', 'null'] }, { type: 'string' }] }, { oneOf: [{ nullable: true, type: 'integer' }, { type: 'string' }] }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -68,12 +60,12 @@ describe('object cycles', () => {
   it('treats a cycle of the input graph as loosened under not and oneOf', () => {
     const negated: any = { not: { properties: {} }, patternProperties: { '^x': { type: 'string' } } }
     negated.not.properties.p = negated
-    expect(convert(negated)).toEqual({})
+    expect(convertSchema(negated)).toEqual({})
 
     const tree: any = { oneOf: [{ required: ['value'], type: 'object' }], unevaluatedProperties: false }
     tree.oneOf.push({ properties: { children: { items: tree, type: 'array' } }, type: 'object' })
-    const out = convert(tree) as any
-    expect(out.oneOf).toBeUndefined()
-    expect(out.anyOf[1].properties.children.items).toBe(out)
+    const out = convertSchema(tree)
+    expect(out).not.toHaveProperty('oneOf')
+    expect(dig(out, 'anyOf', '1', 'properties', 'children', 'items')).toBe(out)
   })
 })

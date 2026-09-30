@@ -1,4 +1,5 @@
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
+import { convertSchema } from './helpers'
 
 const inner = { discriminator: { defaultMapping: 'A', propertyName: 'kind' } }
 const converted = { discriminator: { propertyName: 'kind' } }
@@ -10,11 +11,11 @@ const lists = ['allOf', 'anyOf', 'oneOf', 'prefixItems']
 const maps = ['$defs', 'dependentSchemas', 'patternProperties', 'properties']
 
 it('converts nested schemas at every subschema position', () => {
-  expect(downgradeSchemaV32ToV31({
+  expect(convertSchema({
     ...Object.fromEntries(single.map(key => [key, inner])),
     ...Object.fromEntries(lists.map(key => [key, [inner, true]])),
     ...Object.fromEntries(maps.map(key => [key, { a: inner }])),
-  } as any)).toEqual({
+  })).toEqual({
     ...Object.fromEntries(single.map(key => [key, converted])),
     ...Object.fromEntries(lists.map(key => [key, [converted, true]])),
     ...Object.fromEntries(maps.map(key => [key, { a: converted }])),
@@ -26,7 +27,7 @@ it('converts nested schemas at every subschema position', () => {
 // one, so it is copied as is.
 it('does not convert schema-like values outside subschema positions', () => {
   const schema = { 'const': inner, 'default': inner, 'enum': [inner], 'examples': [inner], 'x-extension': inner }
-  expect(downgradeSchemaV32ToV31(schema as any)).toEqual(schema)
+  expect(convertSchema(schema)).toEqual(schema)
 })
 
 it('converts nested schemas at any depth', () => {
@@ -38,5 +39,5 @@ it('converts nested schemas at any depth', () => {
 })
 
 it('clones malformed subschema containers through', () => {
-  expect(downgradeSchemaV32ToV31({ allOf: 'junk', properties: 5 } as any)).toEqual({ allOf: 'junk', properties: 5 })
+  expect(convertSchema({ allOf: 'junk', properties: 5 })).toEqual({ allOf: 'junk', properties: 5 })
 })

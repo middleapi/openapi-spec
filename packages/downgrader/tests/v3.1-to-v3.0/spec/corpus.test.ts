@@ -1,8 +1,6 @@
-// The official 3.1 documents, from OAI/learn.openapis.org and from the
-// `tests/schema/pass` folder of OAI/OpenAPI-Specification (see
-// packages/types/tests/README.md). Each one must downgrade to a document the
-// official 3.0 JSON Schema accepts, without leaving a reference dangling that
-// resolved before.
+// Each official 3.1 document (see tests/corpus.ts) must downgrade to a
+// document the official 3.0 JSON Schema accepts, without leaving a reference
+// dangling that resolved before.
 
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
@@ -11,95 +9,14 @@ import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 import { doc as nonOauthScopesExample } from '../../../../types/tests/examples/non-oauth-scopes-3-1'
 import { doc as petstore } from '../../../../types/tests/examples/petstore-3-0'
 import { doc as tictactoe } from '../../../../types/tests/examples/tictactoe-3-1'
-import { doc as webhookExampleDoc } from '../../../../types/tests/examples/webhook-example-3-1'
-import { doc as callbackObjectExamples } from '../../../../types/tests/schema-tests-3.1/callback-object-examples'
-import { doc as compPathitems } from '../../../../types/tests/schema-tests-3.1/comp-pathitems'
-import { doc as componentsObjectExample } from '../../../../types/tests/schema-tests-3.1/components-object-example'
-import { doc as exampleObjectExamples } from '../../../../types/tests/schema-tests-3.1/example-object-examples'
-import { doc as headerObjectExamples } from '../../../../types/tests/schema-tests-3.1/header-object-examples'
-import { doc as infoObjectExample } from '../../../../types/tests/schema-tests-3.1/info-object-example'
-import { doc as infoSummary } from '../../../../types/tests/schema-tests-3.1/info-summary'
-import { doc as jsonSchemaDialect } from '../../../../types/tests/schema-tests-3.1/json-schema-dialect'
-import { doc as licenseIdentifier } from '../../../../types/tests/schema-tests-3.1/license-identifier'
-import { doc as linkObjectExamples } from '../../../../types/tests/schema-tests-3.1/link-object-examples'
-import { doc as mediaTypeExamples } from '../../../../types/tests/schema-tests-3.1/media-type-examples'
+import { doc as webhookExample } from '../../../../types/tests/examples/webhook-example-3-1'
 import { doc as mega } from '../../../../types/tests/schema-tests-3.1/mega'
-import { doc as minimalComp } from '../../../../types/tests/schema-tests-3.1/minimal-comp'
-import { doc as minimalHooks } from '../../../../types/tests/schema-tests-3.1/minimal-hooks'
-import { doc as minimalPaths } from '../../../../types/tests/schema-tests-3.1/minimal-paths'
-import { doc as nonOauthScopes } from '../../../../types/tests/schema-tests-3.1/non-oauth-scopes'
-import { doc as operationObjectExample } from '../../../../types/tests/schema-tests-3.1/operation-object-example'
-import { doc as parameterObjectExamples } from '../../../../types/tests/schema-tests-3.1/parameter-object-examples'
-import { doc as parameterObjectQueryAllowReserved } from '../../../../types/tests/schema-tests-3.1/parameter-object-query-allow-reserved'
-import { doc as pathItemObjectExample } from '../../../../types/tests/schema-tests-3.1/path-item-object-example'
-import { doc as pathItemServersParameters } from '../../../../types/tests/schema-tests-3.1/path-item-servers-parameters'
-import { doc as pathNoResponse } from '../../../../types/tests/schema-tests-3.1/path-no-response'
-import { doc as pathVarEmptyPathitem } from '../../../../types/tests/schema-tests-3.1/path-var-empty-pathitem'
-import { doc as pathsObjectExample } from '../../../../types/tests/schema-tests-3.1/paths-object-example'
-import { doc as requestBodyExamples } from '../../../../types/tests/schema-tests-3.1/request-body-examples'
-import { doc as responseObjectExamples } from '../../../../types/tests/schema-tests-3.1/response-object-examples'
-import { doc as schema } from '../../../../types/tests/schema-tests-3.1/schema'
-import { doc as schemaObjectDeprecatedExampleKeyword } from '../../../../types/tests/schema-tests-3.1/schema-object-deprecated-example-keyword'
-import { doc as servers } from '../../../../types/tests/schema-tests-3.1/servers'
-import { doc as specificationExtensions } from '../../../../types/tests/schema-tests-3.1/specification-extensions'
-import { doc as tagObjectExample } from '../../../../types/tests/schema-tests-3.1/tag-object-example'
-import { doc as validSchemaTypes } from '../../../../types/tests/schema-tests-3.1/valid-schema-types'
-import { doc as webhookExample } from '../../../../types/tests/schema-tests-3.1/webhook-example'
-import { expectNoNewDanglingRefs, expectValidAs } from '../../helpers'
-
-// Left out:
-// - security-scheme-object-examples, whose external `$ref` the validator
-//   cannot resolve
-// - style-defaults, which puts an `x-comment` in an Encoding Object; the
-//   official 3.0 schema rejects extensions there
-const corpus: readonly (readonly [name: string, doc: OpenAPIV3_1.OpenAPIObject])[] = [
-  ['examples/non-oauth-scopes-3-1', nonOauthScopesExample],
-  ['examples/tictactoe-3-1', tictactoe],
-  ['examples/webhook-example-3-1', webhookExampleDoc],
-  ['callback-object-examples', callbackObjectExamples],
-  ['comp-pathitems', compPathitems],
-  ['components-object-example', componentsObjectExample],
-  ['example-object-examples', exampleObjectExamples],
-  ['header-object-examples', headerObjectExamples],
-  ['info-object-example', infoObjectExample],
-  ['info-summary', infoSummary],
-  ['json-schema-dialect', jsonSchemaDialect],
-  ['license-identifier', licenseIdentifier],
-  ['link-object-examples', linkObjectExamples],
-  ['media-type-examples', mediaTypeExamples],
-  ['mega', mega],
-  ['minimal-comp', minimalComp],
-  ['minimal-hooks', minimalHooks],
-  ['minimal-paths', minimalPaths],
-  ['non-oauth-scopes', nonOauthScopes],
-  ['operation-object-example', operationObjectExample],
-  ['parameter-object-examples', parameterObjectExamples],
-  ['parameter-object-query-allow-reserved', parameterObjectQueryAllowReserved],
-  ['path-item-object-example', pathItemObjectExample],
-  ['path-item-servers-parameters', pathItemServersParameters],
-  ['path-no-response', pathNoResponse],
-  ['path-var-empty-pathitem', pathVarEmptyPathitem],
-  ['paths-object-example', pathsObjectExample],
-  ['request-body-examples', requestBodyExamples],
-  ['response-object-examples', responseObjectExamples],
-  ['schema', schema],
-  ['schema-object-deprecated-example-keyword', schemaObjectDeprecatedExampleKeyword],
-  ['servers', servers],
-  ['specification-extensions', specificationExtensions],
-  ['tag-object-example', tagObjectExample],
-  ['valid-schema-types', validSchemaTypes],
-  ['webhook-example', webhookExample],
-]
+import { corpusV31 } from '../../corpus'
+import { expectValidAs, expectValidDowngrade } from '../../validate'
 
 describe('official corpus', () => {
-  it.each(corpus)('converts %s to a valid 3.0 document without new dangling references or mutating the input', async (_name, doc) => {
-    await expectValidAs(doc, '3.1')
-    const before = structuredClone(doc)
-    const v30 = downgradeSpecV31ToV30(doc)
-    expect(v30.openapi).toBe('3.0.4')
-    await expectValidAs(v30, '3.0')
-    expectNoNewDanglingRefs(doc, v30)
-    expect(doc).toEqual(before)
+  it.each(corpusV31)('converts %s to a valid 3.0 document', async (_name, doc) => {
+    await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
   })
 })
 
@@ -109,7 +26,7 @@ describe('official examples', () => {
   })
 
   it('removes the webhooks of the webhook example, leaving empty paths', () => {
-    const v30 = downgradeSpecV31ToV30(webhookExampleDoc)
+    const v30 = downgradeSpecV31ToV30(webhookExample)
     expect(v30).not.toHaveProperty('webhooks')
     expect(v30.paths).toEqual({})
     expect(v30.components).toHaveProperty(['schemas', 'Pet'])

@@ -28,14 +28,10 @@ import { convertComponent, convertSpec } from './helpers'
 
 const octetStream = { contentType: 'application/octet-stream' }
 
+const schemas = { Form: { allOf: [{ properties: { a: {} } }], properties: { b: {} } }, Pet: { type: 'object' }, Raw: {} }
+
 function convertForm(mediaType: unknown, type = 'multipart/form-data'): unknown {
-  const result = convertSpec({
-    components: {
-      requestBodies: { X: { content: { [type]: mediaType } } },
-      schemas: { Form: { allOf: [{ properties: { a: {} } }], properties: { b: {} } }, Pet: { type: 'object' }, Raw: {} },
-    },
-  })
-  return dig(result, 'components', 'requestBodies', 'X', 'content', type)
+  return dig(convertComponent('requestBodies', { content: { [type]: mediaType } }, { schemas }), 'content', type)
 }
 
 describe('parts that need the 3.1 default written out', () => {

@@ -11,7 +11,8 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
-import { dig, expectValidAs } from '../../helpers'
+import { dig } from '../../helpers'
+import { expectValidAs } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
 it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {

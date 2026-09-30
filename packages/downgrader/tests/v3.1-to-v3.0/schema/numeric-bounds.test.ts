@@ -8,11 +8,7 @@
 // one bound per side, so the tighter of the two is kept. At a tie the
 // exclusive one is tighter.
 
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 it.each([
   ['turns a numeric exclusiveMinimum into minimum plus the flag', { exclusiveMinimum: 3 }, { exclusiveMinimum: true, minimum: 3 }],
@@ -25,12 +21,12 @@ it.each([
   ['prefers the exclusive form for equal maximums', { exclusiveMaximum: 5, maximum: 5 }, { exclusiveMaximum: true, maximum: 5 }],
   ['converts both sides at once', { exclusiveMaximum: 9, exclusiveMinimum: 1 }, { exclusiveMaximum: true, exclusiveMinimum: true, maximum: 9, minimum: 1 }],
 ])('%s', (_name, input, expected) => {
-  expect(convert(input)).toEqual(expected)
+  expect(convertSchema(input)).toEqual(expected)
 })
 
 it.each([
   ['a 3.0-style boolean exclusiveMinimum', { exclusiveMinimum: true, minimum: 3 }],
   ['a 3.0-style boolean exclusiveMaximum', { exclusiveMaximum: false, maximum: 3 }],
 ])('passes %s through', (_name, input) => {
-  expect(convert(input)).toEqual(input)
+  expect(convertSchema(input)).toEqual(input)
 })

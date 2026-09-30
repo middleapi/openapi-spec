@@ -3,25 +3,22 @@ import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 describe('input shapes', () => {
   it('clones non-schema input unchanged', () => {
-    expect(convert(null)).toBeNull()
-    expect(convert(42)).toBe(42)
-    expect(convert('x')).toBe('x')
+    expect(convertSchema(null)).toBeNull()
+    expect(convertSchema(42)).toBe(42)
+    expect(convertSchema('x')).toBe('x')
     const list = [{ type: 'string' }]
-    const result = convert(list)
+    const result = convertSchema(list)
     expect(result).toEqual(list)
     expect(result).not.toBe(list)
   })
 
   it('treats keywords named like Object.prototype members as unknown keywords', () => {
     const input = JSON.parse('{"constructor":1,"hasOwnProperty":2,"toString":3,"__proto__":{"type":["string","null"]},"type":"string"}')
-    const result = convert(input) as object
+    const result = convertSchema(input) as object
     expect(Object.getOwnPropertyDescriptor(result, 'constructor')?.value).toBe(1)
     expect(Object.getOwnPropertyDescriptor(result, 'hasOwnProperty')?.value).toBe(2)
     expect(Object.getOwnPropertyDescriptor(result, 'toString')?.value).toBe(3)
@@ -32,7 +29,7 @@ describe('input shapes', () => {
   // JSON.parse creates a real own `__proto__` key, here a property name.
   // It is converted like any other property.
   it('converts a property named __proto__ without polluting prototypes', () => {
-    const properties = dig(convert(JSON.parse('{"properties":{"__proto__":{"type":["string","null"]}}}')), 'properties') as object
+    const properties = dig(convertSchema(JSON.parse('{"properties":{"__proto__":{"type":["string","null"]}}}')), 'properties') as object
     expect(Object.getOwnPropertyDescriptor(properties, '__proto__')?.value).toEqual({ nullable: true, type: 'string' })
     expect(Object.getPrototypeOf(properties)).toBe(Object.prototype)
     expect('nullable' in {}).toBe(false)
@@ -79,7 +76,7 @@ describe('object graphs', () => {
     const node: Record<string, unknown> = { properties, type: ['object', 'null'] }
     properties.self = node
     properties.children = { items: node, type: 'array' }
-    const result = convert(node) as Record<string, unknown>
+    const result = convertSchema(node) as Record<string, unknown>
     expect(result.type).toBe('object')
     expect(result.nullable).toBe(true)
     expect(dig(result, 'properties', 'self')).toBe(result)
@@ -91,7 +88,7 @@ describe('object graphs', () => {
     const grandchild: Record<string, unknown> = { type: ['string', 'null'] }
     const child = { properties: { grandchild }, type: 'object' }
     grandchild.items = child
-    const result = convert({ properties: { child }, type: 'object' })
+    const result = convertSchema({ properties: { child }, type: 'object' })
     const convertedChild = dig(result, 'properties', 'child')
     expect(dig(convertedChild, 'properties', 'grandchild', 'items')).toBe(convertedChild)
   })
@@ -101,7 +98,7 @@ describe('object graphs', () => {
   it('points the array branch of a cyclic multi-type schema at the converted schema', () => {
     const node: Record<string, unknown> = { type: ['array', 'object'] }
     node.items = node
-    const result = convert(node) as Record<string, unknown>
+    const result = convertSchema(node) as Record<string, unknown>
     expect(result).not.toHaveProperty('items')
     expect(dig(result, 'anyOf', '0', 'items')).toBe(result)
     expect(dig(result, 'anyOf', '1')).toEqual({ type: 'object' })
@@ -116,7 +113,7 @@ describe('object graphs', () => {
     for (let index = 0; index < 64; index += 1) {
       node = { properties: { left: node, right: node }, type: 'object' }
     }
-    const result = convert(node)
+    const result = convertSchema(node)
     expect(dig(result, 'properties', 'left')).toBe(dig(result, 'properties', 'right'))
     let leaf = result
     for (let index = 0; index < 64; index += 1) {

@@ -14,8 +14,8 @@ export function convertSpec(fields: Record<string, unknown>): OpenAPIV3_1.OpenAP
 }
 
 /** Converts `pathItem` as the only entry of `paths` and returns it. */
-export function convertPathItem(pathItem: unknown, components: Record<string, unknown> = {}): unknown {
-  return dig(convertSpec({ components, paths: { '/a': pathItem } }), 'paths', '/a')
+export function convertPathItem(pathItem: unknown, components?: Record<string, unknown>): unknown {
+  return dig(convertSpec({ ...(components && { components }), paths: { '/a': pathItem } }), 'paths', '/a')
 }
 
 /** Converts `value` as the entry `X` of the `kind` component map and returns it. */
@@ -24,7 +24,7 @@ export function convertComponent(kind: string, value: unknown, components: Recor
 }
 
 /** Converts `content` as the content map of a request body and returns it. */
-export function convertContent(content: unknown, components: Record<string, unknown> = {}): unknown {
+export function convertContent(content: unknown, components?: Record<string, unknown>): unknown {
   return dig(
     convertPathItem({ post: { requestBody: { content }, responses: {} } }, components),
     'post',

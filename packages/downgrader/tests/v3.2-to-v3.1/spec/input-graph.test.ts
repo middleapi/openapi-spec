@@ -175,7 +175,7 @@ describe('shared objects and cycles', () => {
         },
       },
       { mediaTypes: { Pet: { schema: { type: 'string' } } } },
-    ), 'get', 'responses') as Record<string, unknown>
+    ), 'get', 'responses')
     expect(dig(content, '200', 'content', 'a/b')).toEqual({ schema: { type: 'string' } })
     expect(dig(content, '201', 'content', 'a/b')).toBe(dig(content, '200', 'content', 'a/b'))
   })

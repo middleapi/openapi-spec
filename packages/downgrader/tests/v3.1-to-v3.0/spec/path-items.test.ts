@@ -21,19 +21,15 @@ const inlined = {
   summary: 'Reusable',
 }
 
-function convertWithPathItems(paths: unknown, pathItems: unknown, extra: Record<string, unknown> = {}) {
-  return convertSpec({ components: { pathItems, ...extra }, paths })
-}
-
 describe('inlining', () => {
   it('inlines the converted entry and lets the referencing fields win', () => {
-    const result = convertWithPathItems(
-      {
+    const result = convertSpec({
+      components: { pathItems: { Reusable: reusable } },
+      paths: {
         '/a': { $ref: '#/components/pathItems/Reusable' },
         '/b': { $ref: '#/components/pathItems/Reusable', description: 'own', summary: 'Own summary' },
       },
-      { Reusable: reusable },
-    )
+    })
     expect(result.components).toEqual({})
     expect(result.paths).toEqual({
       '/a': inlined,
@@ -43,27 +39,30 @@ describe('inlining', () => {
 
   // Each hop of a chain adds the fields the hops before it did not set.
   it('follows chains of path item references, merging the fields of every hop', () => {
-    expect(convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/Alias', summary: 'Own' } },
-      {
-        Alias: { $ref: '#/components/pathItems/Reusable', description: 'alias' },
-        Reusable: reusable,
+    expect(convertSpec({
+      components: {
+        pathItems: {
+          Alias: { $ref: '#/components/pathItems/Reusable', description: 'alias' },
+          Reusable: reusable,
+        },
       },
-    ).paths).toEqual({ '/a': { ...inlined, description: 'alias', summary: 'Own' } })
+      paths: { '/a': { $ref: '#/components/pathItems/Alias', summary: 'Own' } },
+    }).paths).toEqual({ '/a': { ...inlined, description: 'alias', summary: 'Own' } })
   })
 
   // The target is an external reference, which stays valid, so the result is
   // that reference with the referencing Path Item's fields beside it.
   it('inlines an entry that references an external file', () => {
-    expect(convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/External', summary: 'Own' } },
-      { External: { $ref: './paths/a.yaml' } },
-    ).paths).toEqual({ '/a': { $ref: './paths/a.yaml', summary: 'Own' } })
+    expect(convertSpec({
+      components: { pathItems: { External: { $ref: './paths/a.yaml' } } },
+      paths: { '/a': { $ref: '#/components/pathItems/External', summary: 'Own' } },
+    }).paths).toEqual({ '/a': { $ref: './paths/a.yaml', summary: 'Own' } })
   })
 
   it('inlines references inside callbacks', () => {
-    expect(convertWithPathItems(
-      {
+    expect(convertSpec({
+      components: { pathItems: { Reusable: reusable } },
+      paths: {
         '/a': {
           post: {
             callbacks: { onEvent: { '{$request.body#/url}': { $ref: '#/components/pathItems/Reusable' } } },
@@ -71,19 +70,19 @@ describe('inlining', () => {
           },
         },
       },
-      { Reusable: reusable },
-    ).paths).toEqual({
+    }).paths).toEqual({
       '/a': { post: { callbacks: { onEvent: { '{$request.body#/url}': inlined } }, responses: {} } },
     })
   })
 
   it('converts the inlined path item like any other, removing mutualTLS requirements', () => {
-    const result = convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/Secured' } },
-      { Secured: { get: { responses: {}, security: [{ mtls: [] }, { api: ['r'] }] } } },
-      { securitySchemes: { api: { in: 'header', name: 'k', type: 'apiKey' }, mtls: { type: 'mutualTLS' } } },
-    )
-    expect(result.paths).toEqual({ '/a': { get: { responses: {}, security: [{ api: [] }] } } })
+    expect(convertSpec({
+      components: {
+        pathItems: { Secured: { get: { responses: {}, security: [{ mtls: [] }, { api: ['r'] }] } } },
+        securitySchemes: { api: { in: 'header', name: 'k', type: 'apiKey' }, mtls: { type: 'mutualTLS' } },
+      },
+      paths: { '/a': { $ref: '#/components/pathItems/Secured' } },
+    }).paths).toEqual({ '/a': { get: { responses: {}, security: [{ api: [] }] } } })
   })
 })
 
@@ -98,17 +97,19 @@ describe('references left as written', () => {
     ['a prototype member', '#/components/pathItems/hasOwnProperty', {}],
     ['a malformed pathItems map', '#/components/pathItems/Reusable', 'junk'],
   ])('leaves a reference to %s untouched', (_name, ref, pathItems) => {
-    expect(convertWithPathItems({ '/a': { $ref: ref, summary: 's' } }, pathItems).paths).toEqual({ '/a': { $ref: ref, summary: 's' } })
+    expect(convertSpec({ components: { pathItems }, paths: { '/a': { $ref: ref, summary: 's' } } }).paths).toEqual({
+      '/a': { $ref: ref, summary: 's' },
+    })
   })
 
   // `#/components/pathItems/Reusable/get` resolves to an Operation. A Path
   // Item `$ref` must point at a Path Item, so this one is not merged; it is
   // left as written, like a reference to any other invalid target.
   it('leaves a reference to something that is not a path item untouched', () => {
-    expect(convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/Reusable/get', summary: 's' } },
-      { Reusable: reusable },
-    ).paths).toEqual({ '/a': { $ref: '#/components/pathItems/Reusable/get', summary: 's' } })
+    expect(convertSpec({
+      components: { pathItems: { Reusable: reusable } },
+      paths: { '/a': { $ref: '#/components/pathItems/Reusable/get', summary: 's' } },
+    }).paths).toEqual({ '/a': { $ref: '#/components/pathItems/Reusable/get', summary: 's' } })
   })
 
   it('leaves a reference untouched when components.pathItems is missing', () => {
@@ -116,13 +117,15 @@ describe('references left as written', () => {
   })
 
   it('leaves a chain that loops without reaching a path item as written', () => {
-    expect(convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } },
-      {
-        Ping: { $ref: '#/components/pathItems/Pong', description: 'ping' },
-        Pong: { $ref: '#/components/pathItems/Ping' },
+    expect(convertSpec({
+      components: {
+        pathItems: {
+          Ping: { $ref: '#/components/pathItems/Pong', description: 'ping' },
+          Pong: { $ref: '#/components/pathItems/Ping' },
+        },
       },
-    ).paths).toEqual({ '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } })
+      paths: { '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } },
+    }).paths).toEqual({ '/a': { $ref: '#/components/pathItems/Ping', summary: 'Own' } })
   })
 })
 
@@ -131,22 +134,24 @@ describe('recursion', () => {
   // forever. The inner reference keeps only its own fields instead, since a
   // Path Item has no "accept anything" form like the `{}` schema.
   it('cuts a path item that reaches itself through its callbacks down to its own fields', () => {
-    expect(convertWithPathItems(
-      { '/a': { $ref: '#/components/pathItems/Self' } },
-      {
-        Self: {
-          post: {
-            callbacks: {
-              loop: {
-                bare: { $ref: '#/components/pathItems/Self' },
-                own: { $ref: '#/components/pathItems/Self', summary: 'own' },
+    expect(convertSpec({
+      components: {
+        pathItems: {
+          Self: {
+            post: {
+              callbacks: {
+                loop: {
+                  bare: { $ref: '#/components/pathItems/Self' },
+                  own: { $ref: '#/components/pathItems/Self', summary: 'own' },
+                },
               },
+              responses: {},
             },
-            responses: {},
           },
         },
       },
-    ).paths).toEqual({
+      paths: { '/a': { $ref: '#/components/pathItems/Self' } },
+    }).paths).toEqual({
       '/a': { post: { callbacks: { loop: { bare: {}, own: { summary: 'own' } } }, responses: {} } },
     })
   })
@@ -161,24 +166,31 @@ describe('recursion', () => {
       },
       paths: { '/a': { $ref: '#/components/pathItems/A' } },
     })
-    expect(result.paths?.['/a']).toEqual({
+    expect(result.paths['/a']).toEqual({
       post: { callbacks: { cb: { expr: { description: 'alias', summary: 'outer' } } }, responses: {} },
     })
   })
 
-  it('cuts fields inherited from a later hop that lead back into it', () => {
+  // `A` is both a hop of the chain and the Path Item being inlined. Where the
+  // inner reference re-enters it, `A` contributes nothing, neither its
+  // operations nor its plain fields, and only the later hop `T` is merged.
+  it('cuts a hop that the chain re-enters, merging only the hops after it', () => {
     const responses = { 200: { description: 'ok' } }
     const result = convertSpec({
       components: {
         pathItems: {
-          A: { $ref: '#/components/pathItems/T', post: { callbacks: { c: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses } },
+          A: {
+            $ref: '#/components/pathItems/T',
+            description: 'a',
+            post: { callbacks: { c: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses },
+          },
           T: { summary: 't' },
         },
       },
       paths: { '/p': { $ref: '#/components/pathItems/A' } },
     })
     expect(result.paths).toEqual({
-      '/p': { post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
+      '/p': { description: 'a', post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
     })
   })
 })

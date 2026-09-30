@@ -3,6 +3,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
+import { convertSchema } from './helpers'
 
 describe('input shapes', () => {
   // `true` and `false` are complete schemas in JSON Schema 2020-12, and 3.1
@@ -13,9 +14,9 @@ describe('input shapes', () => {
   })
 
   it('passes non-schema input through', () => {
-    expect(downgradeSchemaV32ToV31('junk' as any)).toBe('junk')
-    expect(downgradeSchemaV32ToV31(null as any)).toBeNull()
-    expect(downgradeSchemaV32ToV31([{ type: 'string' }] as any)).toEqual([{ type: 'string' }])
+    expect(convertSchema('junk')).toBe('junk')
+    expect(convertSchema(null)).toBeNull()
+    expect(convertSchema([{ type: 'string' }])).toEqual([{ type: 'string' }])
   })
 })
 
@@ -27,7 +28,7 @@ describe('copies', () => {
       items: { xml: { nodeType: 'cdata' } },
       properties: { a: { xml: { name: 'a' } } },
     }
-    const result = downgradeSchemaV32ToV31(source as any)
+    const result = convertSchema(source)
     expect(result).toEqual({
       allOf: [{ discriminator: {} }, true],
       discriminator: { mapping: { dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
@@ -89,7 +90,7 @@ describe('object graphs', () => {
 
   it('converts a subschema shared by several positions once', () => {
     const shared = { xml: { nodeType: 'attribute' } }
-    const result = downgradeSchemaV32ToV31({ properties: { a: shared, b: shared } } as any)
+    const result = convertSchema({ properties: { a: shared, b: shared } })
     expect(dig(result, 'properties', 'a')).toEqual({ xml: { attribute: true } })
     expect(dig(result, 'properties', 'b')).toBe(dig(result, 'properties', 'a'))
   })

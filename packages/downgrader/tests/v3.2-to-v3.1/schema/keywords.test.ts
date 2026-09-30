@@ -5,6 +5,7 @@
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
+import { convertSchema } from './helpers'
 
 describe('xml.nodeType', () => {
   // 3.2 replaces the `attribute` and `wrapped` flags with `nodeType`, one of
@@ -29,7 +30,7 @@ describe('xml.nodeType', () => {
     ['keeps an xml object without nodeType', { xml: { name: 'n', prefix: 'p' } }, { xml: { name: 'n', prefix: 'p' } }],
     ['passes a malformed xml value through', { xml: 'junk' }, { xml: 'junk' }],
   ])('%s', (_name, input, expected) => {
-    expect(downgradeSchemaV32ToV31(input as any)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -49,8 +50,8 @@ describe('discriminator.defaultMapping', () => {
   })
 
   it('passes a malformed discriminator or mapping through', () => {
-    expect(downgradeSchemaV32ToV31({ discriminator: 'junk' } as any)).toEqual({ discriminator: 'junk' })
-    expect(downgradeSchemaV32ToV31({ discriminator: { mapping: 'junk', propertyName: 'kind' } } as any)).toEqual({
+    expect(convertSchema({ discriminator: 'junk' })).toEqual({ discriminator: 'junk' })
+    expect(convertSchema({ discriminator: { mapping: 'junk', propertyName: 'kind' } })).toEqual({
       discriminator: { mapping: 'junk', propertyName: 'kind' },
     })
   })

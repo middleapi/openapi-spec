@@ -1,8 +1,4 @@
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 describe('const', () => {
   // `const` arrived in JSON Schema draft 06, after the draft Wright-00 (05)
@@ -25,15 +21,15 @@ describe('const', () => {
     ['keeps a null const that contradicts its type', { const: null, type: 'string' }, { enum: [null], type: 'string' }],
     ['matches nothing when a non-null const contradicts a null-only type', { const: 7, type: ['null'] }, { enum: [7], not: {} }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 
   // A value must satisfy both `const` and `enum`. When the const value is in
   // the enum, the const alone says it all. When it is not, nothing matches
   // in 3.1, and the single enum is looser (see loosening.test.ts).
   it('replaces an existing enum with the const value', () => {
-    expect(convert({ const: 5, enum: [1, 2, 5] })).toEqual({ enum: [5] })
-    expect(convert({ const: 5, enum: [1, 2] })).toEqual({ enum: [5] })
+    expect(convertSchema({ const: 5, enum: [1, 2, 5] })).toEqual({ enum: [5] })
+    expect(convertSchema({ const: 5, enum: [1, 2] })).toEqual({ enum: [5] })
   })
 })
 
@@ -46,7 +42,7 @@ describe('enum', () => {
     ['removes an empty enum', { enum: [], type: 'string' }, { type: 'string' }],
     ['keeps a non-empty enum', { enum: ['a'], type: 'string' }, { enum: ['a'], type: 'string' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -61,6 +57,6 @@ describe('required', () => {
     ['deduplicates required names', { required: ['a', 'b', 'a'], type: 'object' }, { required: ['a', 'b'], type: 'object' }],
     ['passes a malformed required value through', { required: 'junk' }, { required: 'junk' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })

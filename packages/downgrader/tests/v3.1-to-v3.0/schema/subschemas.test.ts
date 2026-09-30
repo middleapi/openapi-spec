@@ -1,8 +1,5 @@
 import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 describe('boolean schemas', () => {
   // `true` and `false` are schemas in JSON Schema 2020-12 that accept
@@ -21,7 +18,7 @@ describe('boolean schemas', () => {
     ['converts a true items schema', { items: true }, { items: {} }],
     ['converts a false items schema', { items: false }, { items: { not: {} } }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -42,13 +39,13 @@ describe('nested schemas', () => {
     ['passes a malformed allOf through', { allOf: 'junk' }, { allOf: 'junk' }],
     ['passes malformed properties through', { properties: 5 }, { properties: 5 }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 
   // `const`, `default`, and `enum` hold instance data: a value there that
   // looks like a schema is copied as is.
   it('does not convert schema-like values outside subschema positions', () => {
     const data = { type: ['string', 'null'] }
-    expect(convert({ 'default': data, 'enum': [data], 'x-data': data })).toEqual({ 'default': data, 'enum': [data], 'x-data': data })
+    expect(convertSchema({ 'default': data, 'enum': [data], 'x-data': data })).toEqual({ 'default': data, 'enum': [data], 'x-data': data })
   })
 })

@@ -9,7 +9,6 @@ it('removes pathItems and keeps the other component maps', () => {
     },
   })
   expect(result.components).toEqual({ schemas: { S: { type: 'string' } } })
-  expect(result.components).not.toHaveProperty('x-pathItems')
 })
 
 it('converts component callbacks and schemas, including boolean schemas', () => {

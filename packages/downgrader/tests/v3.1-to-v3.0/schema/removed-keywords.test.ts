@@ -4,14 +4,10 @@
 // The official 3.0 schema rejects them (`additionalProperties: false`), so
 // JSON Schema 2020-12 keywords without a 3.0 form are removed.
 
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 it('removes every keyword with no 3.0 equivalent', () => {
-  expect(convert({
+  expect(convertSchema({
     $anchor: 'a',
     $comment: 'c',
     $defs: { D: { type: 'string' } },
@@ -57,17 +53,14 @@ it.each([
     { additionalProperties: { type: 'integer' }, patternProperties: { '^x-': {} }, type: 'object' },
     { type: 'object' },
   ],
+  // An array keeps its `type`, so it needs an `items` again once the removed
+  // `prefixItems` took the original one with it.
+  ['gives an array that lost its items an empty one', { items: { type: 'integer' }, prefixItems: [{ type: 'string' }], type: 'array' }, { items: {}, type: 'array' }],
 ])('%s', (_name, input, expected) => {
-  expect(convert(input)).toEqual(expected)
-})
-
-// An array keeps its `type`, so it needs an `items` again once the removed
-// `prefixItems` took the original one with it.
-it('gives an array that lost its items an empty one', () => {
-  expect(convert({ items: { type: 'integer' }, prefixItems: [{ type: 'string' }], type: 'array' })).toEqual({ items: {}, type: 'array' })
+  expect(convertSchema(input)).toEqual(expected)
 })
 
 it('keeps extensions and unknown keywords', () => {
   const input = { 'customKeyword': 'v', 'title': 't', 'x-foo': { a: 1 } }
-  expect(convert(input)).toEqual(input)
+  expect(convertSchema(input)).toEqual(input)
 })

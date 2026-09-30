@@ -1,8 +1,4 @@
-import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
-
-function convert(schema: unknown): unknown {
-  return downgradeSchemaV31ToV30(schema as any)
-}
+import { convertSchema } from './helpers'
 
 describe('examples', () => {
   // 3.1 uses the JSON Schema `examples` list, and deprecates the singular
@@ -16,7 +12,7 @@ describe('examples', () => {
     ['drops an empty list', { examples: [] }, {}],
     ['drops a malformed value', { examples: 'junk' }, {}],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -40,21 +36,16 @@ describe('binary content', () => {
       { anyOf: [{ type: 'string' }, { type: 'integer' }], format: 'binary' },
     ],
     ['keeps an existing format', { contentEncoding: 'base64', format: 'custom' }, { format: 'custom', type: 'string' }],
-  ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
-  })
-
-  // `format: byte` is base64 as in RFC 4648 section 4, so it cannot describe
-  // the URL-safe alphabet of section 5, or any other encoding:
-  // https://spec.openapis.org/oas/v3.0.4.html#data-type-format
-  // Content keywords on a type that is not a string have nothing to map to.
-  it.each([
+    // `format: byte` is base64 as in RFC 4648 section 4, so it cannot describe
+    // the URL-safe alphabet of section 5, or any other encoding:
+    // https://spec.openapis.org/oas/v3.0.4.html#data-type-format
+    // Content keywords on a type that is not a string have nothing to map to.
     ['drops base64url, which format: byte does not cover', { contentEncoding: 'base64url', contentMediaType: 'image/png', type: 'string' }, { type: 'string' }],
     ['drops content keywords on non-string types', { contentMediaType: 'image/png', type: 'object' }, { type: 'object' }],
     ['drops a malformed contentMediaType', { contentMediaType: 42 }, {}],
     ['drops contentSchema', { contentSchema: { type: 'string' } }, {}],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -71,7 +62,7 @@ describe('xml.nodeType', () => {
     ['keeps an xml object without nodeType', { type: 'string', xml: { attribute: true, name: 'n' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
     ['passes a malformed xml value through', { type: 'string', xml: 'junk' }, { type: 'string', xml: 'junk' }],
   ])('%s', (_name, input, expected) => {
-    expect(convert(input)).toEqual(expected)
+    expect(convertSchema(input)).toEqual(expected)
   })
 })
 
@@ -81,10 +72,10 @@ describe('discriminator', () => {
       discriminator: { mapping: { cat: '#/components/schemas/Cat' }, propertyName: 'kind' },
       oneOf: [{ $ref: '#/components/schemas/Cat' }],
     }
-    expect(convert(schema)).toEqual(schema)
+    expect(convertSchema(schema)).toEqual(schema)
   })
 
   it('passes a malformed discriminator through', () => {
-    expect(convert({ discriminator: 'junk' })).toEqual({ discriminator: 'junk' })
+    expect(convertSchema({ discriminator: 'junk' })).toEqual({ discriminator: 'junk' })
   })
 })

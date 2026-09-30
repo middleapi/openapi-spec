@@ -7,12 +7,7 @@
 // Object that resolves to such a Link.
 
 import { dig } from '../../helpers'
-import { convertSpec } from './helpers'
-
-const item = {
-  get: { operationId: 'getItem', responses: { 200: { description: 'item' } } },
-  parameters: [{ in: 'query', name: 'q', schema: { const: 'x' } }],
-}
+import { convertSpec, item, removedPointer } from './helpers'
 
 describe('links', () => {
   it('removes links whose operationRef points into the removed parts, together with references to them', () => {
@@ -80,7 +75,7 @@ describe('links', () => {
       refUnknown: { $ref: '#/components/links/Unknown' },
     })
     expect(dig(result, 'paths', '/b', 'post', 'responses', '200', 'links')).toEqual({})
-    expect(JSON.stringify(result)).not.toMatch(/#\/(?:webhooks|components\/pathItems)/)
+    expect(JSON.stringify(result)).not.toMatch(removedPointer)
   })
 
   // `/a` inlines the webhook but defines its own `post`, which wins, so the

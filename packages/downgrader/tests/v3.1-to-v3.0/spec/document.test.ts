@@ -1,6 +1,9 @@
 import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
-import { convertSpec, empty, info } from './helpers'
+import { convertSpec, info } from './helpers'
+
+/** The converted form of a document holding nothing but `info`. */
+const empty = { info, openapi: '3.0.4', paths: {} }
 
 describe('openapi and paths', () => {
   it('stamps 3.0.4, the latest 3.0 patch release', () => {
@@ -38,13 +41,12 @@ describe('3.1-only root fields', () => {
   // operations, not as standalone webhooks, and an `x-` extension would
   // only hide them from tools, so webhooks are removed.
   // References into them are inlined (see removed-parts.test.ts).
-  it('removes jsonSchemaDialect and webhooks without leaving extensions behind', () => {
+  it('removes jsonSchemaDialect and webhooks without leaving an extension behind', () => {
     const result = convertSpec({
       jsonSchemaDialect: 'https://spec.openapis.org/oas/3.1/dialect/base',
       webhooks: { newPet: { post: { summary: 's' } } },
     })
     expect(result).toEqual(empty)
-    expect(result).not.toHaveProperty('x-webhooks')
   })
 })
 

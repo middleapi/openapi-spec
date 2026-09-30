@@ -140,21 +140,17 @@ describe('schemas and examples', () => {
   // `content` can carry its own examples instead.
   it('removes parameter and header examples beside content', () => {
     const content = { 'a/b': { schema: { type: 'object' } } }
-    const operation = dig(convertSpec({
-      paths: {
-        '/a': {
-          get: {
-            parameters: [
-              { content, example: { a: 1 }, in: 'query', name: 'moved' },
-              { content: { 'a/b': { example: 'own' } }, examples: { e: { dataValue: 1 } }, in: 'query', name: 'kept' },
-              { content: { 'a/b': {}, 'c/d': {} }, example: 1, in: 'query', name: 'many' },
-              { example: 1, in: 'query', name: 'plain', schema: { type: 'integer' } },
-            ],
-            responses: { 200: { description: 'ok', headers: { X: { content, examples: { e: { dataValue: 2 } } } } } },
-          },
-        },
+    const operation = dig(convertPathItem({
+      get: {
+        parameters: [
+          { content, example: { a: 1 }, in: 'query', name: 'moved' },
+          { content: { 'a/b': { example: 'own' } }, examples: { e: { dataValue: 1 } }, in: 'query', name: 'kept' },
+          { content: { 'a/b': {}, 'c/d': {} }, example: 1, in: 'query', name: 'many' },
+          { example: 1, in: 'query', name: 'plain', schema: { type: 'integer' } },
+        ],
+        responses: { 200: { description: 'ok', headers: { X: { content, examples: { e: { dataValue: 2 } } } } } },
       },
-    }), 'paths', '/a', 'get')
+    }), 'get')
     expect(dig(operation, 'parameters')).toEqual([
       { content, in: 'query', name: 'moved' },
       { content: { 'a/b': { example: 'own' } }, in: 'query', name: 'kept' },
