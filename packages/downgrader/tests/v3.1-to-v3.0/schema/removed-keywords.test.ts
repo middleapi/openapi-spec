@@ -18,6 +18,7 @@ it('removes every keyword with no 3.0 equivalent', () => {
     $vocabulary: { 'https://example.com/v': true },
     contains: { type: 'string' },
     contentSchema: { type: 'string' },
+    definitions: { D: { type: 'string' } },
     dependentRequired: { a: ['b'] },
     dependentSchemas: { a: { type: 'object' } },
     else: { title: 'e' },

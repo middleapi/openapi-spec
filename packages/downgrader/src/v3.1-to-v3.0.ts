@@ -57,6 +57,7 @@ const ANNOTATION_KEYWORDS = [
   'contentEncoding',
   'contentMediaType',
   'contentSchema',
+  'definitions',
   'examples',
 ]
 

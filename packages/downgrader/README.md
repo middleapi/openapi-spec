@@ -131,13 +131,13 @@ Converted:
 | `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
 | XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
 
-Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
+Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs` and its older spelling `definitions`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
 
 ## References
 
 Both converters treat local `$ref`s the same way:
 
-- A `$ref` whose target is removed or moved is replaced by its converted target, following the reference chain until it leaves the removed part. Beside other schema keywords, the target joins `allOf`. When a Path Item `$ref` is replaced, its own fields win over the target's. This covers `webhooks`, `components.pathItems`, `components.mediaTypes`, `$defs`, `itemSchema`, `query` and `additionalOperations` operations, and parameter lists that lost entries.
+- A `$ref` whose target is removed or moved is replaced by its converted target, following the reference chain until it leaves the removed part. Beside other schema keywords, the target joins `allOf`. When a Path Item `$ref` is replaced, its own fields win over the target's. This covers `webhooks`, `components.pathItems`, `components.mediaTypes`, `$defs` and `definitions`, `itemSchema`, `query` and `additionalOperations` operations, and parameter lists that lost entries.
 - A target inlined in several places is converted once and shared. Where it refers back to itself, the inner reference becomes `{}` in a schema, keeps only its own fields on a Path Item, and is removed elsewhere. In 3.2 → 3.1, only the first copy of a repeated schema keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique.
 - A `$ref` to an object the target version cannot express, such as a `querystring` parameter or a `mutualTLS` scheme, is removed with it. So are Links and discriminator `mapping` entries that point into a removed part.
 - Inlining ignores the Reference Object's own fields, such as `summary`, `description`, and extensions.

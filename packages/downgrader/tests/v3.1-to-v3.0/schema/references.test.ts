@@ -42,6 +42,37 @@ describe('references into removed keywords', () => {
     })
   })
 
+  // `definitions` is the draft-07 spelling of `$defs`, which the 2020-12
+  // meta-schema still accepts. Generators such as Pydantic v1 and
+  // ts-json-schema-generator emit it. Kept, it would carry raw 3.1 schemas
+  // (type arrays, numeric exclusiveMinimum) into the 3.0 output, where every
+  // `$ref` into it would still point. So it is handled exactly like `$defs`.
+  it('inlines $refs into definitions, the older spelling of $defs', () => {
+    const schema = (key: string): unknown => ({
+      [key]: {
+        Item: { properties: { note: { type: ['string', 'null'] }, qty: { exclusiveMinimum: 0, type: 'integer' } } },
+        Pair: { items: false, prefixItems: [{ type: 'string' }, { type: 'integer' }], type: 'array' },
+      },
+      properties: {
+        items: { items: { $ref: `#/${key}/Item` }, type: 'array' },
+        pair: { $ref: `#/${key}/Pair` },
+      },
+      type: 'object',
+    })
+    const result = convertSchema(schema('definitions'))
+    expect(result).toEqual({
+      properties: {
+        items: {
+          items: { properties: { note: { nullable: true, type: 'string' }, qty: { exclusiveMinimum: true, minimum: 0, type: 'integer' } } },
+          type: 'array',
+        },
+        pair: { items: {}, type: 'array' },
+      },
+      type: 'object',
+    })
+    expect(JSON.stringify(result)).toBe(JSON.stringify(convertSchema(schema('$defs'))))
+  })
+
   // Inlining a recursive definition would never end. The recursion is cut
   // at its first repeat with `{}`, the schema that accepts anything, so the
   // result can only be looser than the original, never stricter.
