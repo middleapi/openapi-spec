@@ -40,11 +40,11 @@ describe('official examples', () => {
     expect(v31).toMatchSnapshot()
   })
 
-  it('removes the discriminator defaultMapping of the mega document', () => {
+  it('removes the discriminator with a defaultMapping from the mega document', () => {
     const v31 = downgradeSpecV32ToV31(mega)
-    const discriminator = ['components', 'pathItems', 'myPathItem', 'post', 'requestBody', 'content', 'application/json', 'schema', 'discriminator']
-    expect(v31).not.toHaveProperty([...discriminator, 'defaultMapping'])
-    expect(v31).toHaveProperty([...discriminator, 'propertyName'], 'type')
+    const schema = ['components', 'pathItems', 'myPathItem', 'post', 'requestBody', 'content', 'application/json', 'schema']
+    expect(v31).not.toHaveProperty([...schema, 'discriminator'])
+    expect(v31).toHaveProperty([...schema, 'anyOf'], [{ $ref: '#/components/schemas/Foo' }])
     expect(v31).toMatchSnapshot()
   })
 })

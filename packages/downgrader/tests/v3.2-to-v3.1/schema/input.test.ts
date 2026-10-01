@@ -30,7 +30,7 @@ describe('copies', () => {
     }
     const result = convertSchema(source)
     expect(result).toEqual({
-      allOf: [{ discriminator: {} }, true],
+      allOf: [{}, true],
       discriminator: { mapping: { dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
       items: { xml: {} },
       properties: { a: { xml: { name: 'a' } } },
@@ -83,7 +83,7 @@ describe('object graphs', () => {
     const node: Record<string, unknown> = { discriminator: { defaultMapping: 'A', propertyName: 'kind' }, type: 'object' }
     node.properties = { self: node, children: { items: node, type: 'array' } }
     const result = downgradeSchemaV32ToV31(node)
-    expect(dig(result, 'discriminator')).toEqual({ propertyName: 'kind' })
+    expect(result).not.toHaveProperty('discriminator')
     expect(dig(result, 'properties', 'self')).toBe(result)
     expect(dig(result, 'properties', 'children', 'items')).toBe(result)
   })

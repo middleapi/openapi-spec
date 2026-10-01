@@ -32,7 +32,6 @@ describe('component maps', () => {
       discriminator: { defaultMapping: 'Dog', propertyName: 'kind' },
       xml: { nodeType: 'attribute' },
     })).toEqual({
-      discriminator: { propertyName: 'kind' },
       xml: { attribute: true },
     })
   })

@@ -36,17 +36,37 @@ describe('xml.nodeType', () => {
 
 describe('discriminator.defaultMapping', () => {
   // 3.2 lets a discriminator name the schema to use when the property is
-  // absent or its value is unmapped:
+  // absent or its value is unmapped, and the property may then be optional:
   // https://spec.openapis.org/oas/v3.2.0.html#discriminator-default-mapping
-  // 3.1 has no fallback, so the field is removed and `mapping` is kept.
-  it('removes defaultMapping and keeps mapping and propertyName', () => {
+  // A 3.1 discriminator has no fallback. It selects no schema for those
+  // payloads, and its property must be required:
+  // https://spec.openapis.org/oas/v3.1.2.html#discriminator-object
+  // Removing only `defaultMapping` would turn its routing into failures, so the
+  // whole discriminator is removed. The `oneOf` or `anyOf` beside it accepts
+  // the same payloads without it.
+  it('removes a discriminator that has a defaultMapping', () => {
+    const oneOf = ['Cat', 'Dog', 'Lizard', 'OtherPet'].map(name => ({ $ref: `#/components/schemas/${name}` }))
     expect(downgradeSchemaV32ToV31({
-      discriminator: { defaultMapping: 'Dog', mapping: { dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
-      oneOf: [{ $ref: '#/components/schemas/Dog' }],
+      discriminator: { defaultMapping: 'OtherPet', propertyName: 'petType' },
+      oneOf,
+    })).toEqual({ oneOf })
+  })
+
+  it('removes the mapping and extensions along with it', () => {
+    expect(convertSchema({
+      anyOf: [{ $ref: '#/components/schemas/Dog' }],
+      discriminator: { 'defaultMapping': 'Dog', 'mapping': { dog: '#/components/schemas/Dog' }, 'propertyName': 'kind', 'x-note': 'n' },
     })).toEqual({
-      discriminator: { mapping: { dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
-      oneOf: [{ $ref: '#/components/schemas/Dog' }],
+      anyOf: [{ $ref: '#/components/schemas/Dog' }],
     })
+  })
+
+  it('keeps a discriminator without defaultMapping', () => {
+    const schema = {
+      discriminator: { 'mapping': { dog: '#/components/schemas/Dog' }, 'propertyName': 'kind', 'x-note': 'n' },
+      oneOf: [{ $ref: '#/components/schemas/Dog' }],
+    }
+    expect(convertSchema(schema)).toEqual(schema)
   })
 
   it('passes a malformed discriminator or mapping through', () => {

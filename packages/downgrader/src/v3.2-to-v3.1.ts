@@ -53,7 +53,6 @@ const TAG_FIELDS = defineFields({
 })
 
 const DISCRIMINATOR_FIELDS = defineFields({
-  defaultMapping: DROP,
   mapping: map(convertMappingRef),
 })
 
@@ -66,7 +65,7 @@ const SCHEMA_FIELDS = defineFields({
   contains: convertSchema,
   contentSchema: convertSchema,
   dependentSchemas: map(convertSchema),
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  discriminator: convertDiscriminator,
   else: convertSchema,
   if: convertSchema,
   items: convertSchema,
@@ -185,6 +184,10 @@ function convertServer(value: unknown, ctx: Context): unknown {
 
 function convertTag(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, TAG_FIELDS)
+}
+
+function convertDiscriminator(value: unknown, ctx: Context): unknown {
+  return isRecord(value) && 'defaultMapping' in value ? DROP : convertObject(value, ctx, DISCRIMINATOR_FIELDS)
 }
 
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {

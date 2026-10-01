@@ -79,7 +79,7 @@ exports[`official examples > removes the QUERY operation of the query example, l
 }
 `;
 
-exports[`official examples > removes the discriminator defaultMapping of the mega document 1`] = `
+exports[`official examples > removes the discriminator with a defaultMapping from the mega document 1`] = `
 {
   "components": {
     "pathItems": {
@@ -94,13 +94,6 @@ exports[`official examples > removes the discriminator defaultMapping of the meg
                       "$ref": "#/components/schemas/Foo",
                     },
                   ],
-                  "discriminator": {
-                    "mapping": {
-                      "foo": "Foo",
-                    },
-                    "propertyName": "type",
-                    "x-extension": true,
-                  },
                   "externalDocs": {
                     "description": "More docs!",
                     "url": "https://example.com/elsewhere.html",

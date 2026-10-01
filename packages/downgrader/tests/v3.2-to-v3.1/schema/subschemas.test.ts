@@ -1,8 +1,8 @@
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
 import { convertSchema } from './helpers'
 
-const inner = { discriminator: { defaultMapping: 'A', propertyName: 'kind' } }
-const converted = { discriminator: { propertyName: 'kind' } }
+const inner = { discriminator: { defaultMapping: 'A', propertyName: 'kind' }, type: 'object' }
+const converted = { type: 'object' }
 
 // Every JSON Schema 2020-12 keyword that takes a schema, a list of schemas, or
 // a map of schemas: https://json-schema.org/draft/2020-12/json-schema-core#section-10

@@ -59,7 +59,7 @@ All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi
 
 ## 3.2 → 3.1
 
-Schema Objects change only in `xml.nodeType`, `discriminator.defaultMapping`, and references into removed or moved parts.
+Schema Objects change only in `xml.nodeType`, discriminators with a `defaultMapping`, and references into removed or moved parts.
 
 Converted:
 
@@ -83,7 +83,8 @@ Removed, with no 3.1 equivalent:
 - parameter and header `example` / `examples` beside `content`
 - media type `description`, `prefixEncoding`, `itemEncoding`, and Encoding Object `encoding`
 - `itemSchema`, response `summary`, and example `dataValue` / `serializedValue`, after the conversions above
-- other XML `nodeType` values and `discriminator.defaultMapping`
+- other XML `nodeType` values
+- a `discriminator` with a `defaultMapping`, as a whole: without the default, a 3.1 discriminator selects no schema when the property is missing or unmapped. The schema's `oneOf` or `anyOf` accepts the same payloads without it.
 - OAuth `deviceAuthorization` flows, and security scheme `oauth2MetadataUrl` and `deprecated`
 
 ## 3.1 → 3.0

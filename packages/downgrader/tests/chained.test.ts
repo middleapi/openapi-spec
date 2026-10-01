@@ -39,3 +39,38 @@ describe('official examples', () => {
     expect(v30).toMatchSnapshot()
   })
 })
+
+// Modelled on the 3.2 spec's `defaultMapping` example: a `petType` of
+// `Hamster`, or none at all, selects `OtherPet`, whose `petType` is optional.
+// A 3.1 or 3.0 discriminator without the default would select no schema for
+// either payload, so both steps must remove it rather than keep the rest.
+// https://spec.openapis.org/oas/v3.2.0.html#discriminator-default-mapping
+describe('discriminator defaultMapping', () => {
+  const pet = (petType: string): OpenAPIV3_2.SchemaObject => ({
+    properties: { name: { type: 'string' }, petType: { const: petType } },
+    required: ['petType'],
+    type: 'object',
+  })
+  const oneOf = ['Cat', 'Dog', 'Lizard', 'OtherPet'].map(name => ({ $ref: `#/components/schemas/${name}` }))
+  const doc: OpenAPIV3_2.OpenAPIObject = {
+    components: {
+      schemas: {
+        Cat: pet('Cat'),
+        Dog: pet('Dog'),
+        Lizard: pet('Lizard'),
+        MyResponseType: { discriminator: { defaultMapping: 'OtherPet', propertyName: 'petType' }, oneOf },
+        OtherPet: { properties: { name: { type: 'string' }, petType: { not: { enum: ['Cat', 'Dog', 'Lizard'] } } }, type: 'object' },
+      },
+    },
+    info: { title: 'Pets', version: '1.0.0' },
+    openapi: '3.2.0',
+    paths: {},
+  }
+
+  it('removes the discriminator in both steps and keeps the oneOf', async () => {
+    const v31 = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+    expect(v31.components?.schemas?.MyResponseType).toEqual({ oneOf })
+    const v30 = await expectValidDowngrade(doc, downgradeTwice, '3.2', '3.0')
+    expect(v30.components?.schemas?.MyResponseType).toEqual({ oneOf })
+  })
+})

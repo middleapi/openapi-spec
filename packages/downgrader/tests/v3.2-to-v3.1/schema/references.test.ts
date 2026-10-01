@@ -21,18 +21,19 @@ it('leaves every $ref as written', () => {
 })
 
 // References into the parts the conversion changes: the `xml` object
-// survives, so a `$ref` to it stays valid. `defaultMapping` is removed, but
-// its value is a string rather than a schema, so there is nothing to inline
-// and the reference is left as written, like any other dangling one.
+// survives, so a `$ref` to it stays valid. A discriminator with a
+// `defaultMapping` is removed, but that value is a string rather than a
+// schema, so there is nothing to inline and the reference is left as
+// written, like any other dangling one.
 it('leaves references into converted keywords as written', () => {
   const schema = {
     discriminator: { defaultMapping: 'Dog', propertyName: 'kind' },
     properties: { a: { $ref: '#/xml' }, b: { $ref: '#/discriminator/defaultMapping' } },
     xml: { nodeType: 'attribute' },
   }
+  const { discriminator: _, ...rest } = schema
   expect(convertSchema(schema)).toEqual({
-    ...schema,
-    discriminator: { propertyName: 'kind' },
+    ...rest,
     xml: { attribute: true },
   })
 })
