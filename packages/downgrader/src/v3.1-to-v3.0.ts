@@ -6,13 +6,13 @@ import {
   allOfItems,
   child,
   clone,
-  convertMappingRef,
   convertObject,
   convertXml,
   defineFields,
   downgrade,
   DROP,
   getRef,
+  hasDanglingMapping,
   hasDanglingOperationRef,
   hasType,
   HTTP_METHODS,
@@ -79,10 +79,6 @@ const convertRequestBodyRef = refOr(convertRequestBody, reference)
 const convertResponseRef = refOr(convertResponse, reference)
 const convertSecuritySchemeRef = refOr(convertSecurityScheme, reference)
 
-const DISCRIMINATOR_FIELDS = defineFields({
-  mapping: map(convertMappingRef),
-})
-
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
@@ -95,7 +91,7 @@ const SCHEMA_FIELDS = defineFields({
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
   const: DROP,
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  discriminator: convertDiscriminator,
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
@@ -440,6 +436,10 @@ function convertResponse(value: unknown, ctx: Context): unknown {
 
 function convertLink(value: unknown, ctx: Context): unknown {
   return hasDanglingOperationRef(value, ctx) ? DROP : clone(value)
+}
+
+function convertDiscriminator(value: unknown, ctx: Context): unknown {
+  return hasDanglingMapping(value, ctx) ? DROP : clone(value, ctx)
 }
 
 function finishOperation(out: Record<string, unknown>): unknown {

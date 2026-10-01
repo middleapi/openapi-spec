@@ -3,11 +3,17 @@
 // https://spec.openapis.org/oas/v3.0.4.html#discriminator-mapping
 // One that points into `webhooks` or `components.pathItems` cannot be kept,
 // since its target is removed, and cannot be inlined either, since both
-// fields must hold a pointer. So it is removed, along with any Reference
-// Object that resolves to such a Link.
+// fields must hold a pointer. So such a Link is removed, along with any
+// Reference Object that resolves to it, and so is a discriminator with such
+// a `mapping` entry.
+
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+
+import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
-import { convertSpec, item, removedPointer } from './helpers'
+import { expectValidDowngrade } from '../../validate'
+import { convertSpec, info, item, removedPointer, webhookSchemaPointer } from './helpers'
 
 describe('links', () => {
   it('removes links whose operationRef points into the removed parts, together with references to them', () => {
@@ -108,29 +114,97 @@ describe('links', () => {
 describe('discriminator mappings', () => {
   // A mapping value is either a schema name or a reference. Names and
   // references that stay valid are kept.
-  it('removes mapping entries that point into the removed parts', () => {
+  it('keeps mapping entries that stay valid', () => {
+    const schemas = {
+      Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
+      Pet: {
+        discriminator: {
+          mapping: { cat: '#/components/schemas/Cat', fish: 'Fish', missing: '#/components/schemas/Missing' },
+          propertyName: 'kind',
+        },
+      },
+    }
+    expect(convertSpec({ components: { schemas } }).components).toEqual({ schemas })
+  })
+
+  // Without an entry, its value would name a schema under
+  // `components.schemas` instead, which may not exist or be an unrelated one.
+  // So a discriminator with an entry into a removed part is removed whole.
+  // It "MUST NOT change the validation outcome", so this loses detail but not
+  // meaning: https://spec.openapis.org/oas/v3.0.4.html#discriminator-object
+  it('removes a discriminator whose mapping points into the removed parts', () => {
     expect(convertSpec({
       components: {
         schemas: {
-          Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
           Pet: {
             discriminator: {
               mapping: {
                 cat: '#/components/schemas/Cat',
-                dog: '#/webhooks/newPet/post/requestBody/content/application~1json/schema',
+                dog: webhookSchemaPointer,
                 fish: 'Fish',
                 hamster: '#/components/pathItems/Item',
               },
               propertyName: 'kind',
             },
+            type: 'object',
           },
         },
       },
-    }).components).toEqual({
-      schemas: {
-        Junk: { discriminator: { mapping: 'junk', propertyName: 'kind' } },
-        Pet: { discriminator: { mapping: { cat: '#/components/schemas/Cat', fish: 'Fish' }, propertyName: 'kind' } },
+    }).components).toEqual({ schemas: { Pet: { type: 'object' } } })
+  })
+
+  // `cat` points at a branch that stays inline, so 3.0 tools that honor the
+  // discriminator would send `{ pet_type: 'cat' }` to the unrelated `cat`
+  // component, which rejects it. Removing the discriminator leaves plain
+  // `oneOf` matching, which picks the right branch.
+  it('removes a discriminator rather than misroute a value to a component of the same name', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      components: {
+        schemas: {
+          cat: { type: 'string' },
+          Dog: { properties: { pet_type: { const: 'dog' } }, required: ['pet_type'], type: 'object' },
+          Pet: {
+            $defs: { Cat: { properties: { pet_type: { const: 'cat' } }, required: ['pet_type'], type: 'object' } },
+            discriminator: {
+              mapping: { cat: '#/components/schemas/Pet/$defs/Cat', dog: '#/components/schemas/Dog' },
+              propertyName: 'pet_type',
+            },
+            oneOf: [{ $ref: '#/components/schemas/Pet/$defs/Cat' }, { $ref: '#/components/schemas/Dog' }],
+          },
+        },
       },
+      info,
+      openapi: '3.1.0',
+      paths: {},
+    }
+    const result = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(dig(result, 'components', 'schemas', 'Pet')).toEqual({
+      oneOf: [
+        { properties: { pet_type: { enum: ['cat'] } }, required: ['pet_type'], type: 'object' },
+        { $ref: '#/components/schemas/Dog' },
+      ],
+    })
+  })
+
+  // A `oneOf` with a loosened branch becomes `anyOf`, so an entry pointing
+  // at one of its branches is a reference into a moved part.
+  it('removes a discriminator whose mapping points into a oneOf that became anyOf', () => {
+    const cat = { properties: { kind: { const: 'cat' } }, type: 'object' }
+    expect(dig(convertSpec({
+      components: {
+        schemas: {
+          Dog: { type: 'object' },
+          Pet: {
+            discriminator: {
+              mapping: { cat: '#/components/schemas/Pet/oneOf/0', dog: '#/components/schemas/Dog' },
+              propertyName: 'kind',
+            },
+            oneOf: [cat, { patternProperties: { '^x': {} }, type: 'object' }],
+          },
+        },
+      },
+    }), 'components', 'schemas', 'Pet')).toEqual({
+      anyOf: [{ properties: { kind: { enum: ['cat'] } }, type: 'object' }, { type: 'object' }],
     })
   })
 })

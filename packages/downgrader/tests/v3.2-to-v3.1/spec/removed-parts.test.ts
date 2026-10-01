@@ -6,7 +6,12 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
+
+import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
+
 import { dig } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
 const petRef = { $ref: '#/components/mediaTypes/Pet/schema' }
@@ -320,22 +325,62 @@ describe('links and discriminator mappings', () => {
   // references too: https://spec.openapis.org/oas/v3.1.2.html#link-operation-ref
   // https://spec.openapis.org/oas/v3.1.2.html#discriminator-mapping
   // One that points into a removed part cannot be inlined (a Link needs an
-  // operation to point at), so it is removed.
-  it('removes links and discriminator mappings that point into removed parts', () => {
+  // operation to point at, and a mapping value must stay a name or a
+  // reference), so the Link is removed. Without the mapping entry, its value
+  // would name a schema under `components.schemas` instead, which may not
+  // exist or be an unrelated one, so the whole discriminator is removed. It
+  // "MUST NOT change the validation outcome", so this loses detail but not
+  // meaning: https://spec.openapis.org/oas/v3.1.2.html#discriminator-object
+  it('removes links, and discriminators with a mapping entry, that point into removed parts', () => {
     const result = convertSpec({
       components: {
         links: { gone: { operationRef: '#/paths/~1a/query' }, kept: { operationRef: '#/paths/~1a/get' } },
-        mediaTypes: { M: { schema: {} } },
+        mediaTypes: { M: { schema: { type: 'object' } } },
         schemas: {
+          Cat: { type: 'object' },
           Pet: {
             discriminator: { mapping: { cat: '#/components/schemas/Cat', item: '#/components/mediaTypes/M/schema' }, propertyName: 'kind' },
+            oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/mediaTypes/M/schema' }],
           },
         },
       },
       paths: { '/a': { get: {}, query: {} } },
     })
     expect(dig(result, 'components', 'links')).toEqual({ kept: { operationRef: '#/paths/~1a/get' } })
-    expect(dig(result, 'components', 'schemas', 'Pet', 'discriminator')).toEqual({ mapping: { cat: '#/components/schemas/Cat' }, propertyName: 'kind' })
+    expect(dig(result, 'components', 'schemas', 'Pet')).toEqual({ oneOf: [{ $ref: '#/components/schemas/Cat' }, { type: 'object' }] })
+  })
+
+  // `cat` points at a schema that stays inline, so tools that honor the
+  // discriminator would send `{ kind: 'cat' }` to the unrelated `cat`
+  // component, which rejects it. Removing the discriminator leaves plain
+  // `oneOf` matching, which picks the right branch.
+  it('removes a discriminator rather than misroute a value to a component of the same name', async () => {
+    const catPointer = '#/paths/~1pets/query/requestBody/content/application~1json/schema'
+    const cat: OpenAPIV3_2.SchemaObject = { properties: { kind: { const: 'cat' } }, required: ['kind'], type: 'object' }
+    const doc: OpenAPIV3_2.OpenAPIObject = {
+      components: {
+        schemas: {
+          cat: { type: 'string' },
+          Dog: { properties: { kind: { const: 'dog' } }, required: ['kind'], type: 'object' },
+          Pet: {
+            discriminator: { mapping: { cat: catPointer, dog: '#/components/schemas/Dog' }, propertyName: 'kind' },
+            oneOf: [{ $ref: catPointer }, { $ref: '#/components/schemas/Dog' }],
+          },
+        },
+      },
+      info: { title: 't', version: '1' },
+      openapi: '3.2.0',
+      paths: {
+        '/pets': {
+          query: {
+            requestBody: { content: { 'application/json': { schema: cat } } },
+            responses: { 200: { description: 'ok' } },
+          },
+        },
+      },
+    }
+    const result = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+    expect(dig(result, 'components', 'schemas', 'Pet')).toEqual({ oneOf: [cat, { $ref: '#/components/schemas/Dog' }] })
   })
 })
 

@@ -78,6 +78,30 @@ describe('references into removed keywords', () => {
     })
   })
 
+  // A discriminator `mapping` value must stay a name or a reference, so an
+  // entry into `$defs` cannot be inlined. Without the entry, its value would
+  // name a schema under `components.schemas` instead, which here does not
+  // exist, and elsewhere may be an unrelated one:
+  // https://spec.openapis.org/oas/v3.0.4.html#discriminator-object
+  // A discriminator "MUST NOT change the validation outcome", so removing
+  // it whole loses detail but not meaning. This is the shape Pydantic emits
+  // for a discriminated union.
+  it('removes a discriminator whose mapping points into $defs', () => {
+    expect(convertSchema({
+      $defs: {
+        Cat: { properties: { pet_type: { const: 'cat' } }, required: ['pet_type'], type: 'object' },
+        Dog: { properties: { pet_type: { const: 'dog' } }, required: ['pet_type'], type: 'object' },
+      },
+      discriminator: { mapping: { cat: '#/$defs/Cat', dog: '#/$defs/Dog' }, propertyName: 'pet_type' },
+      oneOf: [{ $ref: '#/$defs/Cat' }, { $ref: '#/$defs/Dog' }],
+    })).toEqual({
+      oneOf: [
+        { properties: { pet_type: { enum: ['cat'] } }, required: ['pet_type'], type: 'object' },
+        { properties: { pet_type: { enum: ['dog'] } }, required: ['pet_type'], type: 'object' },
+      ],
+    })
+  })
+
   // A standalone schema has no document around it, so pointers into
   // `components` or `webhooks` cannot be checked and stay as written.
   it('leaves references and mapping entries that point outside the schema as written', () => {

@@ -286,8 +286,10 @@ function isGone(ref: string, ctx: Context): boolean {
   return ctx.isRemovedPart(ref) || ctx.dangles(ref)
 }
 
-export function convertMappingRef(value: unknown, ctx: Context): unknown {
-  return typeof value === 'string' && isGone(value, ctx) ? DROP : clone(value)
+export function hasDanglingMapping(discriminator: unknown, ctx: Context): boolean {
+  return isRecord(discriminator)
+    && isRecord(discriminator.mapping)
+    && Object.values(discriminator.mapping).some(value => typeof value === 'string' && isGone(value, ctx))
 }
 
 export function hasDanglingOperationRef(link: unknown, ctx: Context): boolean {
