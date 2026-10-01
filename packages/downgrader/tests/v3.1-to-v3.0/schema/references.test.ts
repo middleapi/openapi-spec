@@ -88,3 +88,114 @@ describe('references into removed keywords', () => {
     expect(convertSchema(schema)).toEqual(schema)
   })
 })
+
+describe('references inside an $id resource', () => {
+  // A subschema with its own `$id` is an embedded resource, and a fragment
+  // `$ref` inside it resolves against that resource, not the schema root:
+  // https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.1
+  // 3.0 has no `$id`, so each JSON Pointer is rewritten to start from the
+  // schema root and then inlined or kept like any other reference.
+  it('cuts recursion through # at the resource instead of the root', () => {
+    expect(convertSchema({
+      $defs: { tree: { $id: 'https://example.com/tree', properties: { child: { $ref: '#' } }, type: 'object' } },
+      properties: { t: { $ref: '#/$defs/tree' } },
+      required: ['t'],
+      type: 'object',
+    })).toEqual({
+      properties: { t: { properties: { child: {} }, type: 'object' } },
+      required: ['t'],
+      type: 'object',
+    })
+  })
+
+  it('resolves pointers within the resource even where the root has the same path', () => {
+    expect(convertSchema({
+      $defs: {
+        name: { type: 'integer' },
+        res: {
+          $defs: { alias: { $ref: '#/$defs/name' }, name: { type: 'string' } },
+          $id: 'https://example.com/res',
+          properties: { n: { $ref: '#/$defs/name' } },
+        },
+      },
+      properties: { a: { $ref: '#/$defs/res' }, alias: { $ref: '#/$defs/res/$defs/alias' } },
+    })).toEqual({
+      properties: { a: { properties: { n: { type: 'string' } } }, alias: { type: 'string' } },
+    })
+  })
+
+  // Read from the root, `res/$defs/a` would point at the root's `b`, which
+  // points back at it, a loop that would be left as a dangling `$ref`.
+  it('follows reference chains from each hop\'s own resource', () => {
+    expect(convertSchema({
+      $defs: {
+        b: { $ref: '#/$defs/res/$defs/a' },
+        res: { $defs: { a: { $ref: '#/$defs/b' }, b: { type: 'string' } }, $id: 'https://example.com/res' },
+      },
+      properties: { a: { $ref: '#/$defs/res/$defs/a' } },
+    })).toEqual({ properties: { a: { type: 'string' } } })
+  })
+
+  it('rewrites a reference into a resource that stays in place as a pointer from the root', () => {
+    expect(convertSchema({
+      properties: {
+        outer: {
+          $id: 'https://example.com/outer',
+          properties: {
+            inner: { $id: 'inner', properties: { self: { $ref: '#' } } },
+            sibling: { $ref: '#/properties/inner', description: 'd' },
+            up: { $ref: '#' },
+          },
+        },
+      },
+    })).toEqual({
+      properties: {
+        outer: {
+          properties: {
+            inner: { properties: { self: { $ref: '#/properties/outer/properties/inner' } } },
+            sibling: { allOf: [{ $ref: '#/properties/outer/properties/inner' }], description: 'd' },
+            up: { $ref: '#/properties/outer' },
+          },
+        },
+      },
+    })
+  })
+
+  it('applies the resource to its own $ref', () => {
+    expect(convertSchema({
+      properties: { r: { $defs: { s: { type: 'string' } }, $id: 'https://example.com/r', $ref: '#/$defs/s', minLength: 1 } },
+    })).toEqual({ properties: { r: { allOf: [{ type: 'string' }], minLength: 1 } } })
+  })
+
+  // https://www.rfc-editor.org/rfc/rfc6901#section-3 and section-6
+  it('escapes the resource location in the rewritten pointer', () => {
+    expect(convertSchema({
+      properties: { 'a/b~c%': { $id: 'https://example.com/r', properties: { self: { $ref: '#' }, x: { $ref: '#/properties/self' } } } },
+    })).toEqual({
+      properties: {
+        'a/b~c%': { properties: { self: { $ref: '#/properties/a~1b~0c%25' }, x: { $ref: '#/properties/a~1b~0c%25/properties/self' } } },
+      },
+    })
+  })
+
+  it('leaves anchors, URIs, and references outside an embedded resource as written', () => {
+    const schema = {
+      $id: 'https://example.com/root',
+      properties: {
+        $id: { $ref: '#' },
+        res: {
+          $id: 'https://example.com/res',
+          properties: { anchor: { $ref: '#node' }, external: { $ref: 'https://example.com/other' }, relative: { $ref: 'other#/$defs/a' } },
+        },
+        self: { $ref: '#' },
+      },
+    }
+    expect(convertSchema(schema)).toEqual({
+      properties: {
+        $id: { $ref: '#' },
+        res: { properties: { anchor: { $ref: '#node' }, external: { $ref: 'https://example.com/other' }, relative: { $ref: 'other#/$defs/a' } } },
+        self: { $ref: '#' },
+      },
+    })
+  })
+})

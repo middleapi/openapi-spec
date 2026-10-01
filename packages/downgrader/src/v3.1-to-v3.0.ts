@@ -278,7 +278,7 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
 
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
   if (typeof schema.$ref === 'string') {
-    out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
+    out.allOf = [convertSchemaRef(ctx.rebase(schema.$ref, schema), ctx), ...allOfItems(out.allOf)]
   }
   let loose = isLooseSchema(out, schema)
   if (isLoose(out.not)) {
@@ -328,7 +328,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   }
   const ref = getRef(value)
   if (ref !== undefined && Object.keys(value as object).length === 1) {
-    return convertSchemaRef(ref, ctx)
+    return convertSchemaRef(ctx.rebase(ref, value), ctx)
   }
   const cyclic = ctx.converting.includes(value)
   const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
@@ -356,7 +356,7 @@ function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
     if (isRecord(node)) {
       const ref = getRef(node)
       if (ref !== undefined) {
-        nodes.add(ctx.resolve(ref))
+        nodes.add(ctx.resolve(ctx.rebase(ref, node)))
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
@@ -503,9 +503,9 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
-  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_0.OpenAPIObject
+  return downgrade(spec, convertDocument, { dropsIds: true, removed: REMOVED }) as OpenAPIV3_0.OpenAPIObject
 }
 
 export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
+  return downgrade(schema, convertSchema, { dropsIds: true }) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }

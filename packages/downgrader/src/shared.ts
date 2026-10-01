@@ -8,6 +8,7 @@ export interface Context {
   readonly dangles: (ref: string) => boolean
   readonly isRemovedPart: (ref: string) => boolean
   readonly markDangling: (ref: string) => void
+  readonly rebase: (ref: string, node: unknown) => string
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
   readonly identified: Set<unknown>
@@ -24,6 +25,18 @@ export type Field = (value: unknown, ctx: Context, parent: Record<string, unknow
 export type Fields = ReadonlyMap<string, Field | typeof DROP>
 
 export type Finish = (out: Record<string, unknown>, source: Record<string, unknown>, ctx: Context) => unknown
+
+export interface Options {
+  /**
+   * Whether the target version lacks `$id`. A JSON Pointer `$ref` inside a
+   * subschema with its own `$id` resolves against that subschema, so
+   * `ctx.rebase` then rewrites it to resolve from the root, and reference
+   * chains are followed the same way.
+   */
+  readonly dropsIds?: boolean
+  /** Pointer prefixes of the parts the conversion removes. */
+  readonly removed?: readonly string[]
+}
 
 export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
@@ -251,7 +264,8 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
   let hop = ref
   for (;;) {
     const target = ctx.resolve(hop)
-    const next = getRef(target)
+    const own = getRef(target)
+    const next = own === undefined ? undefined : ctx.rebase(own, target)
     if (next === undefined || hops.has(next) || !follow(next, target as Record<string, unknown>)) {
       return hop
     }
@@ -386,13 +400,57 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
   return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
 }
 
-export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
+/**
+ * Escapes a key as a JSON Pointer token in a URI fragment, percent-encoding
+ * what a fragment cannot hold: https://www.rfc-editor.org/rfc/rfc6901#section-6
+ * Lone surrogates have no encoding and stay as they are.
+ */
+function escapeToken(token: string): string {
+  return token.replaceAll('~', '~0').replaceAll('/', '~1').replaceAll(/[^\w\-.~!$&'()*+,;=:@?\p{Cs}]/gu, encodeURIComponent)
+}
+
+function isResource(node: unknown): boolean {
+  return isRecord(node) && typeof node.$id === 'string' && node.$id !== '' && !node.$id.startsWith('#')
+}
+
+/**
+ * Maps each object inside a subschema with its own `$id`, other than `root`,
+ * to the pointer from `root` to the nearest such subschema. The search is
+ * breadth-first, so an object reachable in several ways gets its shortest
+ * path.
+ */
+function resourcePointers(root: object): Map<unknown, string> {
+  const pointers = new Map<unknown, string>()
+  const seen = new Set<unknown>([root])
+  const queue: [node: object, pointer: string, base: string | undefined][] = [[root, '', undefined]]
+  for (const [node, pointer, enclosing] of queue) {
+    const base = node !== root && isResource(node) ? pointer : enclosing
+    if (base !== undefined) {
+      pointers.set(node, base)
+    }
+    for (const [key, item] of Object.entries(node)) {
+      if ((Array.isArray(item) || isRecord(item)) && !seen.has(item)) {
+        seen.add(item)
+        queue.push([item, `${pointer}/${escapeToken(key)}`, base])
+      }
+    }
+  }
+  return pointers
+}
+
+export function downgrade(root: unknown, convert: Convert, { dropsIds = false, removed = [] }: Options = {}): unknown {
   const targets = new Map<string, unknown>()
   const resolveRef = (ref: string): unknown => {
     if (!targets.has(ref)) {
       targets.set(ref, resolve(root, ref))
     }
     return targets.get(ref)
+  }
+  let pointers: Map<unknown, string> | undefined
+  // Only called for a `$ref` found inside `root`, so `root` is an object.
+  const rebase = (ref: string, node: unknown): string => {
+    const base = dropsIds ? (pointers ??= resourcePointers(root as object)).get(node) : undefined
+    return base === undefined || parsePointer(ref) === undefined ? ref : `#${base}${ref.slice(1)}`
   }
   const ends = new Map<string, string | undefined>()
   const aliasEnd = (ref: string): string | undefined => {
@@ -408,12 +466,13 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         break
       }
       path.add(hop)
-      const next = getRef(resolveRef(hop))
+      const target = resolveRef(hop)
+      const next = getRef(target)
       if (next === undefined) {
         end = hop
         break
       }
-      hop = next
+      hop = rebase(next, target)
     }
     for (const visited of path) {
       ends.set(visited, end)
@@ -450,6 +509,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       isRemovedPart,
       removals: new Map(),
       markDangling: ref => dangling.add(ref),
+      rebase,
       resolve: resolveRef,
       seen: new Map(),
     })

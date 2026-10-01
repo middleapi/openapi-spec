@@ -78,6 +78,17 @@ describe('parts that need the 3.1 default written out', () => {
     })
   })
 
+  // Inside a schema with its own `$id`, a fragment `$ref` resolves against
+  // that schema, not the document root.
+  it('finds parts through references inside an $id resource', () => {
+    expect(convertForm({
+      schema: { $defs: { parts: { properties: { file: {} } } }, $id: 'https://example.com/upload', $ref: '#/$defs/parts' },
+    })).toEqual({
+      encoding: { file: octetStream },
+      schema: { allOf: [{ properties: { file: {} } }] },
+    })
+  })
+
   it('writes a part named like an Object.prototype member as an own key', () => {
     const encoding = dig(convertForm({ schema: { properties: JSON.parse('{"__proto__":{}}') } }), 'encoding') as object
     expect(Object.getPrototypeOf(encoding)).toBe(Object.prototype)
