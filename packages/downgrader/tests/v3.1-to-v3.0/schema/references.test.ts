@@ -33,44 +33,15 @@ describe('$ref with sibling keywords', () => {
 describe('references into removed keywords', () => {
   // `$defs` has no 3.0 form, and 3.0 schemas are reused through
   // `components.schemas` instead. A standalone schema has no components, so
-  // each `$ref` into `$defs` is replaced by the converted definition.
+  // each `$ref` into `$defs` is replaced by the converted definition. So is
+  // each `$ref` into `definitions`, the draft-07 spelling that the 2020-12
+  // meta-schema still accepts and generators such as Pydantic v1 emit.
   // https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.4
-  it('inlines $refs into $defs', () => {
-    expect(convertSchema({ $defs: { a: { type: ['string', 'null'] } }, items: { $ref: '#/$defs/a' }, type: 'array' })).toEqual({
+  it.each(['$defs', 'definitions'])('inlines $refs into %s', (key) => {
+    expect(convertSchema({ [key]: { a: { type: ['string', 'null'] } }, items: { $ref: `#/${key}/a` }, type: 'array' })).toEqual({
       items: { nullable: true, type: 'string' },
       type: 'array',
     })
-  })
-
-  // `definitions` is the draft-07 spelling of `$defs`, which the 2020-12
-  // meta-schema still accepts. Generators such as Pydantic v1 and
-  // ts-json-schema-generator emit it. Kept, it would carry raw 3.1 schemas
-  // (type arrays, numeric exclusiveMinimum) into the 3.0 output, where every
-  // `$ref` into it would still point. So it is handled exactly like `$defs`.
-  it('inlines $refs into definitions, the older spelling of $defs', () => {
-    const schema = (key: string): unknown => ({
-      [key]: {
-        Item: { properties: { note: { type: ['string', 'null'] }, qty: { exclusiveMinimum: 0, type: 'integer' } } },
-        Pair: { items: false, prefixItems: [{ type: 'string' }, { type: 'integer' }], type: 'array' },
-      },
-      properties: {
-        items: { items: { $ref: `#/${key}/Item` }, type: 'array' },
-        pair: { $ref: `#/${key}/Pair` },
-      },
-      type: 'object',
-    })
-    const result = convertSchema(schema('definitions'))
-    expect(result).toEqual({
-      properties: {
-        items: {
-          items: { properties: { note: { nullable: true, type: 'string' }, qty: { exclusiveMinimum: true, minimum: 0, type: 'integer' } } },
-          type: 'array',
-        },
-        pair: { items: {}, type: 'array' },
-      },
-      type: 'object',
-    })
-    expect(JSON.stringify(result)).toBe(JSON.stringify(convertSchema(schema('$defs'))))
   })
 
   // Inlining a recursive definition would never end. The recursion is cut

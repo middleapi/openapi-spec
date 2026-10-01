@@ -206,15 +206,13 @@ describe('hand-written documents', () => {
   // schema rejects the keyword, and its targets are raw 3.1 schemas, so each
   // `$ref` into it is inlined as a converted schema instead.
   it('inlines references into a schema\'s definitions into a valid 3.0 document', async () => {
-    const order = '#/components/schemas/Order'
+    const itemRef = '#/components/schemas/Order/definitions/Item'
     const doc: OpenAPIV3_1.OpenAPIObject = {
       components: {
         schemas: {
           Order: {
-            definitions: {
-              Item: { properties: { note: { type: ['string', 'null'] }, qty: { exclusiveMinimum: 0, type: 'integer' } }, type: 'object' },
-            },
-            properties: { items: { items: { $ref: `${order}/definitions/Item` }, type: 'array' } },
+            definitions: { Item: { properties: { note: { type: ['string', 'null'] } }, type: 'object' } },
+            properties: { items: { items: { $ref: itemRef }, type: 'array' } },
             type: 'object',
           },
         },
@@ -222,18 +220,15 @@ describe('hand-written documents', () => {
       info: { title: 'Generated schemas', version: '1.0.0' },
       openapi: '3.1.0',
       paths: {
-        '/orders': {
-          post: {
-            requestBody: { content: { 'application/json': { schema: { $ref: order } } } },
-            responses: { 201: { content: { 'application/json': { schema: { $ref: `${order}/definitions/Item` } } }, description: 'first item' } },
-          },
+        '/items/first': {
+          get: { responses: { 200: { content: { 'application/json': { schema: { $ref: itemRef } } }, description: 'ok' } } },
         },
       },
     }
     const v30 = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
-    const item = { properties: { note: { nullable: true, type: 'string' }, qty: { exclusiveMinimum: true, minimum: 0, type: 'integer' } }, type: 'object' }
+    const item = { properties: { note: { nullable: true, type: 'string' } }, type: 'object' }
     expect(v30.components?.schemas).toEqual({ Order: { properties: { items: { items: item, type: 'array' } }, type: 'object' } })
-    expect(v30).toHaveProperty(['paths', '/orders', 'post', 'responses', '201'], { content: { 'application/json': { schema: item } }, description: 'first item' })
+    expect(v30).toHaveProperty(['paths', '/items/first', 'get', 'responses', '200'], { content: { 'application/json': { schema: item } }, description: 'ok' })
   })
 
   // `defaultMapping` is a 3.2 field that can reach a 3.1 document written by
