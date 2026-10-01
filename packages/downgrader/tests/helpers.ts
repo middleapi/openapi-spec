@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { expect } from 'vitest'
 
 /**
@@ -15,4 +16,14 @@ export function dig(value: unknown, ...path: string[]): unknown {
 /** A converted document must stay plain JSON, which cannot hold a cycle. */
 export function expectAcyclic(value: unknown): void {
   expect(() => JSON.stringify(value)).not.toThrow()
+}
+
+/**
+ * Parses `value` as JSON in a new `vm` context. Like JSON parsed in an iframe
+ * or a Vitest VM pool, the result inherits from the Object.prototype and
+ * Array.prototype of another realm, so it is not `instanceof` this realm's
+ * Object or Array.
+ */
+export function fromOtherRealm<T>(value: T): T {
+  return runInNewContext('JSON.parse(text)', { text: JSON.stringify(value) }) as T
 }

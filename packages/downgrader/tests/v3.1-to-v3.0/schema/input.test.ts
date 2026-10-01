@@ -2,7 +2,7 @@ import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import { downgradeSchemaV31ToV30 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
+import { dig, fromOtherRealm } from '../../helpers'
 import { convertSchema } from './helpers'
 
 describe('input shapes', () => {
@@ -14,6 +14,20 @@ describe('input shapes', () => {
     const result = convertSchema(list)
     expect(result).toEqual(list)
     expect(result).not.toBe(list)
+  })
+
+  // JSON parsed in a `vm` context, an iframe, or a Vitest VM pool inherits
+  // from the Object.prototype of another realm. It is still plain JSON, and
+  // the result is built from this realm's objects and arrays.
+  it('converts a schema parsed in another realm into a new schema', () => {
+    const schema = fromOtherRealm({ allOf: [{ const: 1 }], type: ['integer', 'null'] })
+    const expected = { allOf: [{ enum: [1] }], nullable: true, type: 'integer' }
+    const result = convertSchema(schema)
+    expect(result).toEqual(expected)
+    expect(result).toBeInstanceOf(Object)
+    expect(dig(result, 'allOf')).toBeInstanceOf(Array)
+    expect(dig(result, 'allOf', '0')).not.toBe(schema.allOf[0])
+    expect(convertSchema({ properties: { a: schema } })).toEqual({ properties: { a: expected } })
   })
 
   it('treats keywords named like Object.prototype members as unknown keywords', () => {

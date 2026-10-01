@@ -2,7 +2,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
+import { dig, fromOtherRealm } from '../../helpers'
 import { convertSchema } from './helpers'
 
 describe('input shapes', () => {
@@ -17,6 +17,20 @@ describe('input shapes', () => {
     expect(convertSchema('junk')).toBe('junk')
     expect(convertSchema(null)).toBeNull()
     expect(convertSchema([{ type: 'string' }])).toEqual([{ type: 'string' }])
+  })
+
+  // JSON parsed in a `vm` context, an iframe, or a Vitest VM pool inherits
+  // from the Object.prototype of another realm. It is still plain JSON, and
+  // the result is built from this realm's objects and arrays.
+  it('converts a schema parsed in another realm into a new schema', () => {
+    const schema = fromOtherRealm({ prefixItems: [{ xml: { nodeType: 'attribute' } }], type: 'array', xml: { nodeType: 'element' } })
+    const expected = { prefixItems: [{ xml: { attribute: true } }], type: 'array', xml: { wrapped: true } }
+    const result = convertSchema(schema)
+    expect(result).toEqual(expected)
+    expect(result).toBeInstanceOf(Object)
+    expect(dig(result, 'prefixItems')).toBeInstanceOf(Array)
+    expect(dig(result, 'prefixItems', '0')).not.toBe(schema.prefixItems[0])
+    expect(convertSchema({ properties: { a: schema } })).toEqual({ properties: { a: expected } })
   })
 })
 

@@ -32,7 +32,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
     return false
   }
   const proto: unknown = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
+  return proto === null || Object.getPrototypeOf(proto) === null
 }
 
 export function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -127,7 +127,7 @@ export function map(convert: (value: unknown, ctx: Context, key: string) => unkn
 }
 
 export function list(convert: Convert): Convert {
-  return (value, ctx) => Array.isArray(value) ? value.map(item => convert(item, ctx)).filter(item => item !== DROP) : clone(value, ctx)
+  return (value, ctx) => Array.isArray(value) ? Array.prototype.map.call(value, item => convert(item, ctx)).filter(item => item !== DROP) : clone(value, ctx)
 }
 
 export function isPath(key: string): boolean {

@@ -7,7 +7,8 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
+import { dig, fromOtherRealm } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
 describe('the input document', () => {
@@ -63,6 +64,32 @@ describe('the input document', () => {
     expect(convertPathItem({ get: operation, query: {} })).toEqual({
       get: { responses: { 200: { description: 'ok' } } },
     })
+  })
+
+  // JSON parsed in a `vm` context, an iframe, or a Vitest VM pool inherits
+  // from the Object.prototype of another realm. It is still plain JSON, and
+  // the result is built from this realm's objects and arrays.
+  it('converts a document parsed in another realm into a new document', async () => {
+    const input = fromOtherRealm<OpenAPIV3_2.OpenAPIObject>({
+      $self: 'https://example.com/api.json',
+      info: { title: 't', version: '1' },
+      openapi: '3.2.0',
+      paths: { '/a': { query: { responses: { 200: { description: 'ok' } } } } },
+      servers: [{ name: 'root', url: 'https://example.com' }],
+      tags: [{ kind: 'nav', name: 't' }],
+    })
+    const output = await expectValidDowngrade(input, downgradeSpecV32ToV31, '3.2', '3.1')
+    expect(output).toEqual({
+      info: { title: 't', version: '1' },
+      openapi: '3.1.2',
+      paths: { '/a': {} },
+      servers: [{ url: 'https://example.com' }],
+      tags: [{ name: 't' }],
+    })
+    expect(output).toBeInstanceOf(Object)
+    expect(output.servers).toBeInstanceOf(Array)
+    output.info.title = 'changed'
+    expect(input.info.title).toBe('t')
   })
 
   // Values such as a Date or a Map cannot come from JSON or YAML. They are

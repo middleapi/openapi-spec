@@ -5,9 +5,12 @@
 
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
+import { runInNewContext } from 'node:vm'
+
 import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
+import { dig, fromOtherRealm } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
 import { convertPathItem, convertSpec, info } from './helpers'
 
 describe('the input document', () => {
@@ -59,6 +62,44 @@ describe('the input document', () => {
     })
   })
 
+  // JSON parsed in a `vm` context, an iframe, or a Vitest VM pool inherits
+  // from the Object.prototype of another realm. It is still plain JSON, and
+  // the result is built from this realm's objects and arrays.
+  it('converts a document parsed in another realm into a new document', async () => {
+    const input = fromOtherRealm<OpenAPIV3_1.OpenAPIObject>({
+      components: {
+        schemas: { Name: { type: ['string', 'null'] } },
+        securitySchemes: { api: { in: 'header', name: 'k', type: 'apiKey' }, mtls: { type: 'mutualTLS' } },
+      },
+      info,
+      openapi: '3.1.0',
+      paths: {},
+      security: [{ mtls: [] }, { api: [] }],
+      webhooks: { newPet: { post: { responses: { 200: { description: 'ok' } } } } },
+    })
+    const output = await expectValidDowngrade(input, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(output).toEqual({
+      components: {
+        schemas: { Name: { nullable: true, type: 'string' } },
+        securitySchemes: { api: { in: 'header', name: 'k', type: 'apiKey' } },
+      },
+      info,
+      openapi: '3.0.4',
+      paths: {},
+      security: [{ api: [] }],
+    })
+    expect(output).toBeInstanceOf(Object)
+    expect(output.security).toBeInstanceOf(Array)
+    output.info.title = 'changed'
+    expect(input.info.title).toBe(info.title)
+  })
+
+  it('converts a part parsed in another realm inside a document', () => {
+    const result = convertSpec({ components: { schemas: { Name: fromOtherRealm({ type: ['string', 'null'] }) } } })
+    expect(dig(result, 'components', 'schemas', 'Name')).toEqual({ nullable: true, type: 'string' })
+    expect(dig(result, 'components', 'schemas', 'Name')).toBeInstanceOf(Object)
+  })
+
   // Values such as a Date or a Map cannot come from JSON or YAML. They are
   // not walked into, and are kept as the same instance.
   it('keeps values that are not plain objects or arrays by reference', () => {
@@ -66,6 +107,14 @@ describe('the input document', () => {
     const result = convertSpec({ 'components': { schemas: { S: { default: date } } }, 'x-date': date })
     expect(dig(result, 'x-date')).toBe(date)
     expect(dig(result, 'components', 'schemas', 'S', 'default')).toBe(date)
+  })
+
+  it('keeps values that are not plain objects or arrays by reference when they come from another realm', () => {
+    const date = runInNewContext('new Date(0)')
+    const values = runInNewContext('new Map([["a", 1]])')
+    const result = convertSpec({ 'x-date': date, 'x-values': values })
+    expect(dig(result, 'x-date')).toBe(date)
+    expect(dig(result, 'x-values')).toBe(values)
   })
 })
 
