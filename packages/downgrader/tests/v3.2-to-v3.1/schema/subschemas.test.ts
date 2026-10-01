@@ -22,6 +22,21 @@ it('converts nested schemas at every subschema position', () => {
   })
 })
 
+// The 2020-12 meta-schema still describes two older containers: `definitions`,
+// a map of schemas like `$defs`, and `dependencies`, a map of schemas or
+// property-name lists like `dependentSchemas` and `dependentRequired`:
+// https://json-schema.org/draft/2020-12/schema
+// Their schemas are converted, and the lists are copied as is.
+it('converts nested schemas in definitions and dependencies', () => {
+  expect(convertSchema({
+    definitions: { a: inner, b: true },
+    dependencies: { a: inner, b: ['c'], c: true },
+  })).toEqual({
+    definitions: { a: converted, b: true },
+    dependencies: { a: converted, b: ['c'], c: true },
+  })
+})
+
 // `const`, `default`, `enum`, and `examples` hold instance data, and
 // extensions hold anything. A value there that looks like a schema is not
 // one, so it is copied as is.
@@ -40,4 +55,5 @@ it('converts nested schemas at any depth', () => {
 
 it('clones malformed subschema containers through', () => {
   expect(convertSchema({ allOf: 'junk', properties: 5 })).toEqual({ allOf: 'junk', properties: 5 })
+  expect(convertSchema({ definitions: 'junk', dependencies: { a: 'junk' } })).toEqual({ definitions: 'junk', dependencies: { a: 'junk' } })
 })

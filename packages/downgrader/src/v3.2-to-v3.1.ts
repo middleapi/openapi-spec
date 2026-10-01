@@ -65,6 +65,8 @@ const SCHEMA_FIELDS = defineFields({
   anyOf: list(convertSchema),
   contains: convertSchema,
   contentSchema: convertSchema,
+  definitions: map(convertSchema),
+  dependencies: map((item, ctx) => (Array.isArray(item) ? clone(item, ctx) : convertSchema(item, ctx))),
   dependentSchemas: map(convertSchema),
   discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
   else: convertSchema,

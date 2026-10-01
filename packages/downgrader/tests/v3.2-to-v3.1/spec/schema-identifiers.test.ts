@@ -12,7 +12,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
-import { expectValidAs } from '../../validate'
+import { expectValidAs, expectValidDowngrade } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
 it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {
@@ -102,6 +102,36 @@ it('produces a valid 3.1 document with unique identifiers', async () => {
   expect(serialized.match(/"\$id"/g)).toHaveLength(1)
   expect(serialized.match(/"\$anchor"/g)).toHaveLength(1)
   await expectValidAs(v31, '3.1')
+})
+
+// The 2020-12 meta-schema treats the members of the older `definitions` and
+// `dependencies` containers as schemas, so their identifiers must stay unique
+// too. The output is validated as JSON, where every place holds its own copy.
+it('keeps identifiers inside definitions and dependencies unique', async () => {
+  const content = { 'application/json': { $ref: '#/components/mediaTypes/Pet' } }
+  const doc: OpenAPIV3_2.OpenAPIObject = {
+    components: {
+      mediaTypes: {
+        Pet: {
+          schema: {
+            definitions: { Nm: { $anchor: 'nm' }, Tag: { $id: 'https://example.com/tag' } },
+            dependencies: { owner: { $dynamicAnchor: 'owner' }, tag: ['owner'] },
+          },
+        },
+      },
+    },
+    info: { title: 'Identifiers', version: '1.0.0' },
+    openapi: '3.2.0',
+    paths: {
+      '/a': { get: { responses: { 200: { content, description: 'A' } } } },
+      '/b': { get: { responses: { 200: { content, description: 'B' } } } },
+    },
+  }
+  const serialized = JSON.stringify(await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1'))
+  expect(serialized.match(/"\$id"/g)).toHaveLength(1)
+  expect(serialized.match(/"\$anchor"/g)).toHaveLength(1)
+  expect(serialized.match(/"\$dynamicAnchor"/g)).toHaveLength(1)
+  await expectValidAs(JSON.parse(serialized), '3.1')
 })
 
 // Only the first copy is special. The copies after it are identical, so they

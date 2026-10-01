@@ -22,6 +22,8 @@ describe('schema references', () => {
       anyOf: [schema],
       contains: schema,
       contentSchema: schema,
+      definitions: { d: schema },
+      dependencies: { d: schema },
       dependentSchemas: { d: schema },
       else: schema,
       if: schema,
