@@ -155,17 +155,61 @@ export function allOfItems(allOf: unknown): unknown[] {
   return allOf === undefined ? [] : [{ allOf }]
 }
 
-export function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknown>): unknown {
+function xmlNodeType(xml: Record<string, unknown>, schema: Record<string, unknown>): unknown {
+  if ('nodeType' in xml) {
+    return xml.nodeType
+  }
+  if (xml.attribute === true) {
+    return 'attribute'
+  }
+  const isArray = hasType(schema.type, 'array')
+  if (xml.wrapped === true && isArray) {
+    return 'element'
+  }
+  return '$ref' in schema || '$dynamicRef' in schema || isArray ? 'none' : 'element'
+}
+
+export function xmlWrapperType(schema: Record<string, unknown>, ctx: Context): unknown {
+  if ('type' in schema || !isRecord(schema.xml) || xmlNodeType(schema.xml, schema) !== 'element') {
+    return undefined
+  }
+  const nodes = new Set<unknown>([schema])
+  for (const node of nodes) {
+    if (isRecord(node)) {
+      if (hasType(node.type, 'array')) {
+        return node.type
+      }
+      const ref = getRef(node)
+      if (ref !== undefined) {
+        nodes.add(ctx.resolve(ref))
+      }
+      for (const item of Array.isArray(node.allOf) ? node.allOf : []) {
+        nodes.add(item)
+      }
+    }
+  }
+  return undefined
+}
+
+export function convertXml(value: unknown, ctx: Context, schema: Record<string, unknown>): unknown {
   if (!isRecord(value)) {
     return clone(value)
   }
-  const { nodeType, ...rest } = value
+  const nodeType = xmlNodeType(value, schema)
+  const { nodeType: _, ...rest } = value
   const out = clone(rest) as Record<string, unknown>
   if (nodeType === 'attribute') {
     out.attribute = true
   }
-  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
-    out.wrapped = true
+  else if (nodeType === 'element') {
+    if (hasType(schema.type, 'array') || xmlWrapperType(schema, ctx) !== undefined) {
+      out.wrapped = true
+    }
+  }
+  else if (nodeType === 'none' || nodeType === 'text' || nodeType === 'cdata') {
+    delete out.name
+    delete out.namespace
+    delete out.prefix
   }
   return out
 }

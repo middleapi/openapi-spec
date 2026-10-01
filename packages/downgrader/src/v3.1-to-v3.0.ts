@@ -27,6 +27,7 @@ import {
   refOr,
   removedPrefixes,
   setOwn,
+  xmlWrapperType,
 } from './shared'
 
 const LOOSENING_KEYWORDS = new Set([
@@ -110,7 +111,7 @@ const SCHEMA_FIELDS = defineFields({
     return item.length === 0 ? DROP : clone([...new Set(item)])
   },
   type: DROP,
-  xml: convertXml,
+  xml: (item, ctx, schema) => (hasNodeType(schema) ? convertXml(item, ctx, schema) : clone(item)),
 })
 
 const PARAMETER_FIELDS = defineFields({
@@ -189,6 +190,10 @@ const REMOVED = removedPrefixes({ '': DOCUMENT_FIELDS, '/components': COMPONENTS
 
 function reference(value: Record<string, unknown>): unknown {
   return { $ref: value.$ref }
+}
+
+function hasNodeType(schema: Record<string, unknown>): boolean {
+  return isRecord(schema.xml) && 'nodeType' in schema.xml
 }
 
 function isLoose(value: unknown): boolean {
@@ -294,7 +299,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
     out.enum = [clone(schema.const)]
   }
-  loose = convertType(out, schema.type) || loose
+  const type = (hasNodeType(schema) ? xmlWrapperType(schema, ctx) : undefined) ?? schema.type
+  loose = convertType(out, type) || loose
   const { exclusiveMaximum, exclusiveMinimum, maximum, minimum } = schema
   if (typeof exclusiveMinimum === 'number' && !(typeof minimum === 'number' && minimum > exclusiveMinimum)) {
     out.minimum = exclusiveMinimum
@@ -310,9 +316,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   const format = schema.contentEncoding === 'base64'
     ? 'byte'
     : schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string' ? 'binary' : undefined
-  if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
+  if (format !== undefined && (type === undefined || hasType(type, 'string'))) {
     out.format ??= format
-    if (schema.type === undefined) {
+    if (type === undefined) {
       out.type = 'string'
     }
   }

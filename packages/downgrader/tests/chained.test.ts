@@ -10,6 +10,7 @@ import { doc as queryExample } from '../../types/tests/examples/3-2-query-exampl
 import { doc as tagsExample } from '../../types/tests/examples/3-2-tags-example'
 import { doc as mega } from '../../types/tests/schema-tests-3.2/mega'
 import { corpusV32 } from './corpus'
+import { dig } from './helpers'
 import { expectValidDowngrade } from './validate'
 
 function downgradeTwice(doc: OpenAPIV3_2.OpenAPIObject) {
@@ -20,6 +21,41 @@ function downgradeTwice(doc: OpenAPIV3_2.OpenAPIObject) {
 describe('official corpus', () => {
   it.each(corpusV32)('converts %s to a valid 3.0 document', async (_name, doc) => {
     await expectValidDowngrade(doc, downgradeTwice, '3.2', '3.0')
+  })
+})
+
+// A 3.2 XML Object without `nodeType` is a `none` node beside `$ref`, which
+// ignores `name`, and an explicit `element` on an array wraps it even when
+// the array type comes through `$ref`. 3.1 and 3.0 have no `nodeType`, so the
+// name must go and `wrapped: true` needs the array `type` beside it.
+it('keeps 3.2 XML node types through both steps', async () => {
+  const doc: OpenAPIV3_2.OpenAPIObject = {
+    components: {
+      schemas: {
+        Book: { type: 'object' },
+        Books: { items: { $ref: '#/components/schemas/Book' }, type: 'array' },
+        Person: { type: 'object' },
+        Shelf: {
+          properties: {
+            author: { $ref: '#/components/schemas/Person', xml: { name: 'writer' } },
+            books: { $ref: '#/components/schemas/Books', xml: { name: 'shelf', nodeType: 'element' } },
+          },
+          type: 'object',
+        },
+      },
+    },
+    info: { title: 'Library', version: '1.0.0' },
+    openapi: '3.2.0',
+  }
+  const v31 = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+  expect(dig(v31, 'components', 'schemas', 'Shelf', 'properties')).toEqual({
+    author: { $ref: '#/components/schemas/Person', xml: {} },
+    books: { $ref: '#/components/schemas/Books', type: 'array', xml: { name: 'shelf', wrapped: true } },
+  })
+  const v30 = await expectValidDowngrade(doc, downgradeTwice, '3.2', '3.0')
+  expect(dig(v30, 'components', 'schemas', 'Shelf', 'properties')).toEqual({
+    author: { allOf: [{ $ref: '#/components/schemas/Person' }], xml: {} },
+    books: { allOf: [{ $ref: '#/components/schemas/Books' }], items: {}, type: 'array', xml: { name: 'shelf', wrapped: true } },
   })
 })
 

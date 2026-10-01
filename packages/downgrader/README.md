@@ -59,20 +59,22 @@ All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi
 
 ## 3.2 → 3.1
 
-Schema Objects change only in `xml.nodeType`, `discriminator.defaultMapping`, and references into removed or moved parts.
+Schema Objects change only in `xml` (plus a `type` that `wrapped` needs), `discriminator.defaultMapping`, and references into removed or moved parts. An XML Object without `nodeType` has the 3.2 default: `none` beside `$ref`, `$dynamicRef`, or an array `type`, and `element` otherwise.
 
 Converted:
 
-| 3.2 construct                                                             | 3.1 result                                                                                                                                |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi: 3.2.x`                                                          | `openapi: 3.1.2`                                                                                                                          |
-| `jsonSchemaDialect` naming a 3.2 OAS dialect                              | `https://spec.openapis.org/oas/3.1/dialect/base`; other dialects pass through                                                             |
-| `$ref` in a `content` map                                                 | the converted Media Type Object; an external, missing, or looping one is removed, along with a parameter or header left without `content` |
-| media type `itemSchema` without `schema`                                  | `schema: { type: "array", items: … }`                                                                                                     |
-| response without `description`                                            | `description` from `summary`, or `""`                                                                                                     |
-| example `dataValue` / `serializedValue` without `value` / `externalValue` | `value`, preferring `dataValue`                                                                                                           |
-| XML `nodeType: "attribute"`, or `"element"` on an array                   | `attribute: true`, or `wrapped: true`                                                                                                     |
-| parameter `style: "cookie"`                                               | removed, so the 3.1 default `form` applies                                                                                                |
+| 3.2 construct                                                                 | 3.1 result                                                                                                                                |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi: 3.2.x`                                                              | `openapi: 3.1.2`                                                                                                                          |
+| `jsonSchemaDialect` naming a 3.2 OAS dialect                                  | `https://spec.openapis.org/oas/3.1/dialect/base`; other dialects pass through                                                             |
+| `$ref` in a `content` map                                                     | the converted Media Type Object; an external, missing, or looping one is removed, along with a parameter or header left without `content` |
+| media type `itemSchema` without `schema`                                      | `schema: { type: "array", items: … }`                                                                                                     |
+| response without `description`                                                | `description` from `summary`, or `""`                                                                                                     |
+| example `dataValue` / `serializedValue` without `value` / `externalValue`     | `value`, preferring `dataValue`                                                                                                           |
+| XML `nodeType: "attribute"`                                                   | `attribute: true`                                                                                                                         |
+| XML `element` node on an array, including one typed through `$ref` or `allOf` | `wrapped: true`, with the array `type` copied beside `$ref` / `allOf` so that it applies                                                  |
+| XML `name`, `prefix`, and `namespace` on a `text`, `cdata`, or `none` node    | removed, since 3.2 ignores them there                                                                                                     |
+| parameter `style: "cookie"`                                                   | removed, so the 3.1 default `form` applies                                                                                                |
 
 Removed, with no 3.1 equivalent:
 
@@ -83,7 +85,7 @@ Removed, with no 3.1 equivalent:
 - parameter and header `example` / `examples` beside `content`
 - media type `description`, `prefixEncoding`, `itemEncoding`, and Encoding Object `encoding`
 - `itemSchema`, response `summary`, and example `dataValue` / `serializedValue`, after the conversions above
-- other XML `nodeType` values and `discriminator.defaultMapping`
+- XML `nodeType`, after the conversions above, and `discriminator.defaultMapping`
 - OAuth `deviceAuthorization` flows, and security scheme `oauth2MetadataUrl` and `deprecated`
 
 ## 3.1 → 3.0
@@ -129,7 +131,7 @@ Converted:
 | duplicate `required` entries                       | deduplicated                                                                                                             |
 | `not` over a loosened schema                       | removed, since negating a looser schema would reject values the original accepts                                         |
 | `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
-| XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
+| XML `nodeType` (a 3.2 field)                       | converted as in 3.2 → 3.1, then removed                                                                                  |
 
 Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
 
@@ -146,7 +148,7 @@ Both converters treat local `$ref`s the same way:
 ## Known limitations
 
 - Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
-- 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead.
+- 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead. A schema without an XML Object whose array `type` comes only through `allOf` wraps its items in 3.2 but not in 3.1.
 - 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
 
 ## Sponsors

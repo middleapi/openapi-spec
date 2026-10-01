@@ -52,17 +52,42 @@ describe('binary content', () => {
 describe('xml.nodeType', () => {
   // `nodeType` is a 3.2 field (https://spec.openapis.org/oas/v3.2.0.html#xml-node-type)
   // that can reach a 3.1 document written by hand or by a lenient tool. The
-  // 3.2 → 3.1 converter maps it the same way.
+  // 3.2 → 3.1 converter maps it the same way, including removing the `name`
+  // that `text`, `cdata`, and `none` nodes ignore. An XML Object without it is
+  // a 3.1 one, where `name` applies beside `$ref`, so it is kept as written.
   it.each([
     ['maps attribute to attribute: true', { type: 'string', xml: { name: 'n', nodeType: 'attribute' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
     ['maps element on an array to wrapped: true', { items: {}, type: 'array', xml: { nodeType: 'element' } }, { items: {}, type: 'array', xml: { wrapped: true } }],
     ['maps element on a nullable array to wrapped: true', { type: ['array', 'null'], xml: { nodeType: 'element' } }, { items: {}, nullable: true, type: 'array', xml: { wrapped: true } }],
     ['removes element on other schemas', { type: 'string', xml: { nodeType: 'element' } }, { type: 'string', xml: {} }],
-    ['removes values 3.0 cannot express', { type: 'string', xml: { name: 'n', nodeType: 'text' } }, { type: 'string', xml: { name: 'n' } }],
+    ['removes values 3.0 cannot express, with the name they ignore', { type: 'string', xml: { name: 'n', nodeType: 'text', prefix: 'p' } }, { type: 'string', xml: {} }],
+    ['removes the name of a none node beside $ref', { $ref: 'https://example.com/person.json', xml: { name: 'n', nodeType: 'none' } }, { allOf: [{ $ref: 'https://example.com/person.json' }], xml: {} }],
     ['keeps an xml object without nodeType', { type: 'string', xml: { attribute: true, name: 'n' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
+    ['keeps a name beside $ref without nodeType', { $ref: 'https://example.com/person.json', xml: { name: 'n' } }, { allOf: [{ $ref: 'https://example.com/person.json' }], xml: { name: 'n' } }],
     ['passes a malformed xml value through', { type: 'string', xml: 'junk' }, { type: 'string', xml: 'junk' }],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
+  })
+
+  it('wraps element on an array referenced through $ref, copying its type', () => {
+    expect(convertSchema({
+      $defs: { Books: { items: { type: 'string' }, type: ['array', 'null'] } },
+      properties: {
+        books: { $ref: '#/$defs/Books', xml: { name: 'shelf', nodeType: 'element' } },
+        plain: { $ref: '#/$defs/Books', xml: { name: 'shelf' } },
+      },
+    })).toEqual({
+      properties: {
+        books: {
+          allOf: [{ items: { type: 'string' }, nullable: true, type: 'array' }],
+          items: {},
+          nullable: true,
+          type: 'array',
+          xml: { name: 'shelf', wrapped: true },
+        },
+        plain: { allOf: [{ items: { type: 'string' }, nullable: true, type: 'array' }], xml: { name: 'shelf' } },
+      },
+    })
   })
 })
 

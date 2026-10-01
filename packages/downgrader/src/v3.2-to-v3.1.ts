@@ -25,6 +25,7 @@ import {
   refOr,
   removedPrefixes,
   skipAliases,
+  xmlWrapperType,
 } from './shared'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
@@ -201,6 +202,10 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     if (target !== DROP) {
       out.allOf = [...allOfItems(out.allOf), target]
     }
+  }
+  const type = xmlWrapperType(schema, ctx)
+  if (type !== undefined) {
+    out.type = clone(type)
   }
   return out
 }
