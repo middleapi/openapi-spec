@@ -10,7 +10,6 @@ export interface Context {
   readonly markDangling: (ref: string) => void
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
-  readonly dialects: ReadonlyMap<object, string | undefined>
   readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, unknown>>
   readonly inlining: Set<unknown>
@@ -387,12 +386,7 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
   return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
 }
 
-export function downgrade(
-  root: unknown,
-  convert: Convert,
-  removed: readonly string[] = [],
-  dialects: ReadonlyMap<object, string | undefined> = new Map(),
-): unknown {
+export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
   const targets = new Map<string, unknown>()
   const resolveRef = (ref: string): unknown => {
     if (!targets.has(ref)) {
@@ -450,7 +444,6 @@ export function downgrade(
         }
         return dangling.has(ref)
       },
-      dialects,
       identified: new Set(),
       inlined: new Map(),
       inlining: new Set(),

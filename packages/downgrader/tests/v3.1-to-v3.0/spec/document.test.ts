@@ -1,7 +1,5 @@
 import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
-import { expectValidDowngrade } from '../../validate'
 import { convertSpec, info } from './helpers'
 
 /** The converted form of a document holding nothing but `info`. */
@@ -49,67 +47,6 @@ describe('3.1-only root fields', () => {
       webhooks: { newPet: { post: { summary: 's' } } },
     })
     expect(result).toEqual(empty)
-  })
-})
-
-describe('jsonSchemaDialect', () => {
-  // It is "the default value for the `$schema` keyword within Schema
-  // Objects": https://spec.openapis.org/oas/v3.1.2.html#oas-json-schema-dialect
-  // Its schemas are converted in that dialect before it is removed. See
-  // ../schema/dialects.test.ts for what each dialect changes.
-  const draft07 = 'http://json-schema.org/draft-07/schema#'
-  const schemas = {
-    A: { type: 'integer' },
-    // draft-07 ignores the `type` beside the `$ref`, so 5 is valid.
-    B: { $ref: '#/components/schemas/A', type: 'string' },
-    // A draft-07 tuple, which 3.0 cannot express.
-    T: { items: [{ type: 'string' }, { type: 'integer' }], type: 'array' },
-  }
-
-  it('converts the schemas of a draft-07 document as draft-07', async () => {
-    const doc = { components: { schemas }, info, jsonSchemaDialect: draft07, openapi: '3.1.0', paths: {} }
-    const result = await expectValidDowngrade(doc as any, downgradeSpecV31ToV30, '3.1', '3.0')
-    expect(result.components?.schemas).toEqual({
-      A: { type: 'integer' },
-      B: { $ref: '#/components/schemas/A' },
-      T: { items: {}, type: 'array' },
-    })
-  })
-
-  it('lets a schema name its own dialect', () => {
-    const result = convertSpec({
-      components: { schemas: { ...schemas, B: { ...schemas.B, $schema: 'https://json-schema.org/draft/2020-12/schema' } } },
-      jsonSchemaDialect: draft07,
-    })
-    expect(dig(result, 'components', 'schemas', 'B')).toEqual({ allOf: [{ $ref: '#/components/schemas/A' }], type: 'string' })
-  })
-
-  // A schema in a removed part keeps the document's dialect when a `$ref`
-  // inlines it (see removed-parts.test.ts).
-  it('applies to schemas inlined from removed parts', async () => {
-    const doc = {
-      components: {
-        schemas: { ...schemas, W: { $ref: '#/webhooks/w/post/requestBody/content/application~1json/schema' } },
-      },
-      info,
-      jsonSchemaDialect: draft07,
-      openapi: '3.1.0',
-      paths: {},
-      webhooks: { w: { post: { requestBody: { content: { 'application/json': { schema: schemas.B } } } } } },
-    }
-    const result = await expectValidDowngrade(doc as any, downgradeSpecV31ToV30, '3.1', '3.0')
-    expect(dig(result, 'components', 'schemas', 'W')).toEqual({ $ref: '#/components/schemas/A' })
-  })
-
-  // Only Schema Objects name a dialect with `$schema`. On the document
-  // itself it is an unknown field, often a hint for editors.
-  it('ignores a $schema on the document itself', () => {
-    const result = convertSpec({
-      $schema: 'https://spec.openapis.org/oas/3.1/schema/2022-10-07',
-      components: { schemas },
-      jsonSchemaDialect: draft07,
-    })
-    expect(dig(result, 'components', 'schemas', 'B')).toEqual({ $ref: '#/components/schemas/A' })
   })
 })
 
