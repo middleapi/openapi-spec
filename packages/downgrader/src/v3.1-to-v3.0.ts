@@ -8,7 +8,6 @@ import {
   clone,
   convertMappingRef,
   convertObject,
-  convertXml,
   defineFields,
   downgrade,
   DROP,
@@ -97,8 +96,8 @@ const SCHEMA_FIELDS = defineFields({
   const: DROP,
   discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
-  exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
-  exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
+  exclusiveMaximum: DROP,
+  exclusiveMinimum: DROP,
   items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
   not: convertSchema,
   oneOf: list(convertSchema),
@@ -110,7 +109,6 @@ const SCHEMA_FIELDS = defineFields({
     return item.length === 0 ? DROP : clone([...new Set(item)])
   },
   type: DROP,
-  xml: convertXml,
 })
 
 const PARAMETER_FIELDS = defineFields({

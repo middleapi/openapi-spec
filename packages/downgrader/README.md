@@ -129,7 +129,6 @@ Converted:
 | duplicate `required` entries                       | deduplicated                                                                                                             |
 | `not` over a loosened schema                       | removed, since negating a looser schema would reject values the original accepts                                         |
 | `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
-| XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
 
 Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
 
@@ -146,6 +145,7 @@ Both converters treat local `$ref`s the same way:
 ## Known limitations
 
 - Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
+- Both: input must use only the fields of its own version. A field from another version, such as `nullable` or a boolean `exclusiveMinimum` from 3.0, or `xml.nodeType` from 3.2, in a 3.1 document, is not converted, so the output can change meaning or fail validation.
 - 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead.
 - 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
 

@@ -155,21 +155,6 @@ export function allOfItems(allOf: unknown): unknown[] {
   return allOf === undefined ? [] : [{ allOf }]
 }
 
-export function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknown>): unknown {
-  if (!isRecord(value)) {
-    return clone(value)
-  }
-  const { nodeType, ...rest } = value
-  const out = clone(rest) as Record<string, unknown>
-  if (nodeType === 'attribute') {
-    out.attribute = true
-  }
-  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
-    out.wrapped = true
-  }
-  return out
-}
-
 export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }

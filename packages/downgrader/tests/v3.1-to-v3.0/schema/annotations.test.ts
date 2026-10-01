@@ -49,23 +49,6 @@ describe('binary content', () => {
   })
 })
 
-describe('xml.nodeType', () => {
-  // `nodeType` is a 3.2 field (https://spec.openapis.org/oas/v3.2.0.html#xml-node-type)
-  // that can reach a 3.1 document written by hand or by a lenient tool. The
-  // 3.2 → 3.1 converter maps it the same way.
-  it.each([
-    ['maps attribute to attribute: true', { type: 'string', xml: { name: 'n', nodeType: 'attribute' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
-    ['maps element on an array to wrapped: true', { items: {}, type: 'array', xml: { nodeType: 'element' } }, { items: {}, type: 'array', xml: { wrapped: true } }],
-    ['maps element on a nullable array to wrapped: true', { type: ['array', 'null'], xml: { nodeType: 'element' } }, { items: {}, nullable: true, type: 'array', xml: { wrapped: true } }],
-    ['removes element on other schemas', { type: 'string', xml: { nodeType: 'element' } }, { type: 'string', xml: {} }],
-    ['removes values 3.0 cannot express', { type: 'string', xml: { name: 'n', nodeType: 'text' } }, { type: 'string', xml: { name: 'n' } }],
-    ['keeps an xml object without nodeType', { type: 'string', xml: { attribute: true, name: 'n' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
-    ['passes a malformed xml value through', { type: 'string', xml: 'junk' }, { type: 'string', xml: 'junk' }],
-  ])('%s', (_name, input, expected) => {
-    expect(convertSchema(input)).toEqual(expected)
-  })
-})
-
 describe('discriminator', () => {
   it('keeps the discriminator and its mapping', () => {
     const schema = {

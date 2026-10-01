@@ -23,10 +23,3 @@ it.each([
 ])('%s', (_name, input, expected) => {
   expect(convertSchema(input)).toEqual(expected)
 })
-
-it.each([
-  ['a 3.0-style boolean exclusiveMinimum', { exclusiveMinimum: true, minimum: 3 }],
-  ['a 3.0-style boolean exclusiveMaximum', { exclusiveMaximum: false, maximum: 3 }],
-])('passes %s through', (_name, input) => {
-  expect(convertSchema(input)).toEqual(input)
-})

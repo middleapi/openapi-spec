@@ -200,27 +200,4 @@ describe('hand-written documents', () => {
     })
     await expectValidAs(v30, '3.0')
   })
-
-  // `defaultMapping` is a 3.2 field that can reach a 3.1 document written by
-  // hand or by a lenient tool. The 3.0 schema tolerates unknown
-  // discriminator fields, so it is kept.
-  it('keeps a discriminator defaultMapping, which the 3.0 schema tolerates', async () => {
-    const doc = {
-      components: {
-        schemas: {
-          Cat: { properties: { kind: { type: 'string' } }, required: ['kind'], type: 'object' },
-          Pet: {
-            discriminator: { defaultMapping: 'Cat', mapping: { cat: '#/components/schemas/Cat' }, propertyName: 'kind' },
-            oneOf: [{ $ref: '#/components/schemas/Cat' }],
-          },
-        },
-      },
-      info: { title: 'Discriminated', version: '1.0.0' },
-      openapi: '3.1.0',
-      paths: {},
-    }
-    const v30 = downgradeSpecV31ToV30(doc as any)
-    expect(v30).toHaveProperty(['components', 'schemas', 'Pet', 'discriminator'], doc.components.schemas.Pet.discriminator)
-    await expectValidAs(v30, '3.0')
-  })
 })

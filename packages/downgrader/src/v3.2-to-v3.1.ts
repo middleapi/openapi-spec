@@ -7,12 +7,12 @@ import {
   clone,
   convertMappingRef,
   convertObject,
-  convertXml,
   defineFields,
   downgrade,
   DROP,
   getRef,
   hasDanglingOperationRef,
+  hasType,
   HTTP_METHODS,
   inline,
   inlineSchema,
@@ -185,6 +185,21 @@ function convertServer(value: unknown, ctx: Context): unknown {
 
 function convertTag(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, TAG_FIELDS)
+}
+
+function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknown>): unknown {
+  if (!isRecord(value)) {
+    return clone(value)
+  }
+  const { nodeType, ...rest } = value
+  const out = clone(rest) as Record<string, unknown>
+  if (nodeType === 'attribute') {
+    out.attribute = true
+  }
+  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
+    out.wrapped = true
+  }
+  return out
 }
 
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
