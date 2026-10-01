@@ -127,6 +127,8 @@ Converted:
 | `type: "array"` without `items`                    | `items: {}`                                                                                                              |
 | `enum: []` / `required: []`                        | removed                                                                                                                  |
 | duplicate `required` entries                       | deduplicated                                                                                                             |
+| `default` not matching the converted `type`        | removed, since 3.0 requires a `default` to match its `type`; `null` matches only a `nullable` one                        |
+| `readOnly: true` beside `writeOnly: true`          | both removed, since 3.0 forbids marking a schema with both                                                               |
 | `not` over a loosened schema                       | removed, since negating a looser schema would reject values the original accepts                                         |
 | `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
 | XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |

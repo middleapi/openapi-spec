@@ -64,6 +64,15 @@ const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?
 
 const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
 
+const TYPE_CHECKS = new Map<string, (value: unknown) => boolean>([
+  ['array', Array.isArray],
+  ['boolean', value => typeof value === 'boolean'],
+  ['integer', Number.isInteger],
+  ['number', Number.isFinite],
+  ['object', value => typeof value === 'object' && value !== null && !Array.isArray(value)],
+  ['string', value => typeof value === 'string'],
+])
+
 const LOOSE = new WeakSet<object>()
 
 const convertCallback = map(convertPathItem, isNotExtension)
@@ -276,6 +285,11 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
   return false
 }
 
+function matchesType(value: unknown, out: Record<string, unknown>): boolean {
+  const check = typeof out.type === 'string' ? TYPE_CHECKS.get(out.type) : undefined
+  return check === undefined || check(value) || (value === null && out.nullable === true)
+}
+
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
@@ -318,6 +332,13 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   }
   if (out.type === 'array' && out.items === undefined) {
     out.items = placeholder()
+  }
+  if ('default' in out && !matchesType(out.default, out)) {
+    delete out.default
+  }
+  if (out.readOnly === true && out.writeOnly === true) {
+    delete out.readOnly
+    delete out.writeOnly
   }
   return loose ? loosened(out) : out
 }

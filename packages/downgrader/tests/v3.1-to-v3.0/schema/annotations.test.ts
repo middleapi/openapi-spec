@@ -79,3 +79,52 @@ describe('discriminator', () => {
     expect(convertSchema({ discriminator: 'junk' })).toEqual({ discriminator: 'junk' })
   })
 })
+
+describe('default', () => {
+  // Unlike JSON Schema, 3.0 requires `default` to conform to the `type` at
+  // the same level: https://spec.openapis.org/oas/v3.0.4.html#json-schema-keywords
+  // 3.1 only recommends it, so a valid 3.1 default can break the 3.0 rule.
+  // `default` is an annotation, so removing it loses detail but no meaning.
+  it.each([
+    ['keeps a default that matches the type', { default: 'a', type: 'string' }, { default: 'a', type: 'string' }],
+    ['removes a default of another type', { default: '10', type: 'integer' }, { type: 'integer' }],
+    ['removes null beside a type that excludes it', { default: null, type: 'string' }, { type: 'string' }],
+    ['keeps null once nullable', { default: null, type: ['string', 'null'] }, { default: null, nullable: true, type: 'string' }],
+    ['removes a default that only matches the null of a nullable type', { default: 1, type: ['string', 'null'] }, { nullable: true, type: 'string' }],
+    ['keeps an integral number as an integer', { default: 1.0, type: 'integer' }, { default: 1, type: 'integer' }],
+    ['removes a fractional number beside integer', { default: 1.5, type: 'integer' }, { type: 'integer' }],
+    ['keeps an integer as a number', { default: 1, type: 'number' }, { default: 1, type: 'number' }],
+    ['keeps a matching boolean', { default: false, type: 'boolean' }, { default: false, type: 'boolean' }],
+    ['keeps a matching array', { default: [1], items: {}, type: 'array' }, { default: [1], items: {}, type: 'array' }],
+    ['removes an object beside array', { default: {}, type: 'array' }, { items: {}, type: 'array' }],
+    ['keeps a matching object', { default: { a: 1 }, type: 'object' }, { default: { a: 1 }, type: 'object' }],
+    ['removes an array beside object', { default: [], type: 'object' }, { type: 'object' }],
+    // The type the conversion adds counts too.
+    ['removes a default that does not match an added type: string', { contentEncoding: 'base64', default: 1 }, { format: 'byte', type: 'string' }],
+    // Without a `type` at the same level, 3.0 puts no rule on `default`.
+    ['keeps any default without a type', { default: 1 }, { default: 1 }],
+    ['keeps any default beside a null-only type, which leaves no type', { default: 'x', type: 'null' }, { default: 'x', enum: [null] }],
+    ['keeps any default beside a type union, which moves into anyOf', { default: true, type: ['string', 'integer'] }, { anyOf: [{ type: 'string' }, { type: 'integer' }], default: true }],
+    ['keeps any default beside a type 3.0 does not define', { default: 1, type: 'file' }, { default: 1, type: 'file' }],
+    ['keeps any default beside a malformed type', { default: 1, type: 42 }, { default: 1, type: 42 }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+})
+
+describe('readOnly and writeOnly', () => {
+  // "A property MUST NOT be marked as both `readOnly` and `writeOnly` being
+  // `true`": https://spec.openapis.org/oas/v3.0.4.html#schema-read-only
+  // 3.1 allows both, so both are removed. Each only annotates the property,
+  // and in 3.0 relaxes `required` for one direction, so without them the
+  // property is validated in both directions, as 3.1 validates it.
+  it.each([
+    ['removes both when both are true', { readOnly: true, type: 'string', writeOnly: true }, { type: 'string' }],
+    ['keeps readOnly alone', { readOnly: true, type: 'string' }, { readOnly: true, type: 'string' }],
+    ['keeps writeOnly alone', { type: 'string', writeOnly: true }, { type: 'string', writeOnly: true }],
+    ['keeps a true flag beside a false one', { readOnly: true, type: 'string', writeOnly: false }, { readOnly: true, type: 'string', writeOnly: false }],
+    ['passes malformed values through', { readOnly: 'yes', writeOnly: true }, { readOnly: 'yes', writeOnly: true }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+})
