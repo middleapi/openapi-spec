@@ -447,7 +447,7 @@ describe('recursion', () => {
         },
       },
     })
-    expect(result).toEqual({ items: { properties: { children: {} }, type: 'object' }, type: 'array' })
+    expect(result).toEqual({ items: { properties: { children: { items: {}, type: 'array' } }, type: 'object' }, type: 'array' })
   })
 
   // Outside schemas there is no "accept anything" value to cut with, so a

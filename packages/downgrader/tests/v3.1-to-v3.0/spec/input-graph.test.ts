@@ -111,6 +111,20 @@ describe('shared objects and cycles', () => {
     expect(dig(result, 'paths', '/pets', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toBe(schema)
   })
 
+  // The Media Type converts once as a form request body and once as header
+  // content. The second conversion still reaches the header in progress, so
+  // the cycle closes there rather than being removed.
+  it('keeps a cycle through a media type that converts both as a form body and as header content', () => {
+    const header: Record<string, unknown> = {}
+    const form = { encoding: { a: { headers: { 'X-Trace': header } } }, schema: { type: 'object' } }
+    header.content = { 'multipart/form-data': form }
+    const result = convertPathItem({ post: { requestBody: { content: { 'multipart/form-data': form } }, responses: {} } })
+    const converted = dig(result, 'post', 'requestBody', 'content', 'multipart/form-data', 'encoding', 'a', 'headers', 'X-Trace')
+    const content = dig(converted, 'content', 'multipart/form-data')
+    expect(dig(content, 'schema')).toEqual({ type: 'object' })
+    expect(dig(content, 'encoding', 'a', 'headers', 'X-Trace')).toBe(converted)
+  })
+
   it('keeps cycles and sharing inside values it only copies', () => {
     const node: Record<string, unknown> = { name: 'root' }
     node.self = node

@@ -1,5 +1,7 @@
 export const DROP: unique symbol = Symbol('drop')
 
+const PENDING = new WeakSet<object>()
+
 const PLACEHOLDERS = new WeakSet<object>()
 
 export interface Context {
@@ -89,11 +91,9 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   if (known !== undefined) {
     return known
   }
-  if (ctx.converting.includes(value)) {
-    return DROP
-  }
   const out: Record<string, unknown> = {}
   seen.set(value, out)
+  PENDING.add(out)
   ctx.converting.push(value)
   for (const [key, item] of Object.entries(value)) {
     const field = fields.get(key)
@@ -104,10 +104,15 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   }
   const result = finish === undefined ? out : finish(out, value, ctx)
   ctx.converting.pop()
+  PENDING.delete(out)
   if (result !== out) {
     seen.set(value, result)
   }
   return result
+}
+
+export function isPending(out: unknown): boolean {
+  return PENDING.has(out as object)
 }
 
 export function map(convert: (value: unknown, ctx: Context, key: string) => unknown, isEntry: (key: string) => boolean = () => true): Convert {
