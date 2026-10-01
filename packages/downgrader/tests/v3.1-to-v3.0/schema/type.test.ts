@@ -37,6 +37,35 @@ describe('only null', () => {
   })
 })
 
+describe('a leftover nullable', () => {
+  // 3.1 replaced `nullable` with `"null"` in `type` (see the guide above), so
+  // a 3.0 document migrated by hand can leave it behind, where it has no
+  // effect. Copied into 3.0 beside a `type`, it would start accepting null,
+  // and an enclosing `not` or `oneOf` would then reject null. It is removed,
+  // and only a `type` that lists `"null"` makes the result nullable.
+  it.each([
+    ['removes it beside a single type', { nullable: true, type: 'string' }, { type: 'string' }],
+    ['removes it without a type', { nullable: true }, {}],
+    ['removes a malformed value', { nullable: 'junk', type: 'string' }, { type: 'string' }],
+    ['lets a type that lists null win over nullable: false', { nullable: false, type: ['string', 'null'] }, { nullable: true, type: 'string' }],
+    [
+      'removes it beside a type union',
+      { nullable: true, type: ['string', 'integer'] },
+      { anyOf: [{ type: 'string' }, { type: 'integer' }] },
+    ],
+    // In 3.1 null matches only the first branch, so the oneOf accepts it.
+    [
+      'keeps null accepted by a oneOf with a null branch',
+      { oneOf: [{ type: 'null' }, { nullable: true, type: 'object' }] },
+      { oneOf: [{ enum: [null] }, { type: 'object' }] },
+    ],
+    // In 3.1 the operand rejects null, so the not accepts it.
+    ['keeps null accepted by a not', { not: { nullable: true, type: 'string' } }, { not: { type: 'string' } }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+})
+
 describe('several types', () => {
   // A union of types has no 3.0 `type` form, so each type becomes its own
   // `anyOf` branch. When null was listed, every branch is nullable.

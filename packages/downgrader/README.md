@@ -119,6 +119,7 @@ Converted:
 | `type: ["T", "null"]`                              | `type: "T"` plus `nullable: true`                                                                                        |
 | `type` with several non-null entries               | `anyOf` of single-type schemas, each `nullable` when `null` was listed; a sibling `items` moves into the `array` variant |
 | `type: "null"`                                     | `enum: [null]`, or `not: {}` when a sibling `enum` or `const` excludes `null`                                            |
+| `nullable` (a 3.0 field, inert in 3.1)             | removed, since beside `type` it would accept `null`; only a `type` listing `"null"` sets `nullable: true`                |
 | `const`                                            | single-value `enum`                                                                                                      |
 | numeric `exclusiveMinimum` / `exclusiveMaximum`    | `minimum` / `maximum` plus the boolean flag; a tighter existing bound wins                                               |
 | `examples`                                         | its first entry becomes `example` unless `example` exists                                                                |
