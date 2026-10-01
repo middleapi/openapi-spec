@@ -25,7 +25,7 @@ Every converter follows the same contract:
 - **Loses detail, never meaning.** Anything the target version lacks is converted to an equivalent or, failing that, removed. A downgraded schema accepts every value the original accepts, and possibly more. The exceptions are `contentEncoding` or `contentMediaType` without a `type`, which 3.0 can only express with `type: string`, and the [known limitations](#known-limitations).
 - **Adds no dangling references.** A local `$ref` whose target is removed or moved is replaced by the converted target. [References](#references) lists the exceptions.
 - **Never throws, never mutates.** The result is a new object. Unexpected shapes are copied through as they are, references inside them included. Cyclic input, such as a dereferenced document, stays cyclic, and the result may reuse one object in several places. Only nesting thousands of levels deep can overflow the stack.
-- **Keeps extensions.** `x-` keys and unknown keys survive, except on Reference Objects that are inlined or downgraded to 3.0.
+- **Keeps extensions.** `x-` keys and unknown keys survive, except on Reference Objects that are inlined or downgraded to 3.0, and beside a schema `$ref` in draft-04 to draft-07, which ignore its siblings.
 
 ## Usage
 
@@ -110,12 +110,14 @@ Removed, with no 3.0 equivalent:
 
 A schema is _loosened_ when the conversion removes a restriction from it or a subschema, or when it contains an object cycle, as in a dereferenced document.
 
+A schema is read in the JSON Schema dialect that its `$schema` names, else in the dialect of the schema around it, else in the one `jsonSchemaDialect` names. JSON Schema draft-04 to draft-07 and 2019-09 give some keywords another meaning than 2020-12, which the OAS dialect builds on, and the conversion follows that meaning. Any other dialect is read as 2020-12.
+
 Converted:
 
 | 3.1 construct                                      | 3.0 result                                                                                                               |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `true` / `false`, except as `additionalProperties` | `{}` / `{ not: {} }`                                                                                                     |
-| `$ref` with sibling keywords                       | siblings kept, `$ref` moved into `allOf`                                                                                 |
+| `$ref` with sibling keywords                       | siblings kept, `$ref` moved into `allOf`; in draft-04 to draft-07, which ignore the siblings, the `$ref` alone           |
 | `type: ["T", "null"]`                              | `type: "T"` plus `nullable: true`                                                                                        |
 | `type` with several non-null entries               | `anyOf` of single-type schemas, each `nullable` when `null` was listed; a sibling `items` moves into the `array` variant |
 | `type: "null"`                                     | `enum: [null]`, or `not: {}` when a sibling `enum` or `const` excludes `null`                                            |
@@ -131,7 +133,7 @@ Converted:
 | `oneOf` with a loosened branch                     | `anyOf`, since looser branches may overlap                                                                               |
 | XML `nodeType` (a 3.2 field)                       | `attribute: true` / `wrapped: true` where expressible, then removed                                                      |
 
-Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`.
+Removed, with no 3.0 equivalent: `$schema`, `$id`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `$comment`, `if` / `then` / `else`, `dependentSchemas`, `dependentRequired`, `prefixItems` with its `items`, `contains`, `minContains`, `maxContains`, `patternProperties` with its `additionalProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `contentSchema`, `contentEncoding`, `contentMediaType`, and `examples`. In draft-04 to 2019-09, so are a tuple `items` (an array of schemas) with its `additionalItems`, `dependencies`, `definitions`, `$recursiveRef`, and `$recursiveAnchor`.
 
 ## References
 
@@ -147,7 +149,7 @@ Both converters treat local `$ref`s the same way:
 
 - Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
 - 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead.
-- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
+- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them. A schema in a dialect other than 2020-12, 2019-09, or draft-04 to draft-07 is read as 2020-12, and a 2020-12 keyword that an earlier draft lacks still converts, so `const` in draft-04 becomes an `enum`.
 
 ## Sponsors
 

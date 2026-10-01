@@ -1,7 +1,7 @@
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import type { Context } from './shared'
+import type { Context, Fields } from './shared'
 import {
   allOfItems,
   child,
@@ -46,6 +46,8 @@ const LOOSENING_KEYWORDS = new Set([
   'unevaluatedProperties',
 ])
 
+const LEGACY_LOOSENING_KEYWORDS = new Set([...LOOSENING_KEYWORDS, '$recursiveRef', 'dependencies'])
+
 const ANNOTATION_KEYWORDS = [
   '$anchor',
   '$comment',
@@ -59,6 +61,10 @@ const ANNOTATION_KEYWORDS = [
   'contentSchema',
   'examples',
 ]
+
+const DRAFT_2019_09_URI = /^https?:\/\/json-schema\.org\/draft\/2019-09\/schema#?$/
+
+const DRAFT_04_TO_07_URI = /^https?:\/\/json-schema\.org\/draft-0[4-7]\/schema#?$/
 
 const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?:;|$))/i
 
@@ -112,6 +118,27 @@ const SCHEMA_FIELDS = defineFields({
   type: DROP,
   xml: convertXml,
 })
+
+const LEGACY_SCHEMA_FIELDS: Fields = new Map([...SCHEMA_FIELDS, ...defineFields({
+  $recursiveAnchor: DROP,
+  $recursiveRef: DROP,
+  additionalItems: DROP,
+  definitions: DROP,
+  dependencies: DROP,
+  items: (item, ctx, schema) => (Array.isArray(item) || 'prefixItems' in schema ? DROP : convertSchema(item, ctx)),
+})])
+
+interface Dialect {
+  readonly fields: Fields
+  readonly loosening: ReadonlySet<string>
+  readonly refOnly: boolean
+}
+
+const DRAFT_2020_12: Dialect = { fields: SCHEMA_FIELDS, loosening: LOOSENING_KEYWORDS, refOnly: false }
+
+const DRAFT_2019_09: Dialect = { fields: LEGACY_SCHEMA_FIELDS, loosening: LEGACY_LOOSENING_KEYWORDS, refOnly: false }
+
+const DRAFT_04_TO_07: Dialect = { ...DRAFT_2019_09, refOnly: true }
 
 const PARAMETER_FIELDS = defineFields({
   content: convertContent,
@@ -204,8 +231,35 @@ function loosened(out: object): object {
   return out
 }
 
-function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+function declaredDialect(value: unknown, key: string, inherited?: string): string | undefined {
+  const uri = child(value, key)
+  return typeof uri === 'string' ? uri : inherited
+}
+
+function indexDialects(value: unknown, dialect: string | undefined, index = new Map<object, string | undefined>()): Map<object, string | undefined> {
+  if ((Array.isArray(value) || isRecord(value)) && !index.has(value)) {
+    index.set(value, dialect)
+    for (const item of Object.values(value)) {
+      indexDialects(item, declaredDialect(item, '$schema', dialect), index)
+    }
+  }
+  return index
+}
+
+function schemaDialect(schema: unknown, ctx: Context): Dialect {
+  const uri = isRecord(schema) ? ctx.dialects.get(schema) : undefined
+  if (uri === undefined) {
+    return DRAFT_2020_12
+  }
+  if (DRAFT_04_TO_07_URI.test(uri)) {
+    return DRAFT_04_TO_07
+  }
+  return DRAFT_2019_09_URI.test(uri) ? DRAFT_2019_09 : DRAFT_2020_12
+}
+
+function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>, dialect: Dialect): boolean {
+  return Object.keys(schema).some(key => dialect.loosening.has(key))
+    || (dialect !== DRAFT_2020_12 && Array.isArray(schema.items))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -280,7 +334,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
   }
-  let loose = isLooseSchema(out, schema)
+  let loose = isLooseSchema(out, schema, schemaDialect(schema, ctx))
   if (isLoose(out.not)) {
     delete out.not
     loose = true
@@ -326,12 +380,13 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
+  const dialect = schemaDialect(value, ctx)
   const ref = getRef(value)
-  if (ref !== undefined && Object.keys(value as object).length === 1) {
+  if (ref !== undefined && (dialect.refOnly || Object.keys(value as object).length === 1)) {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
-  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  const out = convertObject(value, ctx, dialect.fields, finishSchema)
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }
 
@@ -503,9 +558,9 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
-  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_0.OpenAPIObject
+  return downgrade(spec, convertDocument, REMOVED, indexDialects(spec, declaredDialect(spec, 'jsonSchemaDialect'))) as OpenAPIV3_0.OpenAPIObject
 }
 
 export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
+  return downgrade(schema, convertSchema, [], indexDialects(schema, declaredDialect(schema, '$schema'))) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }
