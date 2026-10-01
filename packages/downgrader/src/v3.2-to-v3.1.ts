@@ -309,7 +309,7 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
-  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_1.OpenAPIObject
+  return downgrade(spec, convertDocument, REMOVED, convertSchema) as OpenAPIV3_1.OpenAPIObject
 }
 
 export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {

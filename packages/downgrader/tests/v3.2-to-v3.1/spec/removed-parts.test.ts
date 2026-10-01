@@ -6,7 +6,8 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
-import { dig } from '../../helpers'
+import { dig, expandedSize } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
 const petRef = { $ref: '#/components/mediaTypes/Pet/schema' }
@@ -155,6 +156,33 @@ describe('schema references', () => {
     }).components).toEqual({
       schemas: { Escaped: { type: 'string' }, Percent: { type: 'number' }, Templated: { type: 'integer' } },
     })
+  })
+
+  // Shared by identity, a target still repeats wherever it is used once the
+  // result is expanded as a tree, as JSON.stringify does. Down a chain of
+  // media types whose schemas each use the next one twice, that doubles per
+  // level, so a shared schema that contains another shared schema moves into
+  // components.schemas, named after its pointer.
+  it('moves a shared schema that contains another shared schema into components.schemas', async () => {
+    const depth = 64
+    const pointer = (index: number) => `#/components/mediaTypes/M${index}/schema`
+    const twice = (schema: unknown) => ({ properties: { a: schema, b: schema }, type: 'object' })
+    const mediaTypes: Record<string, unknown> = { [`M${depth}`]: { schema: { type: 'string' } } }
+    for (let index = 0; index < depth; index++) {
+      mediaTypes[`M${index}`] = { schema: twice({ $ref: pointer(index + 1) }) }
+    }
+    const input = { components: { mediaTypes, schemas: { Root: { $ref: pointer(0) } } }, info: { title: 't', version: '1' }, openapi: '3.2.0' }
+    const result = convertSpec(input)
+    const limit = 2 * expandedSize(input, Infinity)
+    expect(expandedSize(result, limit)).toBeLessThanOrEqual(limit)
+    const moved = (index: number) => twice({ $ref: `#/components/schemas/components_mediaTypes_M${index}_schema` })
+    const schemas: Record<string, unknown> = { Root: moved(1) }
+    for (let index = 1; index < depth - 1; index++) {
+      schemas[`components_mediaTypes_M${index}_schema`] = moved(index + 1)
+    }
+    schemas[`components_mediaTypes_M${depth - 1}_schema`] = twice({ type: 'string' })
+    expect(result.components).toEqual({ schemas })
+    await expectValidDowngrade(input, convertSpec, '3.2', '3.1')
   })
 })
 

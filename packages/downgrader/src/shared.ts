@@ -386,7 +386,110 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
   return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
 }
 
-export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
+function hoistedName(ref: string, taken: Set<string>): string {
+  const base = (parsePointer(ref) as string[]).join('/').replace(/[^\w.-]+/g, '_')
+  let name = base
+  for (let index = 2; taken.has(name); index++) {
+    name = `${base}_${index}`
+  }
+  taken.add(name)
+  return name
+}
+
+function reachable(roots: readonly object[], edge: (node: object, item: object) => void): object[] {
+  const nodes = [...roots]
+  const seen = new Set(nodes)
+  for (const node of nodes) {
+    for (const item of Object.values(node)) {
+      if (Array.isArray(item) || isRecord(item)) {
+        edge(node, item)
+        if (!seen.has(item)) {
+          seen.add(item)
+          nodes.push(item)
+        }
+      }
+    }
+  }
+  return nodes
+}
+
+function hoistSchemas(document: Record<string, unknown>, inlined: ReadonlyMap<unknown, unknown>, targets: ReadonlyMap<string, unknown>): unknown {
+  const components = document.components === undefined ? {} : document.components
+  if (!isRecord(components)) {
+    return document
+  }
+  const schemas = components.schemas === undefined ? {} : components.schemas
+  if (!isRecord(schemas)) {
+    return document
+  }
+  const sources = new Map<object, unknown>()
+  for (const [target, out] of inlined) {
+    if (isRecord(out) && !sources.has(out)) {
+      sources.set(out, target)
+    }
+  }
+  let nested = false
+  reachable([...sources.keys()], (_node, item) => {
+    nested ||= sources.has(item)
+  })
+  if (!nested) {
+    return document
+  }
+  const uses = new Map<object, number>()
+  const nodes = reachable([document], (_node, item) => {
+    if (sources.has(item)) {
+      uses.set(item, (uses.get(item) ?? 0) + 1)
+    }
+  })
+  const shared = [...uses].filter(([, count]) => count > 1).map(([node]) => node)
+  const parents = new Map<object, object[]>()
+  reachable(shared, (node, item) => {
+    const itemParents = parents.get(item)
+    if (itemParents === undefined) {
+      parents.set(item, [node])
+    }
+    else {
+      itemParents.push(node)
+    }
+  })
+  const containsShared = new Set<object>()
+  const queue = shared.flatMap(node => parents.get(node) ?? [])
+  for (const node of queue) {
+    if (!containsShared.has(node)) {
+      containsShared.add(node)
+      for (const parent of parents.get(node) ?? []) {
+        queue.push(parent)
+      }
+    }
+  }
+  const pointers = new Map([...targets].map(([ref, target]) => [target, ref]))
+  const taken = new Set(Object.keys(schemas))
+  const names = new Map<unknown, string>()
+  for (const node of shared) {
+    if (containsShared.has(node)) {
+      names.set(node, hoistedName(pointers.get(sources.get(node)) as string, taken))
+    }
+  }
+  if (names.size === 0) {
+    return document
+  }
+  for (const node of nodes) {
+    for (const [key, item] of Object.entries(node)) {
+      const name = names.get(item)
+      if (name !== undefined) {
+        setOwn(node as Record<string, unknown>, key, { $ref: `#/components/schemas/${name}` })
+      }
+    }
+  }
+  for (const [node, name] of names) {
+    setOwn(schemas, name, node)
+  }
+  components.schemas = schemas
+  document.components = components
+  return document
+}
+
+export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = [], schema?: Convert): unknown {
   const targets = new Map<string, unknown>()
   const resolveRef = (ref: string): unknown => {
     if (!targets.has(ref)) {
@@ -429,6 +532,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
   let previous = root
   for (;;) {
     const kept = new Set<string>()
+    const inlined = new Map<Convert, Map<unknown, unknown>>()
     const out = convert(root, {
       aliasEnd,
       converting: [],
@@ -445,7 +549,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         return dangling.has(ref)
       },
       identified: new Set(),
-      inlined: new Map(),
+      inlined,
       inlining: new Set(),
       isRemovedPart,
       removals: new Map(),
@@ -461,7 +565,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       }
     }
     if (!stale) {
-      return out
+      const schemas = schema === undefined ? undefined : inlined.get(schema)
+      return schemas === undefined ? out : hoistSchemas(out as Record<string, unknown>, schemas, targets)
     }
     previous = out
   }

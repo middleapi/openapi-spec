@@ -3,8 +3,9 @@
 // reference is replaced by a converted copy of its target (inlined),
 // following the reference chain until it leaves the removed parts.
 
-import { dig } from '../../helpers'
-import { convertSpec, item, removedPointer, webhookSchemaPointer } from './helpers'
+import { dig, expandedSize } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
+import { convertSpec, info, item, removedPointer, webhookSchemaPointer } from './helpers'
 
 const hook = {
   post: {
@@ -17,6 +18,11 @@ const hook = {
 /** Points into the `full` webhook that several tests below inline from. */
 function full(path: string): string {
   return `#/webhooks/full/post/${path}`
+}
+
+/** An object schema whose properties `a` and `b` are both `schema`. */
+function twice(schema: unknown): Record<string, unknown> {
+  return { properties: { a: schema, b: schema }, type: 'object' }
 }
 
 const hookParameter = { description: 'orig', in: 'header', name: 'X-Hook', schema: { nullable: true, type: 'string' } }
@@ -214,7 +220,8 @@ describe('schema references', () => {
   })
 
   // A diamond of references (two properties pointing at the same target, 64
-  // levels deep) has 2^64 paths. Each target is converted once and shared.
+  // levels deep) has 2^64 paths. Each target is converted once, and all but
+  // the last move into components.schemas, as the next test explains.
   it('converts a target reached through many references once', () => {
     const pointer = (index: number) => `#/webhooks/w${index}/post/requestBody/content/application~1json/schema`
     const leaf = { content: { 'application/json': { schema: { type: ['string', 'null'] } } } }
@@ -223,12 +230,74 @@ describe('schema references', () => {
       const schema = { properties: { a: { $ref: pointer(index + 1) }, b: { $ref: pointer(index + 1) } }, type: 'object' }
       webhooks[`w${index}`] = { post: { requestBody: { content: { 'application/json': { schema } } } } }
     }
-    let node = dig(convertSpec({ components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks }), 'components', 'schemas', 'Root')
-    for (let index = 0; index < 64; index++) {
-      expect(dig(node, 'properties', 'a')).toBe(dig(node, 'properties', 'b'))
-      node = dig(node, 'properties', 'a')
+    const result = convertSpec({ components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks })
+    let node = dig(result, 'components', 'schemas', 'Root')
+    for (let index = 1; index < 64; index++) {
+      const name = `webhooks_w${index}_post_requestBody_content_application_json_schema`
+      expect(dig(node, 'properties', 'a', '$ref')).toBe(`#/components/schemas/${name}`)
+      expect(dig(node, 'properties', 'b')).toEqual(dig(node, 'properties', 'a'))
+      node = dig(result, 'components', 'schemas', name)
     }
-    expect(node).toEqual({ nullable: true, type: 'string' })
+    expect(dig(node, 'properties', 'a')).toBe(dig(node, 'properties', 'b'))
+    expect(dig(node, 'properties', 'a')).toEqual({ nullable: true, type: 'string' })
+  })
+
+  // Shared by identity, a target still repeats wherever it is used once the
+  // result is expanded as a tree, as JSON.stringify does. Down a chain of
+  // targets that each use the next one twice, that doubles per level: 2^64
+  // copies here. So a shared schema that contains another shared schema
+  // moves into components.schemas, named after its pointer, and every use
+  // refers to it there. A shared schema that contains none stays inlined.
+  it('moves a shared schema that contains another shared schema into components.schemas', async () => {
+    const depth = 64
+    const pointer = (index: number) => `#/components/schemas/Defs/$defs/D${index}`
+    const $defs: Record<string, unknown> = { [`D${depth}`]: { type: ['string', 'null'] } }
+    for (let index = 0; index < depth; index++) {
+      $defs[`D${index}`] = twice({ $ref: pointer(index + 1) })
+    }
+    const input = { components: { schemas: { Defs: { $defs }, Root: { $ref: pointer(0) } } }, info, openapi: '3.1.0' }
+    const result = convertSpec(input)
+    const limit = 2 * expandedSize(input, Infinity)
+    expect(expandedSize(result, limit)).toBeLessThanOrEqual(limit)
+    const moved = (index: number) => twice({ $ref: `#/components/schemas/components_schemas_Defs_defs_D${index}` })
+    const schemas: Record<string, unknown> = { Defs: {}, Root: moved(1) }
+    for (let index = 1; index < depth - 1; index++) {
+      schemas[`components_schemas_Defs_defs_D${index}`] = moved(index + 1)
+    }
+    schemas[`components_schemas_Defs_defs_D${depth - 1}`] = twice({ nullable: true, type: 'string' })
+    expect(result.components).toEqual({ schemas })
+    await expectValidDowngrade(input, convertSpec, '3.1', '3.0')
+  })
+
+  describe('moving shared schemas into components.schemas', () => {
+    const pointer = (index: number) => `#/webhooks/w/x-schemas/${index}`
+    const webhooks = { w: { 'x-schemas': [twice({ $ref: pointer(1) }), twice({ $ref: pointer(2) }), { type: 'string' }] } }
+    const paths = { '/a': { get: { responses: { 200: { content: { 'application/json': { schema: { $ref: pointer(0) } } }, description: 'ok' } } } } }
+    const schema = (result: unknown) => dig(result, 'paths', '/a', 'get', 'responses', '200', 'content', 'application/json', 'schema')
+
+    it('adds components.schemas when the document has none', () => {
+      const result = convertSpec({ paths, webhooks })
+      expect(schema(result)).toEqual(twice({ $ref: '#/components/schemas/webhooks_w_x-schemas_1' }))
+      expect(result.components).toEqual({ schemas: { 'webhooks_w_x-schemas_1': twice({ type: 'string' }) } })
+    })
+
+    it('adds a numeric suffix when the name is already taken', () => {
+      const result = convertSpec({ components: { schemas: { 'webhooks_w_x-schemas_1': { type: 'integer' } } }, paths, webhooks })
+      expect(schema(result)).toEqual(twice({ $ref: '#/components/schemas/webhooks_w_x-schemas_1_2' }))
+      expect(result.components).toEqual({
+        schemas: { 'webhooks_w_x-schemas_1': { type: 'integer' }, 'webhooks_w_x-schemas_1_2': twice({ type: 'string' }) },
+      })
+    })
+
+    it.each([
+      ['components', []],
+      ['components.schemas', { schemas: [] }],
+    ])('keeps sharing by identity when %s is not an object', (_name, components) => {
+      const result = convertSpec({ components, paths, webhooks })
+      expect(result.components).toEqual(components)
+      expect(dig(schema(result), 'properties', 'a')).toBe(dig(schema(result), 'properties', 'b'))
+      expect(schema(result)).toEqual(twice(twice({ type: 'string' })))
+    })
   })
 
   it('converts path items and headers reached through many references once', () => {
