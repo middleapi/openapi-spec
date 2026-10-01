@@ -13,11 +13,17 @@ export interface Context {
   readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, unknown>>
   readonly inlining: Set<unknown>
+  readonly merged: Map<Convert, Map<unknown, Merged>>
   readonly removals: Map<string, boolean | undefined>
   readonly seen: Map<Fields, Map<object, unknown>>
 }
 
 export type Convert = (value: unknown, ctx: Context) => unknown
+
+export interface Merged {
+  readonly fields: unknown
+  readonly skipped: readonly unknown[]
+}
 
 export type Field = (value: unknown, ctx: Context, parent: Record<string, unknown>) => unknown
 
@@ -205,26 +211,40 @@ export function resolve(root: unknown, ref: string): unknown {
   return parsePointer(ref)?.reduce<unknown>(child, root)
 }
 
-export function inline(ref: string, ctx: Context, convert: Convert): unknown {
-  const target = ctx.resolve(ref)
-  if (target === undefined || ctx.inlining.has(target) || ctx.converting.includes(target)) {
-    return DROP
-  }
-  let cache = ctx.inlined.get(convert)
+function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Map<unknown, T> {
+  let cache = caches.get(convert)
   if (cache === undefined) {
     cache = new Map()
-    ctx.inlined.set(convert, cache)
+    caches.set(convert, cache)
   }
+  return cache
+}
+
+function convertOnce(target: unknown, ctx: Context, convert: Convert): unknown {
+  const cache = cacheOf(ctx.inlined, convert)
   if (cache.has(target)) {
     return cache.get(target)
   }
   const identified = ctx.identified.size
-  ctx.inlining.add(target)
   const out = convert(target, { ...ctx, seen: new Map() })
-  ctx.inlining.delete(target)
   if (ctx.identified.size === identified) {
     cache.set(target, out)
   }
+  return out
+}
+
+function isInProgress(target: unknown, ctx: Context): boolean {
+  return ctx.inlining.has(target) || ctx.converting.includes(target)
+}
+
+export function inline(ref: string, ctx: Context, convert: Convert): unknown {
+  const target = ctx.resolve(ref)
+  if (target === undefined || isInProgress(target, ctx)) {
+    return DROP
+  }
+  ctx.inlining.add(target)
+  const out = convertOnce(target, ctx, convert)
+  ctx.inlining.delete(target)
   return out
 }
 
@@ -233,7 +253,7 @@ function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
     return ctx.removals.get(ref) === true
   }
   ctx.removals.set(ref, undefined)
-  const removed = inline(ref, { ...ctx, converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), seen: new Map() }, convert) === DROP
+  const removed = inline(ref, { ...ctx, converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }, convert) === DROP
   ctx.removals.set(ref, removed)
   return removed
 }
@@ -331,32 +351,71 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
   return tokens !== undefined && isPathItemPointer(tokens) && ctx.dangles(ref as string)
 }
 
+interface Hop {
+  readonly identified: number
+  readonly own: unknown
+  readonly target: unknown
+}
+
+// Each hop's merged fields are converted once and shared. A merge that skipped
+// a hop in progress lacks that hop's fields, so it is reused only while every
+// hop it skipped is still in progress.
+function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Convert): unknown {
+  const cache = cacheOf(ctx.merged, convert)
+  const hops: (Hop | { readonly target: unknown })[] = []
+  let tail: Merged
+  for (;;) {
+    const target = ctx.resolve(ref)
+    const next = getRef(target)
+    if (!followsPathItem(next, ctx)) {
+      const fields = inline(ref, ctx, convert)
+      tail = { fields, skipped: fields === DROP ? [target] : [] }
+      break
+    }
+    const known = cache.get(target)
+    if (isInProgress(target, ctx)) {
+      hops.push({ target })
+    }
+    else if (known !== undefined && known.skipped.every(hop => isInProgress(hop, ctx))) {
+      tail = known
+      break
+    }
+    else {
+      const identified = ctx.identified.size
+      ctx.inlining.add(target)
+      hops.push({ identified, own: convertOnce(target, ctx, convertOwn), target })
+    }
+    ref = next
+  }
+  for (const hop of hops.reverse()) {
+    if (!('own' in hop)) {
+      tail = { fields: tail.fields, skipped: [...tail.skipped, hop.target] }
+      continue
+    }
+    ctx.inlining.delete(hop.target)
+    const fields: Record<string, unknown> = {}
+    mergeMissing(fields, hop.own)
+    mergeMissing(fields, tail.fields)
+    tail = { fields, skipped: tail.skipped }
+    if (ctx.identified.size === hop.identified) {
+      cache.set(hop.target, tail)
+    }
+  }
+  return tail.fields
+}
+
 export function mergeRef(convert: Convert): Finish {
+  const convertOwn: Convert = (value, ctx) => {
+    const { $ref: _, ...own } = value as Record<string, unknown>
+    return convert(own, ctx)
+  }
   return (out, source, ctx) => {
-    let ref = getRef(source)
+    const ref = getRef(source)
     if (!followsPathItem(ref, ctx)) {
       return out
     }
     delete out.$ref
-    const hops: unknown[] = []
-    for (;;) {
-      const target = ctx.resolve(ref)
-      const next = getRef(target)
-      if (!followsPathItem(next, ctx)) {
-        mergeMissing(out, inline(ref, ctx, convert))
-        break
-      }
-      if (!ctx.inlining.has(target) && !ctx.converting.includes(target)) {
-        const { $ref: _, ...own } = target as Record<string, unknown>
-        ctx.inlining.add(target)
-        hops.push(target)
-        mergeMissing(out, convert(own, { ...ctx, seen: new Map() }))
-      }
-      ref = next
-    }
-    for (const hop of hops) {
-      ctx.inlining.delete(hop)
-    }
+    mergeMissing(out, mergeChain(ref, ctx, convert, convertOwn))
     return out
   }
 }
@@ -448,6 +507,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       inlined: new Map(),
       inlining: new Set(),
       isRemovedPart,
+      merged: new Map(),
       removals: new Map(),
       markDangling: ref => dangling.add(ref),
       resolve: resolveRef,

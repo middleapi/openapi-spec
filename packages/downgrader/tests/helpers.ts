@@ -16,3 +16,19 @@ export function dig(value: unknown, ...path: string[]): unknown {
 export function expectAcyclic(value: unknown): void {
   expect(() => JSON.stringify(value)).not.toThrow()
 }
+
+/**
+ * Copies `object`, turning its `key` field into a getter that adds one to
+ * `reads.count` on every read, so a test can bound how many times the
+ * conversion walks into that field.
+ */
+export function countReads<T extends Record<string, unknown>>(object: T, key: keyof T & string, reads: { count: number }): T {
+  const value = object[key]
+  return Object.defineProperty({ ...object }, key, {
+    enumerable: true,
+    get: () => {
+      reads.count++
+      return value
+    },
+  })
+}

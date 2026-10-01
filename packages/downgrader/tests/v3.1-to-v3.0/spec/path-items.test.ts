@@ -8,6 +8,8 @@
 // https://spec.openapis.org/oas/v3.1.2.html#path-item-ref
 // So when a Path Item `$ref` is inlined, its own fields win.
 
+import { countReads, dig } from '../../helpers'
+import { expectValidAs } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
 const reusable = {
@@ -192,5 +194,100 @@ describe('recursion', () => {
     expect(result.paths).toEqual({
       '/p': { description: 'a', post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
     })
+  })
+})
+
+// A hop is a Path Item with its own fields and a `$ref` to the next one. Like
+// any inlined target, each hop is converted once and shared, so the work grows
+// with the number of references, not with the number of paths through them.
+// Each test counts reads of the field the conversion walks into: a hop's
+// operation each time its own fields are converted, or its `$ref` at each step
+// along a chain.
+describe('hops converted once', () => {
+  const responses = { 200: { description: 'ok' } }
+
+  it('shares a hop that many paths point at', () => {
+    const reads = { count: 0 }
+    const get = { parameters: [{ in: 'query', name: 'q', schema: { type: ['string', 'null'] } }], responses }
+    const paths = Object.fromEntries(Array.from({ length: 200 }, (_, index) => [`/p${index}`, { $ref: '#/components/pathItems/Hop' }]))
+    const result = convertSpec({
+      components: {
+        pathItems: {
+          Base: { summary: 'base' },
+          Hop: countReads({ $ref: '#/components/pathItems/Base', get }, 'get', reads),
+        },
+      },
+      paths,
+    })
+    expect(reads.count).toBe(1)
+    const first = result.paths['/p0']
+    expect(first).toEqual({
+      get: { parameters: [{ in: 'query', name: 'q', schema: { nullable: true, type: 'string' } }], responses },
+      summary: 'base',
+    })
+    for (const item of Object.values(result.paths)) {
+      expect(item).toEqual(first)
+      expect(item.get).toBe(first?.get)
+    }
+  })
+
+  it('walks a long alias chain once, however many paths enter it', () => {
+    const reads = { count: 0 }
+    const length = 1000
+    const pathItems: Record<string, unknown> = { [`P${length}`]: { get: { responses } } }
+    const paths: Record<string, unknown> = {}
+    for (let index = 0; index < length; index++) {
+      pathItems[`P${index}`] = countReads({ $ref: `#/components/pathItems/P${index + 1}` }, '$ref', reads)
+      paths[`/p${index}`] = { $ref: `#/components/pathItems/P${index}` }
+    }
+    const result = convertSpec({ components: { pathItems }, paths })
+    expect(reads.count).toBeLessThan(50 * length)
+    for (const item of Object.values(result.paths)) {
+      expect(item).toEqual({ get: { responses } })
+    }
+  })
+
+  // Every webhook `h<i>` points at `base`, and its callbacks point at every
+  // webhook, itself included. Inlining each path through this graph
+  // separately would convert the webhooks about k! times.
+  it('converts each hop of a cyclic callback graph once', async () => {
+    const reads = { count: 0 }
+    const k = 8
+    const webhooks: Record<string, unknown> = { base: { get: { responses } } }
+    for (let i = 0; i < k; i++) {
+      const callbacks = Object.fromEntries(Array.from({ length: k }, (_, j) => [`c${j}`, { '{$request.body#/url}': { $ref: `#/webhooks/h${j}` } }]))
+      webhooks[`h${i}`] = countReads({ $ref: '#/webhooks/base', post: { callbacks, responses } }, 'post', reads)
+    }
+    const result = convertSpec({ paths: { '/a': { $ref: '#/webhooks/h0' } }, webhooks })
+    expect(reads.count).toBe(k)
+    await expectValidAs(result, '3.0')
+    const callbacks = dig(result, 'paths', '/a', 'post', 'callbacks')
+    // `h0` is in progress inside its own callbacks, so the reference back to
+    // it keeps only the fields of `base`.
+    expect(dig(callbacks, 'c0', '{$request.body#/url}')).toEqual({ get: { responses } })
+    // `h2` is converted inside `h1`, and that copy is shared with `h0`.
+    expect(dig(callbacks, 'c2', '{$request.body#/url}', 'post'))
+      .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
+  })
+
+  // The callbacks of `B` enter the chain A0 → … → A499 → B → T, which passes
+  // `B` while it is in progress, so every copy inside `B` skips it. That merge
+  // is shared among those copies but not with `/q`, which enters the chain from
+  // outside and keeps the fields of `B`.
+  it('shares a merge that skipped a hop in progress only while that hop is in progress', () => {
+    const reads = { count: 0 }
+    const length = 500
+    const pointer = (name: string): string => `#/components/pathItems/${name}`
+    const pathItems: Record<string, unknown> = { T: { summary: 't' } }
+    for (let index = 0; index < length; index++) {
+      pathItems[`A${index}`] = countReads({ $ref: pointer(index + 1 < length ? `A${index + 1}` : 'B') }, '$ref', reads)
+    }
+    const callbacks = Object.fromEntries(Array.from({ length }, (_, index) => [`c${index}`, { '{$url}': { $ref: pointer('A0') } }]))
+    pathItems.B = { $ref: pointer('T'), get: { callbacks, responses } }
+    const result = convertSpec({ components: { pathItems }, paths: { '/p': { $ref: pointer('B') }, '/q': { $ref: pointer('A0') } } })
+    expect(reads.count).toBeLessThan(50 * length)
+    const inner = Object.fromEntries(Array.from({ length }, (_, index) => [`c${index}`, { '{$url}': { summary: 't' } }]))
+    expect(result.paths['/p']).toEqual({ get: { callbacks: inner, responses }, summary: 't' })
+    expect(result.paths['/q']).toEqual(result.paths['/p'])
   })
 })
