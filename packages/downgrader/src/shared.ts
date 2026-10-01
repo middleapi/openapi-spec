@@ -20,11 +20,6 @@ export interface Context {
 
 export type Convert = (value: unknown, ctx: Context) => unknown
 
-export interface Merged {
-  readonly fields: unknown
-  readonly skipped: readonly unknown[]
-}
-
 export type Field = (value: unknown, ctx: Context, parent: Record<string, unknown>) => unknown
 
 export type Fields = ReadonlyMap<string, Field | typeof DROP>
@@ -248,12 +243,16 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   return out
 }
 
+function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen'> {
+  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }
+}
+
 function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
   if (ctx.removals.has(ref)) {
     return ctx.removals.get(ref) === true
   }
   ctx.removals.set(ref, undefined)
-  const removed = inline(ref, { ...ctx, converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }, convert) === DROP
+  const removed = inline(ref, { ...ctx, ...freshState() }, convert) === DROP
   ctx.removals.set(ref, removed)
   return removed
 }
@@ -351,36 +350,53 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
   return tokens !== undefined && isPathItemPointer(tokens) && ctx.dangles(ref as string)
 }
 
-interface Hop {
-  readonly identified: number
-  readonly own: unknown
-  readonly target: unknown
+interface Skipped {
+  readonly hop: unknown
+  readonly rest: Skipped | undefined
 }
 
-// Each hop's merged fields are converted once and shared. A merge that skipped
-// a hop in progress lacks that hop's fields, so it is reused only while every
-// hop it skipped is still in progress.
+interface Merged {
+  readonly fields: unknown
+  readonly skipped: Skipped | undefined
+}
+
+type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly target: unknown }
+
+function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
+  for (let node = skipped; node !== undefined; node = node.rest) {
+    if (!isInProgress(node.hop, ctx)) {
+      return false
+    }
+  }
+  return true
+}
+
+// Two caches keep this linear. A hop's own fields are converted once and
+// shared whatever is in progress, like any inlined target. Its merged fields
+// also depend on which later hops were skipped for being in progress, so a
+// merge is reused only while every hop it skipped is still in progress: a
+// reference from outside the cycle keeps those hops' fields.
 function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Convert): unknown {
   const cache = cacheOf(ctx.merged, convert)
-  const hops: (Hop | { readonly target: unknown })[] = []
+  const hops: Hop[] = []
   let tail: Merged
   for (;;) {
     const target = ctx.resolve(ref)
     const next = getRef(target)
     if (!followsPathItem(next, ctx)) {
       const fields = inline(ref, ctx, convert)
-      tail = { fields, skipped: fields === DROP ? [target] : [] }
+      tail = { fields, skipped: fields === DROP ? { hop: target, rest: undefined } : undefined }
       break
     }
-    const known = cache.get(target)
     if (isInProgress(target, ctx)) {
       hops.push({ target })
     }
-    else if (known !== undefined && known.skipped.every(hop => isInProgress(hop, ctx))) {
-      tail = known
-      break
-    }
     else {
+      const known = cache.get(target)
+      if (known !== undefined && isStillSkipped(known.skipped, ctx)) {
+        tail = known
+        break
+      }
       const identified = ctx.identified.size
       ctx.inlining.add(target)
       hops.push({ identified, own: convertOnce(target, ctx, convertOwn), target })
@@ -389,14 +405,14 @@ function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Con
   }
   for (const hop of hops.reverse()) {
     if (!('own' in hop)) {
-      tail = { fields: tail.fields, skipped: [...tail.skipped, hop.target] }
+      tail = { ...tail, skipped: { hop: hop.target, rest: tail.skipped } }
       continue
     }
     ctx.inlining.delete(hop.target)
     const fields: Record<string, unknown> = {}
     mergeMissing(fields, hop.own)
     mergeMissing(fields, tail.fields)
-    tail = { fields, skipped: tail.skipped }
+    tail = { ...tail, fields }
     if (ctx.identified.size === hop.identified) {
       cache.set(hop.target, tail)
     }
@@ -489,8 +505,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
   for (;;) {
     const kept = new Set<string>()
     const out = convert(root, {
+      ...freshState(),
       aliasEnd,
-      converting: [],
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
@@ -503,15 +519,10 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         }
         return dangling.has(ref)
       },
-      identified: new Set(),
-      inlined: new Map(),
-      inlining: new Set(),
       isRemovedPart,
-      merged: new Map(),
       removals: new Map(),
       markDangling: ref => dangling.add(ref),
       resolve: resolveRef,
-      seen: new Map(),
     })
     let stale = false
     for (const ref of kept) {

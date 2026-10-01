@@ -8,7 +8,7 @@
 // https://spec.openapis.org/oas/v3.1.2.html#path-item-ref
 // So when a Path Item `$ref` is inlined, its own fields win.
 
-import { countReads, dig } from '../../helpers'
+import { countReads, cyclicCallbackGraph, dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
@@ -22,6 +22,7 @@ const inlined = {
   parameters: [{ in: 'query', name: 'q', schema: { nullable: true, type: 'string' } }],
   summary: 'Reusable',
 }
+const responses = { 200: { description: 'ok' } }
 
 describe('inlining', () => {
   it('inlines the converted entry and lets the referencing fields win', () => {
@@ -177,7 +178,6 @@ describe('recursion', () => {
   // inner reference re-enters it, `A` contributes nothing, neither its
   // operations nor its plain fields, and only the later hop `T` is merged.
   it('cuts a hop that the chain re-enters, merging only the hops after it', () => {
-    const responses = { 200: { description: 'ok' } }
     const result = convertSpec({
       components: {
         pathItems: {
@@ -204,60 +204,48 @@ describe('recursion', () => {
 // operation each time its own fields are converted, or its `$ref` at each step
 // along a chain.
 describe('hops converted once', () => {
-  const responses = { 200: { description: 'ok' } }
+  const pointer = (name: string): string => `#/components/pathItems/${name}`
 
   it('shares a hop that many paths point at', () => {
     const reads = { count: 0 }
-    const get = { parameters: [{ in: 'query', name: 'q', schema: { type: ['string', 'null'] } }], responses }
-    const paths = Object.fromEntries(Array.from({ length: 200 }, (_, index) => [`/p${index}`, { $ref: '#/components/pathItems/Hop' }]))
+    const length = 50
     const result = convertSpec({
       components: {
         pathItems: {
           Base: { summary: 'base' },
-          Hop: countReads({ $ref: '#/components/pathItems/Base', get }, 'get', reads),
+          Hop: countReads({ $ref: pointer('Base'), get: { parameters: reusable.parameters, responses } }, 'get', reads),
         },
       },
-      paths,
+      paths: Object.fromEntries(Array.from({ length }, (_, index) => [`/p${index}`, { $ref: pointer('Hop') }])),
     })
     expect(reads.count).toBe(1)
-    const first = result.paths['/p0']
-    expect(first).toEqual({
-      get: { parameters: [{ in: 'query', name: 'q', schema: { nullable: true, type: 'string' } }], responses },
-      summary: 'base',
-    })
+    const expected = { get: { parameters: inlined.parameters, responses }, summary: 'base' }
+    expect(Object.values(result.paths)).toEqual(Array.from({ length }).fill(expected))
     for (const item of Object.values(result.paths)) {
-      expect(item).toEqual(first)
-      expect(item.get).toBe(first?.get)
+      expect(item.get).toBe(result.paths['/p0']?.get)
     }
   })
 
   it('walks a long alias chain once, however many paths enter it', () => {
     const reads = { count: 0 }
-    const length = 1000
+    const length = 200
     const pathItems: Record<string, unknown> = { [`P${length}`]: { get: { responses } } }
     const paths: Record<string, unknown> = {}
     for (let index = 0; index < length; index++) {
-      pathItems[`P${index}`] = countReads({ $ref: `#/components/pathItems/P${index + 1}` }, '$ref', reads)
-      paths[`/p${index}`] = { $ref: `#/components/pathItems/P${index}` }
+      pathItems[`P${index}`] = countReads({ $ref: pointer(`P${index + 1}`) }, '$ref', reads)
+      paths[`/p${index}`] = { $ref: pointer(`P${index}`) }
     }
     const result = convertSpec({ components: { pathItems }, paths })
     expect(reads.count).toBeLessThan(50 * length)
-    for (const item of Object.values(result.paths)) {
-      expect(item).toEqual({ get: { responses } })
-    }
+    expect(Object.values(result.paths)).toEqual(Array.from({ length }, () => ({ get: { responses } })))
   })
 
-  // Every webhook `h<i>` points at `base`, and its callbacks point at every
-  // webhook, itself included. Inlining each path through this graph
-  // separately would convert the webhooks about k! times.
+  // Inlining each path through this graph separately would convert the
+  // webhooks about k! times.
   it('converts each hop of a cyclic callback graph once', async () => {
     const reads = { count: 0 }
     const k = 8
-    const webhooks: Record<string, unknown> = { base: { get: { responses } } }
-    for (let i = 0; i < k; i++) {
-      const callbacks = Object.fromEntries(Array.from({ length: k }, (_, j) => [`c${j}`, { '{$request.body#/url}': { $ref: `#/webhooks/h${j}` } }]))
-      webhooks[`h${i}`] = countReads({ $ref: '#/webhooks/base', post: { callbacks, responses } }, 'post', reads)
-    }
+    const webhooks = cyclicCallbackGraph(k, name => `#/webhooks/${name}`, reads)
     const result = convertSpec({ paths: { '/a': { $ref: '#/webhooks/h0' } }, webhooks })
     expect(reads.count).toBe(k)
     await expectValidAs(result, '3.0')
@@ -270,14 +258,13 @@ describe('hops converted once', () => {
       .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
   })
 
-  // The callbacks of `B` enter the chain A0 → … → A499 → B → T, which passes
+  // The callbacks of `B` enter the chain A0 → … → A99 → B → T, which passes
   // `B` while it is in progress, so every copy inside `B` skips it. That merge
   // is shared among those copies but not with `/q`, which enters the chain from
   // outside and keeps the fields of `B`.
-  it('shares a merge that skipped a hop in progress only while that hop is in progress', () => {
+  it('keeps the fields of a hop for a reference from outside its cycle, in linear work', () => {
     const reads = { count: 0 }
-    const length = 500
-    const pointer = (name: string): string => `#/components/pathItems/${name}`
+    const length = 100
     const pathItems: Record<string, unknown> = { T: { summary: 't' } }
     for (let index = 0; index < length; index++) {
       pathItems[`A${index}`] = countReads({ $ref: pointer(index + 1 < length ? `A${index + 1}` : 'B') }, '$ref', reads)

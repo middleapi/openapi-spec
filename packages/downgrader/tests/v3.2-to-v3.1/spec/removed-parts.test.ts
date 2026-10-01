@@ -6,7 +6,7 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
-import { countReads, dig } from '../../helpers'
+import { cyclicCallbackGraph, dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
@@ -315,24 +315,17 @@ describe('path Item references', () => {
     })
   })
 
-  // Every Path Item `h<i>` in the callbacks of the removed `query` operation
-  // points at `base` there, and its own callbacks point at every `h<j>`, itself
-  // included. Each is converted once and shared: inlining each path through
-  // this graph separately would convert them about k! times. The getter counts
-  // how many times the own fields of an `h<i>` are converted.
+  // The Path Items of the cyclic callback graph live in the callbacks of the
+  // removed `query` operation. Each is converted once and shared: inlining
+  // each path through this graph separately would convert them about k! times.
   it('converts each path item of a cyclic callback graph in a removed operation once', async () => {
     const reads = { count: 0 }
     const k = 8
     const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
     const responses = { 200: { description: 'ok' } }
-    const cb: Record<string, unknown> = { base: { get: { responses } } }
-    for (let i = 0; i < k; i++) {
-      const callbacks = Object.fromEntries(Array.from({ length: k }, (_, j) => [`c${j}`, { '{$request.body#/url}': { $ref: pointer(`h${j}`) } }]))
-      cb[`h${i}`] = countReads({ $ref: pointer('base'), post: { callbacks, responses } }, 'post', reads)
-    }
     const result = convertSpec({
       info: { title: 't', version: '1' },
-      paths: { '/a': { $ref: pointer('h0') }, '/q': { query: { callbacks: { cb }, responses } } },
+      paths: { '/a': { $ref: pointer('h0') }, '/q': { query: { callbacks: { cb: cyclicCallbackGraph(k, pointer, reads) }, responses } } },
     })
     expect(reads.count).toBe(k)
     await expectValidAs(result, '3.1')
