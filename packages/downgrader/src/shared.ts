@@ -8,6 +8,7 @@ export interface Context {
   readonly dangles: (ref: string) => boolean
   readonly isRemovedPart: (ref: string) => boolean
   readonly markDangling: (ref: string) => void
+  readonly claims: unknown[]
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
   readonly identified: Set<unknown>
@@ -92,6 +93,7 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   if (ctx.converting.includes(value)) {
     return DROP
   }
+  const claims = ctx.claims.length
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(value)
@@ -104,7 +106,10 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   }
   const result = finish === undefined ? out : finish(out, value, ctx)
   ctx.converting.pop()
-  if (result !== out) {
+  if (ctx.claims.length !== claims) {
+    seen.delete(value)
+  }
+  else if (result !== out) {
     seen.set(value, result)
   }
   return result
@@ -205,6 +210,15 @@ export function resolve(root: unknown, ref: string): unknown {
   return parsePointer(ref)?.reduce<unknown>(child, root)
 }
 
+function convertTarget(target: unknown, ctx: Context, convert: Convert): unknown {
+  const identified = ctx.identified.size
+  const out = convert(target, { ...ctx, seen: new Map() })
+  if (ctx.identified.size !== identified) {
+    ctx.claims.push(target)
+  }
+  return out
+}
+
 export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   const target = ctx.resolve(ref)
   if (target === undefined || ctx.inlining.has(target) || ctx.converting.includes(target)) {
@@ -218,11 +232,11 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   if (cache.has(target)) {
     return cache.get(target)
   }
-  const identified = ctx.identified.size
+  const claims = ctx.claims.length
   ctx.inlining.add(target)
-  const out = convert(target, { ...ctx, seen: new Map() })
+  const out = convertTarget(target, ctx, convert)
   ctx.inlining.delete(target)
-  if (ctx.identified.size === identified) {
+  if (ctx.claims.length === claims) {
     cache.set(target, out)
   }
   return out
@@ -233,7 +247,7 @@ function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
     return ctx.removals.get(ref) === true
   }
   ctx.removals.set(ref, undefined)
-  const removed = inline(ref, { ...ctx, converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), seen: new Map() }, convert) === DROP
+  const removed = inline(ref, { ...ctx, claims: [], converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), seen: new Map() }, convert) === DROP
   ctx.removals.set(ref, removed)
   return removed
 }
@@ -350,7 +364,7 @@ export function mergeRef(convert: Convert): Finish {
         const { $ref: _, ...own } = target as Record<string, unknown>
         ctx.inlining.add(target)
         hops.push(target)
-        mergeMissing(out, convert(own, { ...ctx, seen: new Map() }))
+        mergeMissing(out, convertTarget(own, ctx, convert))
       }
       ref = next
     }
@@ -431,6 +445,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     const kept = new Set<string>()
     const out = convert(root, {
       aliasEnd,
+      claims: [],
       converting: [],
       copies: new Map(),
       dangles: (ref) => {
