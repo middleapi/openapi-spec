@@ -1,7 +1,7 @@
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import type { Context } from './shared'
+import type { Context, Finish } from './shared'
 import {
   allOfItems,
   child,
@@ -60,9 +60,9 @@ const ANNOTATION_KEYWORDS = [
   'examples',
 ]
 
-const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?:;|$))/i
+const RFC6570_MEDIA_TYPE = /^(?:multipart\/form-data|application\/x-www-form-urlencoded)\s*(?:;|$)/i
 
-const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
+const MULTIPART_MEDIA_TYPE = /^multipart\//i
 
 const LOOSE = new WeakSet<object>()
 
@@ -71,6 +71,8 @@ const convertContent = map(convertMediaType)
 const convertRequestContent = map(convertRequestMediaType)
 const convertRequirements = list(convertRequirement)
 const finishPathItem = mergeRef(convertPathItem)
+const finishRfc6570MediaType = finishFormMediaType(['allowReserved', 'contentType', 'explode', 'style'])
+const finishMultipartMediaType = finishFormMediaType(['contentType'])
 const convertCallbackRef = refOr(convertCallback, reference)
 const convertExampleRef = refOr(clone, reference)
 const convertLinkRef = refOr(convertLink, reference)
@@ -125,7 +127,9 @@ const MEDIA_TYPE_FIELDS = defineFields({
   schema: convertSchema,
 })
 
-const FORM_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+const RFC6570_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+
+const MULTIPART_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
 
 const ENCODING_FIELDS = defineFields({
   headers: map(convertParameterRef),
@@ -401,29 +405,35 @@ function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem
   return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
 }
 
-function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
-  const encoding = out.encoding ?? {}
-  if (!isRecord(encoding)) {
+function finishFormMediaType(overrides: readonly string[]): Finish {
+  return (out, mediaType, ctx) => {
+    const encoding = out.encoding ?? {}
+    if (!isRecord(encoding)) {
+      return out
+    }
+    for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
+      const entry = child(encoding, name) ?? {}
+      if (
+        isRecord(entry)
+        && !overrides.some(key => Object.hasOwn(entry, key))
+        && defaultsToOctetStream(schemas, ctx)
+      ) {
+        setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })
+        out.encoding = encoding
+      }
+    }
     return out
   }
-  for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
-    const entry = child(encoding, name) ?? {}
-    if (
-      isRecord(entry)
-      && !CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))
-      && defaultsToOctetStream(schemas, ctx)
-    ) {
-      setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })
-      out.encoding = encoding
-    }
-  }
-  return out
 }
 
 function convertRequestMediaType(value: unknown, ctx: Context, type: string): unknown {
-  return FORM_MEDIA_TYPE.test(type)
-    ? convertObject(value, ctx, FORM_MEDIA_TYPE_FIELDS, finishFormMediaType)
-    : convertMediaType(value, ctx)
+  if (RFC6570_MEDIA_TYPE.test(type)) {
+    return convertObject(value, ctx, RFC6570_MEDIA_TYPE_FIELDS, finishRfc6570MediaType)
+  }
+  if (MULTIPART_MEDIA_TYPE.test(type)) {
+    return convertObject(value, ctx, MULTIPART_MEDIA_TYPE_FIELDS, finishMultipartMediaType)
+  }
+  return convertMediaType(value, ctx)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {

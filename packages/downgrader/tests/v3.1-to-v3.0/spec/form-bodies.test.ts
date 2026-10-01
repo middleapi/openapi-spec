@@ -21,9 +21,22 @@
 // An Encoding Object that sets `style`, `explode`, or `allowReserved`
 // switches the part to RFC6570-style serialization, where `contentType`
 // does not apply: https://spec.openapis.org/oas/v3.1.2.html#fixed-fields-for-rfc6570-style-serialization
-// Such entries, and ones that already set `contentType`, are left alone.
+// 3.1 honors these fields in `application/x-www-form-urlencoded` and
+// `multipart/form-data` bodies only, so there such entries are left alone,
+// as are ones that already set `contentType`. Other multipart bodies ignore
+// the fields, so their parts still get the default. 3.0 honors the fields
+// in URL-encoded bodies only
+// (https://spec.openapis.org/oas/v3.0.4.html#fixed-fields-for-rfc6570-style-serialization),
+// so it cannot express a `multipart/form-data` part serialized this way: the
+// entry is kept as written, and the README lists the loss as a known
+// limitation.
+
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
+
+import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
+import { expectValidDowngrade } from '../../validate'
 import { convertComponent, convertSpec } from './helpers'
 
 const octetStream = { contentType: 'application/octet-stream' }
@@ -148,11 +161,82 @@ describe('existing Encoding Objects', () => {
     expect(dig(result, 'multipart/mixed', 'encoding', 'part')).toEqual(entry)
   })
 
+  it('converts a media type shared between multipart/form-data and multipart/mixed as each', () => {
+    const mediaType = { encoding: { file: { style: 'form' } }, schema: { properties: { file: {} } } }
+    const result = dig(convertComponent('requestBodies', {
+      content: { 'multipart/form-data': mediaType, 'multipart/mixed': mediaType },
+    }), 'content')
+    expect(dig(result, 'multipart/form-data')).toEqual(mediaType)
+    expect(dig(result, 'multipart/mixed', 'encoding')).toEqual({ file: { style: 'form', ...octetStream } })
+  })
+
   it('leaves a malformed encoding value alone', () => {
     expect(convertForm({ encoding: 'junk', schema: { properties: { file: {} } } })).toEqual({
       encoding: 'junk',
       schema: { properties: { file: {} } },
     })
+  })
+})
+
+describe('style, explode, and allowReserved', () => {
+  const encoding = { exploded: { explode: false }, reserved: { allowReserved: true }, styled: { style: 'form' } }
+  const schema = { properties: { exploded: {}, reserved: {}, styled: {} } }
+
+  it.each([
+    'application/x-www-form-urlencoded',
+    'multipart/form-data',
+    'Multipart/Form-Data; charset=utf-8',
+  ])('override the default in %s bodies, where 3.1 serializes the part with them', (type) => {
+    expect(convertForm({ encoding, schema }, type)).toEqual({ encoding, schema })
+  })
+
+  it.each([
+    'multipart/mixed',
+    'multipart/related',
+    'Multipart/Mixed; boundary=x',
+    'multipart/form-data-v2',
+  ])('leave the default in place in %s bodies, where 3.1 ignores them', (type) => {
+    expect(convertForm({ encoding, schema }, type)).toEqual({
+      encoding: {
+        exploded: { explode: false, ...octetStream },
+        reserved: { allowReserved: true, ...octetStream },
+        styled: { style: 'form', ...octetStream },
+      },
+      schema,
+    })
+  })
+
+  // In 3.1, `tags` goes out as one `a,b,c` part. 3.0 ignores `explode` in
+  // multipart/form-data and sends one text/plain part per item; it has no
+  // way to say otherwise, so the entry is kept for tools that honor it.
+  it('are kept as written in a valid 3.0 document', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      info: { title: 'Forms', version: '1.0.0' },
+      openapi: '3.1.0',
+      paths: {
+        '/form': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  encoding: { tags: { explode: false } },
+                  schema: { properties: { tags: { items: { type: 'string' }, type: 'array' } }, type: 'object' },
+                },
+                'multipart/mixed': {
+                  encoding: { file: { style: 'form' } },
+                  schema: { properties: { file: {} }, type: 'object' },
+                },
+              },
+            },
+            responses: { 204: { description: 'saved' } },
+          },
+        },
+      },
+    }
+    const v30 = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    const content = dig(v30, 'paths', '/form', 'post', 'requestBody', 'content')
+    expect(dig(content, 'multipart/form-data', 'encoding')).toEqual({ tags: { explode: false } })
+    expect(dig(content, 'multipart/mixed', 'encoding')).toEqual({ file: { style: 'form', ...octetStream } })
   })
 })
 

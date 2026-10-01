@@ -90,14 +90,14 @@ Removed, with no 3.1 equivalent:
 
 Converted:
 
-| 3.1 construct                                                                             | 3.0 result                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi: 3.1.x`                                                                          | `openapi: 3.0.4`                                                                                                                 |
-| missing `paths`                                                                           | `{}`                                                                                                                             |
-| missing operation `responses`                                                             | `{ "default": { "description": "" } }`                                                                                           |
-| path parameter without `required: true`                                                   | `required: true`                                                                                                                 |
-| security requirement scopes on `apiKey` and `http` schemes                                | `[]`                                                                                                                             |
-| `multipart` or URL-encoded body part with no `type`, or a `string` with `contentEncoding` | `contentType: application/octet-stream`, the 3.1 default, unless its Encoding Object sets a content type or RFC6570-style fields |
+| 3.1 construct                                                                             | 3.0 result                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi: 3.1.x`                                                                          | `openapi: 3.0.4`                                                                                                                                                                 |
+| missing `paths`                                                                           | `{}`                                                                                                                                                                             |
+| missing operation `responses`                                                             | `{ "default": { "description": "" } }`                                                                                                                                           |
+| path parameter without `required: true`                                                   | `required: true`                                                                                                                                                                 |
+| security requirement scopes on `apiKey` and `http` schemes                                | `[]`                                                                                                                                                                             |
+| `multipart` or URL-encoded body part with no `type`, or a `string` with `contentEncoding` | `contentType: application/octet-stream`, the 3.1 default, unless its Encoding Object sets a content type, or RFC6570-style fields in a `multipart/form-data` or URL-encoded body |
 
 Removed, with no 3.0 equivalent:
 
@@ -147,7 +147,7 @@ Both converters treat local `$ref`s the same way:
 
 - Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
 - 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead.
-- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
+- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them. In a `multipart/form-data` body, an Encoding Object's `style`, `explode`, and `allowReserved` are kept, but 3.0 honors them only in URL-encoded bodies, so its tools send such parts by their content type instead.
 
 ## Sponsors
 
