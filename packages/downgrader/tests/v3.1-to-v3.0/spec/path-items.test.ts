@@ -171,26 +171,34 @@ describe('recursion', () => {
     })
   })
 
-  // `A` is both a hop of the chain and the Path Item being inlined. Where the
-  // inner reference re-enters it, `A` contributes nothing, neither its
-  // operations nor its plain fields, and only the later hop `T` is merged.
-  it('cuts a hop that the chain re-enters, merging only the hops after it', () => {
+  // `P2` is both a hop of the chain and the Path Item being inlined. The later
+  // hop `P3` is reached only through `P2`, whose fields win over its own, so
+  // where the inner reference re-enters `P2` the chain stops, as it does for
+  // direct recursion. Merging `P3` there would advertise the `get` that `P2`
+  // overrides, and a `post` without the header and server `P2` adds to it.
+  it('stops a chain at the hop it re-enters, merging none of the hops after it', () => {
     const responses = { 200: { description: 'ok' } }
+    const header = { in: 'header', name: 'X-Token', required: true, schema: { type: 'string' } }
+    const servers = [{ url: 'https://hooks.example.com' }]
     const result = convertSpec({
-      components: {
-        pathItems: {
-          A: {
-            $ref: '#/components/pathItems/T',
-            description: 'a',
-            post: { callbacks: { c: { '{$url}': { $ref: '#/components/pathItems/A' } } }, responses },
-          },
-          T: { summary: 't' },
+      paths: { '/a': { $ref: '#/webhooks/P2' } },
+      webhooks: {
+        P2: {
+          $ref: '#/webhooks/P3',
+          get: { callbacks: { cb: { '{$url}': { $ref: '#/webhooks/P2' } } }, operationId: 'p2get', responses },
+          parameters: [header],
+          servers,
         },
+        P3: { get: { operationId: 'p3get-overridden', responses }, post: { operationId: 'p3post', responses } },
       },
-      paths: { '/p': { $ref: '#/components/pathItems/A' } },
     })
     expect(result.paths).toEqual({
-      '/p': { description: 'a', post: { callbacks: { c: { '{$url}': { summary: 't' } } }, responses }, summary: 't' },
+      '/a': {
+        get: { callbacks: { cb: { '{$url}': {} } }, operationId: 'p2get', responses },
+        parameters: [header],
+        post: { operationId: 'p3post', responses },
+        servers,
+      },
     })
   })
 })

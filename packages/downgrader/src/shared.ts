@@ -346,12 +346,13 @@ export function mergeRef(convert: Convert): Finish {
         mergeMissing(out, inline(ref, ctx, convert))
         break
       }
-      if (!ctx.inlining.has(target) && !ctx.converting.includes(target)) {
-        const { $ref: _, ...own } = target as Record<string, unknown>
-        ctx.inlining.add(target)
-        hops.push(target)
-        mergeMissing(out, convert(own, { ...ctx, seen: new Map() }))
+      if (ctx.inlining.has(target) || ctx.converting.includes(target)) {
+        break
       }
+      const { $ref: _, ...own } = target as Record<string, unknown>
+      ctx.inlining.add(target)
+      hops.push(target)
+      mergeMissing(out, convert(own, { ...ctx, seen: new Map() }))
       ref = next
     }
     for (const hop of hops) {
