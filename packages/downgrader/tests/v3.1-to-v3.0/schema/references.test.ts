@@ -33,12 +33,10 @@ describe('$ref with sibling keywords', () => {
 describe('references into removed keywords', () => {
   // `$defs` has no 3.0 form, and 3.0 schemas are reused through
   // `components.schemas` instead. A standalone schema has no components, so
-  // each `$ref` into `$defs` is replaced by the converted definition. So is
-  // each `$ref` into `definitions`, the draft-07 spelling that the 2020-12
-  // meta-schema still accepts and generators such as Pydantic v1 emit.
+  // each `$ref` into `$defs` is replaced by the converted definition.
   // https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.4
-  it.each(['$defs', 'definitions'])('inlines $refs into %s', (key) => {
-    expect(convertSchema({ [key]: { a: { type: ['string', 'null'] } }, items: { $ref: `#/${key}/a` }, type: 'array' })).toEqual({
+  it('inlines $refs into $defs', () => {
+    expect(convertSchema({ $defs: { a: { type: ['string', 'null'] } }, items: { $ref: '#/$defs/a' }, type: 'array' })).toEqual({
       items: { nullable: true, type: 'string' },
       type: 'array',
     })

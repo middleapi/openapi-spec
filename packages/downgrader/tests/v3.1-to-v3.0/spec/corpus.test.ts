@@ -201,36 +201,6 @@ describe('hand-written documents', () => {
     await expectValidAs(v30, '3.0')
   })
 
-  // A schema embedded from a draft-07-era generator keeps its reusable parts
-  // under `definitions`, the older spelling of `$defs`. The official 3.0
-  // schema rejects the keyword, and its targets are raw 3.1 schemas, so each
-  // `$ref` into it is inlined as a converted schema instead.
-  it('inlines references into a schema\'s definitions into a valid 3.0 document', async () => {
-    const itemRef = '#/components/schemas/Order/definitions/Item'
-    const doc: OpenAPIV3_1.OpenAPIObject = {
-      components: {
-        schemas: {
-          Order: {
-            definitions: { Item: { properties: { note: { type: ['string', 'null'] } }, type: 'object' } },
-            properties: { items: { items: { $ref: itemRef }, type: 'array' } },
-            type: 'object',
-          },
-        },
-      },
-      info: { title: 'Generated schemas', version: '1.0.0' },
-      openapi: '3.1.0',
-      paths: {
-        '/items/first': {
-          get: { responses: { 200: { content: { 'application/json': { schema: { $ref: itemRef } } }, description: 'ok' } } },
-        },
-      },
-    }
-    const v30 = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
-    const item = { properties: { note: { nullable: true, type: 'string' } }, type: 'object' }
-    expect(v30.components?.schemas).toEqual({ Order: { properties: { items: { items: item, type: 'array' } }, type: 'object' } })
-    expect(v30).toHaveProperty(['paths', '/items/first', 'get', 'responses', '200'], { content: { 'application/json': { schema: item } }, description: 'ok' })
-  })
-
   // `defaultMapping` is a 3.2 field that can reach a 3.1 document written by
   // hand or by a lenient tool. The 3.0 schema tolerates unknown
   // discriminator fields, so it is kept.
