@@ -147,7 +147,7 @@ Both converters treat local `$ref`s the same way:
 
 - Both: a Link that names a removed operation (`query`, `additionalOperations`, a webhook) by `operationId` is kept, and a Path Item inlined in several places repeats its `operationId`s.
 - 3.2 → 3.1: security requirements keyed by URI, `$self`-relative references, and a `$schema` naming the 3.2 dialect pass through unchanged. Where recursion becomes `{}`, an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. A repeated schema copy that loses its `$id` resolves its relative `$ref`s against the enclosing base instead.
-- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them.
+- 3.1 → 3.0: `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle, so rewrite them as JSON pointers first. A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts. Non-standard schema keywords are kept, although the official 3.0 schema forbids them. A `requestBody` on a `get`, `head`, or `delete` operation is kept, but 3.0 tells consumers to ignore it, so tools that follow the spec drop it even when it is `required`.
 
 ## Sponsors
 
