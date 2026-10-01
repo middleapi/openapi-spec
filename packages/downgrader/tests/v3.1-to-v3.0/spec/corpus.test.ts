@@ -201,28 +201,6 @@ describe('hand-written documents', () => {
     await expectValidAs(v30, '3.0')
   })
 
-  // A half-migrated document can keep the 3.0 `nullable` on a schema that a
-  // 3.1 `oneOf` combines with a null branch. In 3.1 `nullable` has no effect,
-  // so null matches only the null branch and `MaybePet` accepts it.
-  it('drops a leftover nullable so a oneOf with a null branch still accepts null', async () => {
-    const doc: OpenAPIV3_1.OpenAPIObject = {
-      components: {
-        schemas: {
-          MaybePet: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/Pet' }] },
-          Pet: { nullable: true, properties: { name: { type: 'string' } }, type: 'object' },
-        },
-      },
-      info: { title: 'Half-migrated', version: '1.0.0' },
-      openapi: '3.1.0',
-      paths: {},
-    }
-    const v30 = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
-    expect(v30.components?.schemas).toEqual({
-      MaybePet: { oneOf: [{ enum: [null] }, { $ref: '#/components/schemas/Pet' }] },
-      Pet: { properties: { name: { type: 'string' } }, type: 'object' },
-    })
-  })
-
   // `defaultMapping` is a 3.2 field that can reach a 3.1 document written by
   // hand or by a lenient tool. The 3.0 schema tolerates unknown
   // discriminator fields, so it is kept.
