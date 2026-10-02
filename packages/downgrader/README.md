@@ -52,6 +52,8 @@ downgradeSchemaV31ToV30({ type: ['string', 'null'] })
 
 Each step can also be imported on its own from `@openapi-spec/downgrader/v3.2-to-v3.1` or `@openapi-spec/downgrader/v3.1-to-v3.0`. All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi-spec/blob/main/packages/types/README.md).
 
+Input is read as JSON would see it: a key holding `undefined`, as spreading options often leaves, counts as missing and never reaches the output.
+
 ## 3.2 → 3.1
 
 ### Spec (`downgradeSpecV32ToV31`)
@@ -118,7 +120,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 - A Link that names a removed operation (`query` or `additionalOperations`) by `operationId` is kept.
-- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. In a dense cycle of targets that refer to one another, where losing only those would take more than a few times the work of the rest of the conversion, copies are shared instead, so an inner reference can also be lost where it does not refer back to an enclosing target.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV32ToV31`)
@@ -138,7 +140,7 @@ Accepts the default OAS dialect. It builds on JSON Schema 2020-12 in both versio
 #### Limitations
 
 - A `$schema` naming the 3.2 dialect passes through unchanged.
-- Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts.
+- Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. In a dense cycle of such schemas, an inner reference can also become `{}` where it does not refer back to an enclosing schema, as for Path Items above.
 - Only the first copy of a schema inlined in several places keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique. In the other copies, JSON Pointer `$ref`s that resolved against that `$id` are replaced by their converted targets, such `mapping` values are dropped, and other relative `$ref`s, such as one to an `$anchor`, resolve against the enclosing base instead.
 - Older drafts are not supported. Subschemas under keywords that only draft-07 or 2019-09 define, such as `definitions`, pass through unconverted. Convert such schemas to 2020-12 first.
 
@@ -150,17 +152,18 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 #### Removed
 
-| API                                                                                                                                              | Why                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`jsonSchemaDialect`][3.1-json-schema-dialect]                                                                                                   | 3.0 has one fixed schema dialect.                                                                                                                                                         |
-| [`webhooks`][3.1-webhooks]                                                                                                                       | 3.0 only describes callbacks tied to an operation. `$ref`s to a webhook are inlined.                                                                                                      |
-| [`components.pathItems`][3.1-components-path-items]                                                                                              | 3.0 Components hold no Path Items. `$ref`s to them are inlined.                                                                                                                           |
-| Info [`summary`][3.1-info-summary]                                                                                                               | 3.0 has no such field.                                                                                                                                                                    |
-| License [`identifier`][3.1-license-identifier]                                                                                                   | An SPDX expression. A 3.0 License has only `name` and `url`.                                                                                                                              |
-| Reference Object [`summary`][3.1-reference-summary], [`description`][3.1-reference-description], and extensions                                  | A 3.0 Reference Object holds only `$ref`.                                                                                                                                                 |
-| [`mutualTLS`][3.1-security-scheme-type] security schemes, `$ref`s to them, and their names in security requirements                              | 3.0 has no mutual TLS scheme. An emptied requirement or `security` list is removed too, because an empty one would mean no security. An operation then falls back to the root `security`. |
-| [Security requirement][3.1-security-requirement-object] scopes on `apiKey` and `http` schemes                                                    | 3.1 lets them list required roles. 3.0 requires an empty list for schemes other than OAuth2 and OpenID Connect.                                                                           |
-| Links ([`operationRef`][3.1-link-operation-ref]) and discriminator [`mapping`][3.1-discriminator-mapping] entries that point into a removed part | They would point at nothing.                                                                                                                                                              |
+| API                                                                                                                                                                | Why                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`jsonSchemaDialect`][3.1-json-schema-dialect]                                                                                                                     | 3.0 has one fixed schema dialect.                                                                                                                                                                                                                                |
+| [`webhooks`][3.1-webhooks]                                                                                                                                         | 3.0 only describes callbacks tied to an operation. `$ref`s to a webhook are inlined.                                                                                                                                                                             |
+| [`components.pathItems`][3.1-components-path-items]                                                                                                                | 3.0 Components hold no Path Items. `$ref`s to them are inlined.                                                                                                                                                                                                  |
+| Info [`summary`][3.1-info-summary]                                                                                                                                 | 3.0 has no such field.                                                                                                                                                                                                                                           |
+| License [`identifier`][3.1-license-identifier]                                                                                                                     | An SPDX expression. A 3.0 License has only `name` and `url`.                                                                                                                                                                                                     |
+| Reference Object [`summary`][3.1-reference-summary], [`description`][3.1-reference-description], and extensions                                                    | A 3.0 Reference Object holds only `$ref`.                                                                                                                                                                                                                        |
+| Encoding Object [`style`][3.1-encoding-style], [`explode`][3.1-encoding-explode], and [`allowReserved`][3.1-encoding-allow-reserved] in `multipart` request bodies | 3.1 serializes a `multipart/form-data` part that sets them RFC6570-style, such as an exploded object as one part per property. 3.0 ignores them outside `application/x-www-form-urlencoded`, so the part is sent by its `contentType` or schema default instead. |
+| [`mutualTLS`][3.1-security-scheme-type] security schemes, `$ref`s to them, and their names in security requirements                                                | 3.0 has no mutual TLS scheme. An emptied requirement or `security` list is removed too, because an empty one would mean no security. An operation then falls back to the root `security`.                                                                        |
+| [Security requirement][3.1-security-requirement-object] scopes on `apiKey` and `http` schemes                                                                      | 3.1 lets them list required roles. 3.0 requires an empty list for schemes other than OAuth2 and OpenID Connect.                                                                                                                                                  |
+| Links ([`operationRef`][3.1-link-operation-ref]) and discriminator [`mapping`][3.1-discriminator-mapping] entries that point into a removed part                   | They would point at nothing.                                                                                                                                                                                                                                     |
 
 [3.1-json-schema-dialect]: https://spec.openapis.org/oas/v3.1.2.html#oas-json-schema-dialect
 [3.1-webhooks]: https://spec.openapis.org/oas/v3.1.2.html#oas-webhooks
@@ -169,6 +172,9 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 [3.1-license-identifier]: https://spec.openapis.org/oas/v3.1.2.html#license-identifier
 [3.1-reference-summary]: https://spec.openapis.org/oas/v3.1.2.html#reference-summary
 [3.1-reference-description]: https://spec.openapis.org/oas/v3.1.2.html#reference-description
+[3.1-encoding-style]: https://spec.openapis.org/oas/v3.1.2.html#encoding-style
+[3.1-encoding-explode]: https://spec.openapis.org/oas/v3.1.2.html#encoding-explode
+[3.1-encoding-allow-reserved]: https://spec.openapis.org/oas/v3.1.2.html#encoding-allow-reserved
 [3.1-security-scheme-type]: https://spec.openapis.org/oas/v3.1.2.html#security-scheme-type
 [3.1-security-requirement-object]: https://spec.openapis.org/oas/v3.1.2.html#security-requirement-object
 [3.1-link-operation-ref]: https://spec.openapis.org/oas/v3.1.2.html#link-operation-ref
@@ -177,7 +183,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A Link that names a webhook operation by `operationId` is kept.
-- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. In a dense cycle of targets that refer to one another, where losing only those would take more than a few times the work of the rest of the conversion, copies are shared instead, so an inner reference can also be lost where it does not refer back to an enclosing target.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV31ToV30`)
@@ -204,6 +210,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 | [`unevaluatedItems`][js-unevaluated-items] and [`unevaluatedProperties`][js-unevaluated-properties] | 3.0 has no equivalent.                                                                                                                                                                         |
 | [`contentEncoding`][js-content-encoding] and [`contentMediaType`][js-content-media-type]            | 3.0 marks binary strings with `format` instead: `base64` becomes `format: byte`, and a media type without an encoding becomes `format: binary`. Anything else is lost.                         |
 | [`examples`][js-examples]                                                                           | 3.0 has a single `example`. The first entry fills it when missing, and the rest are dropped.                                                                                                   |
+| [`readOnly` and `writeOnly`][js-read-only-write-only] when both are `true`                          | 3.0 forbids marking a property with both. Dropping these annotations loses detail, not validation. Keeping one would misstate the intent and, in 3.0, apply `required` one way only.           |
 | Empty [`enum`][js-enum]                                                                             | 3.0 requires at least one value. An empty `enum` rejects everything, so dropping it only loosens the schema.                                                                                   |
 | [`not`][js-not] over a loosened schema                                                              | Negating a looser schema would reject values the original accepts.                                                                                                                             |
 | The exclusivity of [`oneOf`][js-one-of] with a loosened branch                                      | Looser branches may overlap, so "exactly one" could reject values the original accepts. It becomes `anyOf`.                                                                                    |
@@ -234,6 +241,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 [js-content-encoding]: https://json-schema.org/draft/2020-12/json-schema-validation#name-contentencoding
 [js-content-media-type]: https://json-schema.org/draft/2020-12/json-schema-validation#name-contentmediatype
 [js-examples]: https://json-schema.org/draft/2020-12/json-schema-validation#name-examples
+[js-read-only-write-only]: https://json-schema.org/draft/2020-12/json-schema-validation#name-readonly-and-writeonly
 [js-enum]: https://json-schema.org/draft/2020-12/json-schema-validation#name-enum
 [js-not]: https://json-schema.org/draft/2020-12/json-schema-core#name-not
 [js-one-of]: https://json-schema.org/draft/2020-12/json-schema-core#name-oneof
