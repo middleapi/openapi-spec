@@ -78,6 +78,13 @@ describe('parts that need the 3.1 default written out', () => {
     })
   })
 
+  // A property holding `undefined` is missing, as in JSON, so only the other
+  // branch describes the part.
+  it('skips a part that one allOf branch holds as undefined', () => {
+    const schema = { allOf: [{ properties: { file: undefined } }, { properties: { file: { contentEncoding: 'base64', type: 'string' } } }] }
+    expect(dig(convertForm({ schema }), 'encoding')).toStrictEqual({ file: octetStream })
+  })
+
   it('writes a part named like an Object.prototype member as an own key', () => {
     const encoding = dig(convertForm({ schema: { properties: JSON.parse('{"__proto__":{}}') } }), 'encoding') as object
     expect(Object.getPrototypeOf(encoding)).toBe(Object.prototype)
@@ -146,6 +153,11 @@ describe('existing Encoding Objects', () => {
     }), 'content')
     expect(dig(result, 'multipart/form-data', 'encoding', 'part')).toEqual({ ...entry, ...octetStream })
     expect(dig(result, 'multipart/mixed', 'encoding', 'part')).toEqual(entry)
+  })
+
+  it('writes contentType on an entry whose contentType holds undefined', () => {
+    const mediaType = { encoding: { part: { contentType: undefined } }, schema: { properties: { part: {} } } }
+    expect(dig(convertForm(mediaType), 'encoding')).toStrictEqual({ part: octetStream })
   })
 
   it('leaves a malformed encoding value alone', () => {

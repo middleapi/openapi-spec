@@ -123,9 +123,6 @@ describe('object graphs', () => {
   })
 })
 
-// Builders that spread options often leave a key holding `undefined`. JSON
-// drops such a key, so the conversion treats it as missing, and the output
-// never holds one.
 describe('keys holding undefined', () => {
   it.each([
     ['ignores an undefined const', { const: undefined, type: 'string' }, { type: 'string' }],

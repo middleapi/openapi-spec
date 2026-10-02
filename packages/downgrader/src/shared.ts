@@ -40,15 +40,10 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * Whether `object` has an own `key` whose value is not `undefined`. A key
  * holding `undefined` disappears in JSON, and objects built in JavaScript
  * often carry one, for example from spreading options, so the conversion
- * treats it as missing.
+ * treats it as missing: it skips such keys, and its output never holds one.
  */
 export function has(object: Record<string, unknown>, key: string): boolean {
   return Object.hasOwn(object, key) && object[key] !== undefined
-}
-
-/** The own entries of `object`, without those holding `undefined` (see `has`). */
-export function entries(object: object): [string, unknown][] {
-  return Object.entries(object).filter(([, item]) => item !== undefined)
 }
 
 export function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -86,8 +81,10 @@ function copy(value: unknown, seen: Map<object, unknown>): unknown {
   }
   const out: Record<string, unknown> = {}
   seen.set(value, out)
-  for (const [key, item] of entries(value)) {
-    setOwn(out, key, copy(item, seen))
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== undefined) {
+      setOwn(out, key, copy(item, seen))
+    }
   }
   return out
 }
@@ -111,7 +108,10 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(value)
-  for (const [key, item] of entries(value)) {
+  for (const [key, item] of Object.entries(value)) {
+    if (item === undefined) {
+      continue
+    }
     const field = fields.get(key)
     const converted = field === undefined ? clone(item, ctx) : field === DROP ? DROP : field(item, ctx, value)
     if (converted !== DROP) {
@@ -132,7 +132,10 @@ export function map(convert: (value: unknown, ctx: Context, key: string) => unkn
       return clone(value, ctx)
     }
     const out: Record<string, unknown> = {}
-    for (const [key, item] of entries(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      if (item === undefined) {
+        continue
+      }
       const converted = isEntry(key) ? convert(item, ctx, key) : clone(item, ctx)
       if (converted !== DROP) {
         setOwn(out, key, converted)
@@ -188,6 +191,13 @@ export function convertXml(value: unknown, _ctx: Context, schema: Record<string,
 
 export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
+}
+
+/** The `$ref` of `value` when no other key of it holds a value (see `has`). */
+export function getBareRef(value: unknown): string | undefined {
+  const ref = getRef(value)
+  const record = value as Record<string, unknown>
+  return ref !== undefined && Object.keys(record).every(key => key === '$ref' || record[key] === undefined) ? ref : undefined
 }
 
 export function child(value: unknown, token: string): unknown {
@@ -290,7 +300,7 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
 }
 
 export function inlineSchema(ref: string, ctx: Context, convert: Convert): unknown {
-  return inline(skipAliases(ref, ctx, (next, target) => entries(target).length === 1 && ctx.dangles(next)), ctx, convert)
+  return inline(skipAliases(ref, ctx, (next, target) => getBareRef(target) !== undefined && ctx.dangles(next)), ctx, convert)
 }
 
 export function refOr(convert: Convert, keep: (value: Record<string, unknown>) => unknown = clone): Convert {

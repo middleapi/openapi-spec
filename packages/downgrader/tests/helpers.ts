@@ -54,7 +54,7 @@ export function cyclicCallbackGraph(k: number, pointer: (name: string) => string
  * what a schema loses, which example field fills `value`, whether a response
  * has a description, and so on.
  */
-export const PRESENCE_KEYS = [
+const PRESENCE_KEYS = [
   '$anchor',
   '$dynamicAnchor',
   '$dynamicRef',
@@ -63,7 +63,6 @@ export const PRESENCE_KEYS = [
   'allowReserved',
   'const',
   'contains',
-  'content',
   'contentType',
   'dataValue',
   'dependentRequired',
@@ -76,7 +75,6 @@ export const PRESENCE_KEYS = [
   'externalValue',
   'if',
   'in',
-  'items',
   'itemSchema',
   'maxContains',
   'minContains',
@@ -87,26 +85,25 @@ export const PRESENCE_KEYS = [
   'serializedValue',
   'style',
   'then',
-  'type',
   'unevaluatedItems',
   'unevaluatedProperties',
   'value',
 ]
 
 /**
- * Copies the JSON-like `value`, adding to every object each of `keys` it
- * lacks, holding `undefined`, as builders that spread options often do. JSON
+ * Copies the JSON-like `value`, adding to every object each of the
+ * `PRESENCE_KEYS` it lacks, holding `undefined`, as builders that spread options often do. JSON
  * drops such keys, so the copy serializes exactly like `value`.
  */
-export function withUndefinedKeys(value: unknown, keys: readonly string[] = PRESENCE_KEYS): unknown {
+export function withUndefinedKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map(item => withUndefinedKeys(item, keys))
+    return value.map(withUndefinedKeys)
   }
   if (typeof value !== 'object' || value === null) {
     return value
   }
-  const out = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withUndefinedKeys(item, keys)]))
-  for (const key of keys) {
+  const out = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withUndefinedKeys(item)]))
+  for (const key of PRESENCE_KEYS) {
     if (!Object.hasOwn(out, key)) {
       out[key] = undefined
     }

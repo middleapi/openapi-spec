@@ -12,7 +12,7 @@ import {
   defineFields,
   downgrade,
   DROP,
-  entries,
+  getBareRef,
   getRef,
   has,
   hasDanglingOperationRef,
@@ -208,7 +208,7 @@ function loosened(out: object): object {
 }
 
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return entries(schema).some(([key]) => LOOSENING_KEYWORDS.has(key))
+  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key) && has(schema, key))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -329,8 +329,8 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = getRef(value)
-  if (ref !== undefined && entries(value as object).length === 1) {
+  const ref = getBareRef(value)
+  if (ref !== undefined) {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
@@ -376,7 +376,9 @@ function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
   for (const node of subschemas([schema], ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
-        parts.set(name, [...parts.get(name) ?? [], property])
+        if (property !== undefined) {
+          parts.set(name, [...parts.get(name) ?? [], property])
+        }
       }
     }
   }
@@ -413,7 +415,7 @@ function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<str
     const entry = child(encoding, name) ?? {}
     if (
       isRecord(entry)
-      && !CONTENT_TYPE_OVERRIDES.some(key => has(entry, key))
+      && !CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))
       && defaultsToOctetStream(schemas, ctx)
     ) {
       setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })
@@ -478,7 +480,10 @@ function convertRequirement(value: unknown, ctx: Context): unknown {
   }
   const out: Record<string, unknown> = {}
   let removed = false
-  for (const [name, scopes] of entries(value)) {
+  for (const [name, scopes] of Object.entries(value)) {
+    if (scopes === undefined) {
+      continue
+    }
     const type = schemeType(name, ctx)
     if (type === 'mutualTLS') {
       removed = true

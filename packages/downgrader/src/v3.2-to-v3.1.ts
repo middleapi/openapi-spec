@@ -11,7 +11,7 @@ import {
   defineFields,
   downgrade,
   DROP,
-  entries,
+  getBareRef,
   getRef,
   has,
   hasDanglingOperationRef,
@@ -198,7 +198,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   else if (has(schema, '$id') || has(schema, '$anchor') || has(schema, '$dynamicAnchor')) {
     ctx.identified.add(schema)
   }
-  if (typeof schema.$ref === 'string' && !has(out, '$ref')) {
+  if (typeof schema.$ref === 'string' && !('$ref' in out)) {
     const target = inlineSchema(schema.$ref, ctx, convertSchema)
     if (target !== DROP) {
       out.allOf = [...allOfItems(out.allOf), target]
@@ -208,8 +208,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
 }
 
 function convertSchema(value: unknown, ctx: Context): unknown {
-  const ref = getRef(value)
-  const out = ref !== undefined && entries(value as object).length === 1 && ctx.dangles(ref)
+  const ref = getBareRef(value)
+  const out = ref !== undefined && ctx.dangles(ref)
     ? inlineSchema(ref, ctx, convertSchema)
     : convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
   return out === DROP ? {} : out
@@ -236,7 +236,7 @@ function finishParameter(out: Record<string, unknown>, parameter: Record<string,
     return out
   }
   if (Object.keys(out.content as object).length === 0) {
-    return entries(parameter.content).length > 0 ? DROP : out
+    return Object.values(parameter.content).some(item => item !== undefined) ? DROP : out
   }
   delete out.example
   delete out.examples
@@ -275,7 +275,7 @@ function convertRequestBody(value: unknown, ctx: Context): unknown {
 }
 
 function finishResponse(out: Record<string, unknown>, response: Record<string, unknown>): unknown {
-  if (!has(out, 'description')) {
+  if (!('description' in out)) {
     out.description = typeof response.summary === 'string' ? response.summary : ''
   }
   return out

@@ -9,7 +9,7 @@ import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
 import { corpusV31 } from '../../corpus'
 import { dig, withUndefinedKeys } from '../../helpers'
-import { convertComponent, convertPathItem, convertSpec, info } from './helpers'
+import { convertPathItem, convertSpec, info } from './helpers'
 
 describe('the input document', () => {
   it('is never mutated', () => {
@@ -98,12 +98,6 @@ describe('keys holding undefined', () => {
   it.each(corpusV31)('converts %s as if the undefined keys were missing', (_name, doc) => {
     const sprinkled = withUndefinedKeys(doc) as OpenAPIV3_1.OpenAPIObject
     expect(downgradeSpecV31ToV30(sprinkled)).toStrictEqual(downgradeSpecV31ToV30(doc))
-  })
-
-  it('writes the default contentType of a form part whose contentType is undefined', () => {
-    const mediaType = { encoding: { part: { contentType: undefined } }, schema: { properties: { part: {} } } }
-    const result = convertComponent('requestBodies', { content: { 'multipart/form-data': mediaType } })
-    expect(dig(result, 'content', 'multipart/form-data', 'encoding')).toStrictEqual({ part: { contentType: 'application/octet-stream' } })
   })
 
   // `{ mtls: undefined }` is the empty requirement `{}`, which needs no
