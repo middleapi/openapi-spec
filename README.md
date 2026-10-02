@@ -7,6 +7,9 @@
   <a href="https://www.npmjs.com/package/@openapi-spec/types">
     <img alt="weekly downloads" src="https://img.shields.io/npm/dw/%40openapi-spec%2Ftypes?logo=npm" />
   </a>
+  <a href="https://app.codspeed.io/middleapi/openapi-spec?utm_source=badge">
+    <img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" />
+  </a>
   <a href="https://github.com/middleapi/openapi-spec/blob/main/LICENSE">
     <img alt="MIT License" src="https://img.shields.io/github/license/middleapi/openapi-spec?logo=open-source-initiative" />
   </a>
@@ -32,7 +35,10 @@ pnpm install
 pnpm test
 pnpm lint
 pnpm type:check
+pnpm bench
 ```
+
+`pnpm bench` runs the benchmarks in [`packages/downgrader/benches`](https://github.com/middleapi/openapi-spec/tree/main/packages/downgrader/benches). [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every push to `main` and every pull request, and reports any change in performance on the pull request.
 
 ## Sponsors
 
