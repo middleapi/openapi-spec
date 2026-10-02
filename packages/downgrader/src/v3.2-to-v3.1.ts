@@ -1,50 +1,49 @@
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import type { Context } from './shared'
+import type { Context, Convert } from './shared'
 import {
-  allOfItems,
   clone,
-  convertMappingRef,
   convertObject,
-  convertXml,
   defineFields,
   downgrade,
   DROP,
-  enterSchema,
-  getBareRef,
   getRef,
-  has,
-  hasDanglingOperationRef,
+  hasType,
   HTTP_METHODS,
   inline,
-  inlineSchema,
   isNotExtension,
   isPath,
   isRecord,
-  keepSchemaRef,
   list,
   map,
-  mergeRef,
-  refOr,
-  removedPrefixes,
-  skipAliases,
+  resolve,
 } from './shared'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
 const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'
 
+// Both versions use JSON Schema 2020-12, so a schema only changes in
+// `discriminator` and `xml`. These keywords hold the subschemas to look into.
+const SUBSCHEMA_KEYWORDS = ['additionalProperties', 'contains', 'contentSchema', 'else', 'if', 'items', 'not', 'propertyNames', 'then', 'unevaluatedItems', 'unevaluatedProperties']
+const SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'dependentSchemas', 'patternProperties', 'properties']
+const SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems']
+
 const convertCallback = map(convertPathItem, isNotExtension)
-const convertContent = map(convertContentEntry)
+const convertContent = map(convertMediaTypeEntry)
 const convertServers = list(convertServer)
-const finishPathItem = mergeRef(convertPathItem)
-const convertCallbackRef = refOr(convertCallback)
-const convertExampleRef = refOr(convertExample)
-const convertLinkRef = refOr(convertLink)
-const convertParameterRef = refOr(convertParameter)
-const convertRequestBodyRef = refOr(convertRequestBody)
-const convertResponseRef = refOr(convertResponse)
-const convertSecuritySchemeRef = refOr(convertSecurityScheme)
+
+const DISCRIMINATOR_FIELDS = defineFields({
+  defaultMapping: DROP,
+})
+
+const SCHEMA_FIELDS = defineFields({
+  ...Object.fromEntries(SUBSCHEMA_KEYWORDS.map(key => [key, convertSchema])),
+  ...Object.fromEntries(SUBSCHEMA_MAP_KEYWORDS.map(key => [key, map(convertSchema)])),
+  ...Object.fromEntries(SUBSCHEMA_LIST_KEYWORDS.map(key => [key, list(convertSchema)])),
+  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  xml: convertXml,
+})
 
 const SERVER_FIELDS = defineFields({
   name: DROP,
@@ -56,45 +55,15 @@ const TAG_FIELDS = defineFields({
   summary: DROP,
 })
 
-const DISCRIMINATOR_FIELDS = defineFields({
-  defaultMapping: DROP,
-  mapping: map(convertMappingRef),
-})
-
-const SCHEMA_FIELDS = defineFields({
-  $defs: map(convertSchema),
-  $ref: (item, ctx) => (typeof item === 'string' ? (keepSchemaRef(item, ctx) ?? DROP) : clone(item)),
-  additionalProperties: convertSchema,
-  allOf: list(convertSchema),
-  anyOf: list(convertSchema),
-  contains: convertSchema,
-  contentSchema: convertSchema,
-  dependentSchemas: map(convertSchema),
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
-  else: convertSchema,
-  if: convertSchema,
-  items: convertSchema,
-  not: convertSchema,
-  oneOf: list(convertSchema),
-  patternProperties: map(convertSchema),
-  prefixItems: list(convertSchema),
-  properties: map(convertSchema),
-  propertyNames: convertSchema,
-  then: convertSchema,
-  unevaluatedItems: convertSchema,
-  unevaluatedProperties: convertSchema,
-  xml: convertXml,
-})
-
 const EXAMPLE_FIELDS = defineFields({
   dataValue: DROP,
   serializedValue: DROP,
 })
 
 const PARAMETER_FIELDS = defineFields({
-  allowReserved: (item, _ctx, parameter) => (!has(parameter, 'in') || parameter.in === 'query' ? clone(item) : DROP),
+  allowReserved: (item, _ctx, parameter) => (parameter.in === 'query' ? clone(item) : DROP),
   content: convertContent,
-  examples: map(convertExampleRef),
+  examples: map(refOr(convertExample)),
   schema: convertSchema,
   style: item => (item === 'cookie' ? DROP : clone(item)),
 })
@@ -109,7 +78,7 @@ const ENCODING_FIELDS = defineFields({
 const MEDIA_TYPE_FIELDS = defineFields({
   description: DROP,
   encoding: map(convertEncoding),
-  examples: map(convertExampleRef),
+  examples: map(refOr(convertExample)),
   itemEncoding: DROP,
   itemSchema: DROP,
   prefixEncoding: DROP,
@@ -123,7 +92,7 @@ const REQUEST_BODY_FIELDS = defineFields({
 const RESPONSE_FIELDS = defineFields({
   content: convertContent,
   headers: map(convertParameterRef),
-  links: map(convertLinkRef),
+  links: map(refOr(convertLink)),
   summary: DROP,
 })
 
@@ -142,10 +111,10 @@ const SECURITY_SCHEME_FIELDS = defineFields({
 })
 
 const OPERATION_FIELDS = defineFields({
-  callbacks: map(convertCallbackRef),
+  callbacks: map(refOr(convertCallback)),
   parameters: list(convertParameterRef),
-  requestBody: convertRequestBodyRef,
-  responses: map(convertResponseRef, isNotExtension),
+  requestBody: refOr(convertRequestBody),
+  responses: map(refOr(convertResponse), isNotExtension),
   servers: convertServers,
 })
 
@@ -158,17 +127,17 @@ const PATH_ITEM_FIELDS = defineFields({
 })
 
 const COMPONENTS_FIELDS = defineFields({
-  callbacks: map(convertCallbackRef),
-  examples: map(convertExampleRef),
+  callbacks: map(refOr(convertCallback)),
+  examples: map(refOr(convertExample)),
   headers: map(convertParameterRef),
-  links: map(convertLinkRef),
+  links: map(refOr(convertLink)),
   mediaTypes: DROP,
   parameters: map(convertParameterRef),
   pathItems: map(convertPathItem),
-  requestBodies: map(convertRequestBodyRef),
-  responses: map(convertResponseRef),
+  requestBodies: map(refOr(convertRequestBody)),
+  responses: map(refOr(convertResponse)),
   schemas: map(convertSchema),
-  securitySchemes: map(convertSecuritySchemeRef),
+  securitySchemes: map(refOr(convertSecurityScheme)),
 })
 
 const DOCUMENT_FIELDS = defineFields({
@@ -181,7 +150,28 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: map(convertPathItem),
 })
 
-const REMOVED = removedPrefixes({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS })
+/** Reference Objects are the same in 3.1, so they are copied as they are. */
+function refOr(convert: Convert): Convert {
+  return (value, ctx) => (getRef(value) === undefined ? convert(value, ctx) : clone(value))
+}
+
+function convertSchema(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, SCHEMA_FIELDS)
+}
+
+function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknown>): unknown {
+  if (!isRecord(value)) {
+    return clone(value)
+  }
+  const { nodeType, ...out } = clone(value) as Record<string, unknown>
+  if (nodeType === 'attribute') {
+    out.attribute = true
+  }
+  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
+    out.wrapped = true
+  }
+  return out
+}
 
 function convertServer(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SERVER_FIELDS)
@@ -191,96 +181,72 @@ function convertTag(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, TAG_FIELDS)
 }
 
-function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
-  if (ctx.identified.has(schema)) {
-    delete out.$id
-    delete out.$anchor
-    delete out.$dynamicAnchor
-  }
-  else if (has(schema, '$id') || has(schema, '$anchor') || has(schema, '$dynamicAnchor')) {
-    ctx.identified.add(schema)
-  }
-  if (typeof schema.$ref === 'string' && !('$ref' in out)) {
-    const target = inlineSchema(schema.$ref, ctx, convertSchema)
-    if (target !== DROP) {
-      out.allOf = [...allOfItems(out.allOf), target]
+function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): void {
+  if (example.value === undefined && example.externalValue === undefined) {
+    const value = example.dataValue !== undefined ? example.dataValue : example.serializedValue
+    if (value !== undefined) {
+      out.value = clone(value)
     }
   }
-  return out
-}
-
-function convertSchema(value: unknown, ctx: Context): unknown {
-  const ref = getBareRef(value)
-  const out = ref !== undefined && keepSchemaRef(ref, ctx) === undefined
-    ? inlineSchema(ref, ctx, convertSchema)
-    : convertObject(value, enterSchema(value, ctx, !ctx.identified.has(value)), SCHEMA_FIELDS, finishSchema)
-  return out === DROP ? {} : out
-}
-
-function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): unknown {
-  if (!(has(example, 'value') || has(example, 'externalValue'))) {
-    if (has(example, 'dataValue')) {
-      out.value = clone(example.dataValue)
-    }
-    else if (has(example, 'serializedValue')) {
-      out.value = clone(example.serializedValue)
-    }
-  }
-  return out
 }
 
 function convertExample(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, EXAMPLE_FIELDS, finishExample)
 }
 
-function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): unknown {
-  if (!isRecord(parameter.content)) {
-    return out
+function isQuerystring(parameter: unknown): boolean {
+  return isRecord(parameter) && parameter.in === 'querystring'
+}
+
+// 3.1 allows examples only beside `schema`.
+function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
+  if (parameter.content !== undefined) {
+    delete out.example
+    delete out.examples
   }
-  if (Object.keys(out.content as object).length === 0) {
-    return Object.values(parameter.content).some(item => item !== undefined) ? DROP : out
-  }
-  delete out.example
-  delete out.examples
-  return out
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
-  if (isRecord(value) && value.in === 'querystring') {
-    return DROP
+  return isQuerystring(value) ? DROP : convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
+}
+
+function convertParameterRef(value: unknown, ctx: Context): unknown {
+  const ref = getRef(value)
+  if (ref === undefined) {
+    return convertParameter(value, ctx)
   }
-  return convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
+  return isQuerystring(resolve(ref, ctx)) ? DROP : clone(value)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
 }
 
-function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
-  if (has(mediaType, 'itemSchema') && !has(mediaType, 'schema')) {
+function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): void {
+  if (mediaType.itemSchema !== undefined && mediaType.schema === undefined) {
     out.schema = { items: convertSchema(mediaType.itemSchema, ctx), type: 'array' }
   }
-  return out
 }
 
 function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS, finishMediaType)
 }
 
-function convertContentEntry(value: unknown, ctx: Context): unknown {
+// A 3.1 content map cannot hold a `$ref`, such as one to `components.mediaTypes`.
+function convertMediaTypeEntry(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref === undefined ? convertMediaType(value, ctx) : inline(skipAliases(ref, ctx, () => true), ctx, convertContentEntry)
+  return ref === undefined ? convertMediaType(value, ctx) : inline(ref, ctx, convertMediaTypeEntry)
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, REQUEST_BODY_FIELDS)
 }
 
-function finishResponse(out: Record<string, unknown>, response: Record<string, unknown>): unknown {
-  if (!('description' in out)) {
+// 3.1 requires a description, which a summary can stand in for.
+function finishResponse(out: Record<string, unknown>, response: Record<string, unknown>): void {
+  if (out.description === undefined) {
     out.description = typeof response.summary === 'string' ? response.summary : ''
   }
-  return out
 }
 
 function convertResponse(value: unknown, ctx: Context): unknown {
@@ -288,7 +254,7 @@ function convertResponse(value: unknown, ctx: Context): unknown {
 }
 
 function convertLink(value: unknown, ctx: Context): unknown {
-  return hasDanglingOperationRef(value, ctx) ? DROP : convertObject(value, ctx, LINK_FIELDS)
+  return convertObject(value, ctx, LINK_FIELDS)
 }
 
 function convertSecurityScheme(value: unknown, ctx: Context): unknown {
@@ -300,12 +266,11 @@ function convertOperation(value: unknown, ctx: Context): unknown {
 }
 
 function convertPathItem(value: unknown, ctx: Context): unknown {
-  return convertObject(value, ctx, PATH_ITEM_FIELDS, finishPathItem)
+  return convertObject(value, ctx, PATH_ITEM_FIELDS)
 }
 
-function finishDocument(out: Record<string, unknown>): unknown {
+function finishDocument(out: Record<string, unknown>): void {
   out.openapi = '3.1.2'
-  return out
 }
 
 function convertDocument(value: unknown, ctx: Context): unknown {
@@ -313,7 +278,7 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
-  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_1.OpenAPIObject
+  return downgrade(spec, convertDocument) as OpenAPIV3_1.OpenAPIObject
 }
 
 export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {

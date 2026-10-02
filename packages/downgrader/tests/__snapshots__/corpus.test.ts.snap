@@ -1,85 +1,47 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`official examples > flattens the tag hierarchy of the tags example 1`] = `
+exports[`matches the snapshots of the 3.2 mega document > 3.0 1`] = `
 {
+  "components": {
+    "schemas": {
+      "Foo": {
+        "properties": {
+          "type": {
+            "enum": [
+              "foo",
+            ],
+          },
+        },
+        "type": "object",
+      },
+    },
+    "securitySchemes": {},
+  },
   "info": {
-    "title": "Flight API",
+    "license": {
+      "name": "Apache 2.0",
+    },
+    "title": "My API",
     "version": "1.0.0",
   },
-  "openapi": "3.1.2",
+  "openapi": "3.0.4",
   "paths": {
-    "/flights": {
+    "/": {
       "get": {
-        "summary": "List all flights",
-        "tags": [
-          "flights",
-        ],
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "",
+          },
+        },
       },
     },
-    "/flights/delayed": {
-      "get": {
-        "summary": "Get delayed flights",
-        "tags": [
-          "delays",
-        ],
-      },
-    },
-    "/flights/domestic": {
-      "get": {
-        "summary": "List domestic flights",
-        "tags": [
-          "domestic",
-        ],
-      },
-    },
-    "/flights/international": {
-      "get": {
-        "summary": "List international flights",
-        "tags": [
-          "international",
-        ],
-      },
-    },
-  },
-  "tags": [
-    {
-      "description": "Core flight operations",
-      "name": "flights",
-    },
-    {
-      "description": "Flights that cross country borders",
-      "name": "international",
-    },
-    {
-      "description": "Flights within a single country",
-      "name": "domestic",
-    },
-    {
-      "description": "Information about flight delays",
-      "externalDocs": {
-        "description": "Delay compensation policies",
-        "url": "https://docs.example.com/delay-policies",
-      },
-      "name": "delays",
-    },
-  ],
-}
-`;
-
-exports[`official examples > removes the QUERY operation of the query example, leaving an empty path item 1`] = `
-{
-  "info": {
-    "title": "Flight API",
-    "version": "1.0.0",
-  },
-  "openapi": "3.1.2",
-  "paths": {
-    "/flights/search": {},
+    "/{pathTest}": {},
   },
 }
 `;
 
-exports[`official examples > removes the discriminator defaultMapping of the mega document 1`] = `
+exports[`matches the snapshots of the 3.2 mega document > 3.1 1`] = `
 {
   "components": {
     "pathItems": {

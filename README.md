@@ -21,7 +21,7 @@
   </a>
 </div>
 
-TypeScript tooling for the [OpenAPI Specification](https://spec.openapis.org/), maintained by [middleapi](https://github.com/middleapi). It lets you work with OpenAPI 3.0, 3.1, and 3.2 documents from one place: precise types for each version, and converters that move a document from a newer version to an older one without losing anything the older version can still express.
+TypeScript tooling for the [OpenAPI Specification](https://spec.openapis.org/), maintained by [middleapi](https://github.com/middleapi). It lets you work with OpenAPI 3.0, 3.1, and 3.2 documents from one place: precise types for each version, and small, fast converters that move a document from a newer version to an older one, covering what API frameworks such as [oRPC](https://orpc.dev) generate.
 
 | Package                                                                                                         | Description                                                                                         |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |

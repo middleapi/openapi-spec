@@ -5,7 +5,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 // a few paths and a webhook per resource, around shared schemas, parameters,
 // responses, and security schemes. It uses what each step has to rewrite:
 // 3.1 schemas with `null` in `type`, `const`, numeric exclusive bounds,
-// `examples`, `$defs`, and an `$id`; Path Items reused from
+// `examples`, and `$defs`; Path Items reused from
 // `components.pathItems`; webhooks; mutual TLS; and, in 3.2 only, `$self`,
 // the `query` method, streamed `itemSchema`s, reusable Media Type Objects,
 // Server `name`, Tag `summary`, `parent`, and `kind`, Response `summary`,
@@ -40,14 +40,13 @@ function sharedSchemas(): Record<string, OpenAPIV3_2.SchemaObject> {
       default: 'active',
     },
     Address: {
-      $id: 'https://api.example.com/schemas/address',
       type: 'object',
       required: ['line1', 'country'],
       properties: {
         line1: { type: 'string' },
         line2: { type: ['string', 'null'] },
         postalCode: { type: 'string', pattern: '^[0-9A-Z -]{3,10}$' },
-        country: { $ref: '#/$defs/Country' },
+        country: schemaRef('Address/$defs/Country'),
       },
       $defs: {
         Country: { type: 'string', minLength: 2, maxLength: 2, examples: ['US'] },
