@@ -78,11 +78,9 @@ describe('references into removed keywords', () => {
     })
   })
 
-  // Some keywords get a new value instead of a converted one: `const`
-  // replaces the `enum` beside it, an `enum` without null under a null-only
-  // `type` sets `not: {}`, and `"null"` in `type` sets `nullable: true`.
-  // A `$ref` to the original keyword must get the original schema, not the
-  // value that replaced it.
+  // `const`, a null-only `type`, and `"null"` in `type` write new values over
+  // `enum`, `not`, and `nullable`. A `$ref` to the original keyword must get
+  // the original schema, not the value that replaced it.
   it.each([
     [
       'a not that a null-only type replaces',
