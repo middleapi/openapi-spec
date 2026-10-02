@@ -179,7 +179,7 @@ function describesArray(schema: Record<string, unknown>, ctx: Context): boolean 
   if (hasType(schema.type, 'array')) {
     return true
   }
-  const ref = getRef(schema)
+  const ref = rebasedRef(schema, ctx.base)
   if (ref === undefined) {
     return false
   }

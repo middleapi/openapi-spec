@@ -50,6 +50,19 @@ describe('xml.nodeType', () => {
   ])('%s', (_name, refs, xml) => {
     expect(convertSchema({ ...refs, xml: { nodeType: 'element' } })).toEqual({ ...refs, xml })
   })
+
+  // Inside a schema with an `$id`, the `$ref` resolves against that `$id`:
+  // https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.1
+  it('resolves the $ref against the enclosing $id', () => {
+    const list = { $defs: { arr: { type: 'array' } }, $id: 'https://example.com/list', $ref: '#/$defs/arr' }
+    expect(convertSchema({
+      $defs: { arr: { type: 'object' } },
+      properties: { list: { ...list, xml: { nodeType: 'element' } } },
+    })).toEqual({
+      $defs: { arr: { type: 'object' } },
+      properties: { list: { ...list, xml: { wrapped: true } } },
+    })
+  })
 })
 
 describe('discriminator.defaultMapping', () => {
