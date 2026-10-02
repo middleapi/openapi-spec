@@ -132,10 +132,7 @@ const MEDIA_TYPE_FIELDS = defineFields({
 
 const URL_ENCODED_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
 
-const MULTIPART_MEDIA_TYPE_FIELDS = defineFields({
-  ...Object.fromEntries(MEDIA_TYPE_FIELDS),
-  encoding: map(convertMultipartEncoding),
-})
+const MULTIPART_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS).set('encoding', map(convertMultipartEncoding))
 
 const ENCODING_FIELDS = defineFields({
   headers: map(convertParameterRef),

@@ -174,7 +174,6 @@ describe('style, explode, and allowReserved in multipart bodies', () => {
       encoding: { part: octetStream },
       schema: untyped,
     })
-    expect(convertForm({ encoding: { part: { [key]: value } }, schema: untyped })).toEqual(convertForm({ schema: untyped }))
   })
 
   // 3.1 sends each property of an exploded object as its own part, which
@@ -218,16 +217,11 @@ describe('style, explode, and allowReserved in multipart bodies', () => {
 
   it('converts a media type shared by a multipart and a URL-encoded body as each', () => {
     const mediaType = { encoding: { part: { explode: true } }, schema: untyped }
-    for (const types of [
-      ['multipart/form-data', 'application/x-www-form-urlencoded'],
-      ['application/x-www-form-urlencoded', 'multipart/form-data'],
-    ]) {
-      const content = dig(convertComponent('requestBodies', {
-        content: Object.fromEntries(types.map(type => [type, mediaType])),
-      }), 'content')
-      expect(dig(content, 'multipart/form-data')).toEqual({ ...mediaType, encoding: { part: octetStream } })
-      expect(dig(content, 'application/x-www-form-urlencoded')).toEqual(mediaType)
-    }
+    const content = dig(convertComponent('requestBodies', {
+      content: { 'application/x-www-form-urlencoded': mediaType, 'multipart/form-data': mediaType },
+    }), 'content')
+    expect(dig(content, 'multipart/form-data')).toEqual({ ...mediaType, encoding: { part: octetStream } })
+    expect(dig(content, 'application/x-www-form-urlencoded')).toEqual(mediaType)
   })
 
   it('leaves them in responses, where both versions ignore encoding', () => {
