@@ -7,6 +7,9 @@
   <a href="https://www.npmjs.com/package/@openapi-spec/downgrader">
     <img alt="weekly downloads" src="https://img.shields.io/npm/dw/%40openapi-spec%2Fdowngrader?logo=npm" />
   </a>
+  <a href="https://app.codspeed.io/middleapi/openapi-spec?utm_source=badge">
+    <img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" />
+  </a>
   <a href="https://github.com/middleapi/openapi-spec/blob/main/LICENSE">
     <img alt="MIT License" src="https://img.shields.io/github/license/middleapi/openapi-spec?logo=open-source-initiative" />
   </a>
@@ -254,6 +257,12 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 - A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts.
 - A schema without `type` that has `contentEncoding: base64`, or `contentMediaType` without `contentEncoding`, gains `type: string`, so non-string values the original accepts are rejected.
 - Non-standard keywords are kept, although the official 3.0 schema forbids them.
+
+## Performance
+
+An object reached through many `$ref`s or shared references is converted once and reused, so the work grows with the size of the document, not with the number of paths through its references, even where they form cycles.
+
+[Benchmarks](https://github.com/middleapi/openapi-spec/tree/main/packages/downgrader/benches) cover each converter on the official example documents, generated APIs, and worst-case reference graphs. [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every pull request to catch regressions.
 
 ## Sponsors
 
