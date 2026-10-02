@@ -29,22 +29,26 @@ import {
   setOwn,
 } from './shared'
 
-const LOOSENING_KEYWORDS = new Set([
-  '$dynamicRef',
-  'contains',
-  'dependentRequired',
-  'dependentSchemas',
-  'else',
-  'if',
-  'maxContains',
-  'minContains',
-  'patternProperties',
-  'prefixItems',
-  'propertyNames',
-  'then',
-  'unevaluatedItems',
-  'unevaluatedProperties',
-])
+type Restricts = (value: unknown, schema: Record<string, unknown>) => boolean
+
+// Keywords with no 3.0 form, each with whether dropping it from `schema`
+// removes a restriction, which loosens the schema. When unsure, it does.
+const LOOSENING_KEYWORDS: ReadonlyMap<string, Restricts> = new Map(Object.entries({
+  $dynamicRef: () => true,
+  contains: () => true,
+  dependentRequired: value => !isRecord(value) || Object.values(value).some(names => !(Array.isArray(names) && names.length === 0)),
+  dependentSchemas: value => !isRecord(value) || !Object.values(value).every(acceptsAll),
+  else: (value, schema) => 'if' in schema && !acceptsAll(value),
+  if: () => false,
+  maxContains: (_value, schema) => 'contains' in schema,
+  minContains: (_value, schema) => 'contains' in schema,
+  patternProperties: () => true,
+  prefixItems: () => true,
+  propertyNames: value => !acceptsAllStrings(value),
+  then: (value, schema) => 'if' in schema && !acceptsAll(value),
+  unevaluatedItems: value => !acceptsAll(value),
+  unevaluatedProperties: value => !acceptsAll(value),
+} satisfies Record<string, Restricts>))
 
 const ANNOTATION_KEYWORDS = [
   '$anchor',
@@ -84,7 +88,7 @@ const DISCRIMINATOR_FIELDS = defineFields({
 })
 
 const SCHEMA_FIELDS = defineFields({
-  ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
+  ...Object.fromEntries([...LOOSENING_KEYWORDS.keys(), ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
   additionalProperties: (item, ctx, schema) => {
     if ('patternProperties' in schema) {
@@ -205,8 +209,37 @@ function loosened(out: object): object {
   return out
 }
 
+function acceptsAll(schema: unknown): boolean {
+  return schema === true || (isRecord(schema) && Object.keys(schema).length === 0)
+}
+
+function acceptsAllStrings(schema: unknown): boolean {
+  return schema === true || (isRecord(schema) && Object.entries(schema).every(([key, item]) => key === 'type' && hasType(item, 'string')))
+}
+
+// Compares JSON values as `const` and `enum` do: https://json-schema.org/draft/2020-12/json-schema-core#section-4.2.2
+// Where a value contains itself, which JSON cannot, the repeat compares by
+// identity.
+function isEqual(a: unknown, b: unknown, ancestors: readonly unknown[] = []): boolean {
+  if (a === b) {
+    return true
+  }
+  if (ancestors.includes(a)) {
+    return false
+  }
+  const path = [...ancestors, a]
+  if (Array.isArray(a)) {
+    return Array.isArray(b) && a.length === b.length && [...a].every((item, index) => isEqual(item, b[index], path))
+  }
+  if (!isRecord(a) || !isRecord(b)) {
+    return false
+  }
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every(key => Object.hasOwn(b, key) && isEqual(a[key], b[key], path))
+}
+
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+  return Object.entries(schema).some(([key, value]) => LOOSENING_KEYWORDS.get(key)?.(value, schema) === true)
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -292,7 +325,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     loose = true
   }
   if ('const' in schema) {
-    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
+    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.some(item => isEqual(item, schema.const)))
     out.enum = [clone(schema.const)]
   }
   loose = convertType(out, schema.type) || loose
