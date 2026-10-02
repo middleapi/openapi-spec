@@ -7,8 +7,9 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
-import { convertPathItem, convertSpec } from './helpers'
+import { corpusV32 } from '../../corpus'
+import { dig, withUndefinedKeys } from '../../helpers'
+import { convertComponent, convertContent, convertPathItem, convertSpec } from './helpers'
 
 describe('the input document', () => {
   it('is never mutated', () => {
@@ -102,6 +103,39 @@ describe('keys', () => {
     expect(Object.getOwnPropertyDescriptor(result, 'constructor')?.value).toBe(1)
     expect(Object.getOwnPropertyDescriptor(result, 'toString')?.value).toBe(2)
     expect(dig(result, 'components', 'hasOwnProperty')).toEqual({ a: 1 })
+  })
+})
+
+// Builders that spread options often leave a key holding `undefined`. JSON
+// drops such a key, so the conversion treats it as missing, and the output
+// never holds one.
+describe('keys holding undefined', () => {
+  it.each(corpusV32)('converts %s as if the undefined keys were missing', (_name, doc) => {
+    const sprinkled = withUndefinedKeys(doc) as OpenAPIV3_2.OpenAPIObject
+    expect(downgradeSpecV32ToV31(sprinkled)).toStrictEqual(downgradeSpecV32ToV31(doc))
+  })
+
+  it.each([
+    ['fills an undefined response description from the summary', 'responses', { description: undefined, summary: 'OK' }, { description: 'OK' }],
+    ['moves dataValue into an undefined value', 'examples', { dataValue: { a: 1 }, value: undefined }, { value: { a: 1 } }],
+    ['moves serializedValue in when the other value fields are undefined', 'examples', { dataValue: undefined, externalValue: undefined, serializedValue: 's' }, { value: 's' }],
+    ['keeps allowReserved when in is undefined', 'parameters', { allowReserved: true, in: undefined, name: 'p' }, { allowReserved: true, name: 'p' }],
+    ['keeps a parameter whose content holds only undefined', 'parameters', { content: { 'application/json': undefined }, in: 'query', name: 'p' }, { content: {}, in: 'query', name: 'p' }],
+  ])('%s', (_name, kind, value, expected) => {
+    expect(convertComponent(kind, value)).toStrictEqual(expected)
+  })
+
+  it.each([
+    ['adds no schema for an undefined itemSchema', { itemSchema: undefined }, {}],
+    ['turns itemSchema into an array schema when schema is undefined', { itemSchema: { type: 'string' }, schema: undefined }, { schema: { items: { type: 'string' }, type: 'array' } }],
+  ])('%s', (_name, mediaType, expected) => {
+    expect(convertContent({ 'application/jsonl': mediaType })).toStrictEqual({ 'application/jsonl': expected })
+  })
+
+  it('inlines a dangling reference whose siblings are all undefined as a bare one', () => {
+    const mediaTypes = { B: { itemSchema: { type: 'string' } } }
+    const schema = { $ref: '#/components/mediaTypes/B/itemSchema', description: undefined }
+    expect(convertComponent('schemas', schema, { mediaTypes })).toStrictEqual({ type: 'string' })
   })
 })
 

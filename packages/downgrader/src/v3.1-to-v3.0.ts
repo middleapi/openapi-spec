@@ -12,7 +12,10 @@ import {
   defineFields,
   downgrade,
   DROP,
+  enterSchema,
+  getBareRef,
   getRef,
+  has,
   hasDanglingOperationRef,
   hasType,
   HTTP_METHODS,
@@ -20,11 +23,14 @@ import {
   isNotExtension,
   isPath,
   isRecord,
+  keepSchemaRef,
   list,
   map,
   mergeRef,
+  rebasedRef,
   refOr,
   removedPrefixes,
+  resourceOf,
   setOwn,
 } from './shared'
 
@@ -88,7 +94,7 @@ const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
   additionalProperties: (item, ctx, schema) => {
-    if ('patternProperties' in schema) {
+    if (has(schema, 'patternProperties')) {
       return DROP
     }
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
@@ -100,11 +106,12 @@ const SCHEMA_FIELDS = defineFields({
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
-  items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
+  items: (item, ctx, schema) => (has(schema, 'prefixItems') ? DROP : convertSchema(item, ctx)),
   not: convertSchema,
   nullable: DROP,
   oneOf: list(convertSchema),
   properties: map(convertSchema),
+  readOnly: (item, _ctx, schema) => (item === true && schema.writeOnly === true ? DROP : clone(item)),
   required: (item) => {
     if (!Array.isArray(item)) {
       return clone(item)
@@ -112,6 +119,7 @@ const SCHEMA_FIELDS = defineFields({
     return item.length === 0 ? DROP : clone([...new Set(item)])
   },
   type: DROP,
+  writeOnly: (item, _ctx, schema) => (item === true && schema.readOnly === true ? DROP : clone(item)),
   xml: convertXml,
 })
 
@@ -217,7 +225,7 @@ function loosened(out: object): object {
 }
 
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key) && has(schema, key))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -236,8 +244,9 @@ function addAnyOf(out: Record<string, unknown>, variants: unknown): void {
 }
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
-  if (!ctx.dangles(ref)) {
-    return { $ref: ref }
+  const kept = keepSchemaRef(ref, ctx)
+  if (kept !== undefined) {
+    return { $ref: kept }
   }
   const out = inlineSchema(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
@@ -302,8 +311,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     delete out.oneOf
     loose = true
   }
-  if ('const' in schema) {
-    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
+  if (has(schema, 'const')) {
+    loose ||= has(schema, 'enum') && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
     out.enum = [clone(schema.const)]
   }
   loose = convertType(out, schema.type) || loose
@@ -316,7 +325,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
-  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
+  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !has(schema, 'example')) {
     out.example = clone(schema.examples[0])
   }
   const format = schema.contentEncoding === 'base64'
@@ -338,12 +347,12 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = getRef(value)
-  if (ref !== undefined && Object.keys(value as object).length === 1) {
+  const ref = getBareRef(value)
+  if (ref !== undefined) {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
-  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  const out = convertObject(value, enterSchema(value, ctx, false), SCHEMA_FIELDS, finishSchema)
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }
 
@@ -362,17 +371,27 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
 }
 
-function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
-  const nodes = new Set(schemas)
-  for (const node of nodes) {
+// Adds `schema` to `nodes` with the base its own `$ref`s resolve against: its
+// own `$id`, or else `base`, the one around it. The first place found wins.
+function place(nodes: Map<unknown, string>, schema: unknown, base: string, ctx: Context): void {
+  if (!nodes.has(schema)) {
+    nodes.set(schema, resourceOf(schema, ctx) ?? base)
+  }
+}
+
+// Adds to `nodes` each schema they apply through `$ref`, `allOf`, `anyOf`,
+// and `oneOf`.
+function addSubschemas(nodes: Map<unknown, string>, ctx: Context): Map<unknown, string> {
+  for (const [node, base] of nodes) {
     if (isRecord(node)) {
-      const ref = getRef(node)
+      const ref = rebasedRef(node, base)
       if (ref !== undefined) {
-        nodes.add(ctx.resolve(ref))
+        const location = ctx.locate(ref)
+        place(nodes, location.target, location.base, ctx)
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
-          nodes.add(item)
+          place(nodes, item, base, ctx)
         }
       }
     }
@@ -380,20 +399,31 @@ function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
   return nodes
 }
 
-function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
-  const parts = new Map<string, unknown[]>()
-  for (const node of subschemas([schema], ctx)) {
+function formParts(schema: unknown, ctx: Context): Map<string, Map<unknown, string>> {
+  const parts = new Map<string, Map<unknown, string>>()
+  const body = new Map<unknown, string>()
+  place(body, schema, ctx.base, ctx)
+  for (const [node, base] of addSubschemas(body, ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
-        parts.set(name, [...parts.get(name) ?? [], property])
+        if (property === undefined) {
+          continue
+        }
+        let part = parts.get(name)
+        if (part === undefined) {
+          part = new Map()
+          parts.set(name, part)
+        }
+        place(part, property, base, ctx)
       }
     }
   }
   return parts
 }
 
-function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem = false): boolean {
-  const nodes = [...subschemas(schemas, ctx)]
+function defaultsToOctetStream(schemas: Map<unknown, string>, ctx: Context, isItem = false): boolean {
+  const bases = addSubschemas(schemas, ctx)
+  const nodes = [...bases.keys()]
   if (!nodes.every(node => isRecord(node) || node === true)) {
     return false
   }
@@ -409,8 +439,16 @@ function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem
   if (kinds.has('string')) {
     return records.some(node => node.contentEncoding !== undefined)
   }
-  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
-  return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
+  if (isItem || !kinds.has('array')) {
+    return false
+  }
+  const items = new Map<unknown, string>()
+  for (const [node, base] of bases) {
+    for (const item of [child(node, 'prefixItems') ?? [], child(node, 'items') ?? []].flat()) {
+      place(items, item, base, ctx)
+    }
+  }
+  return items.size === 0 || defaultsToOctetStream(items, ctx, true)
 }
 
 function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
@@ -488,6 +526,9 @@ function convertRequirement(value: unknown, ctx: Context): unknown {
   const out: Record<string, unknown> = {}
   let removed = false
   for (const [name, scopes] of Object.entries(value)) {
+    if (scopes === undefined) {
+      continue
+    }
     const type = schemeType(name, ctx)
     if (type === 'mutualTLS') {
       removed = true
