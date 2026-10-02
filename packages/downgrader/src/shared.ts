@@ -213,11 +213,11 @@ export function resolve(root: unknown, ref: string): unknown {
   return parsePointer(ref)?.reduce<unknown>(child, root)
 }
 
-function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Map<unknown, T> {
-  let cache = caches.get(convert)
+function cacheOf<K, J, T>(caches: Map<K, Map<J, T>>, key: K): Map<J, T> {
+  let cache = caches.get(key)
   if (cache === undefined) {
     cache = new Map()
-    caches.set(convert, cache)
+    caches.set(key, cache)
   }
   return cache
 }
@@ -259,10 +259,9 @@ interface Cached {
   // The objects and targets it converted, apart from those in `parts`.
   readonly held: ReadonlySet<unknown>
   // The cached copies it holds, made or reused while it was converted.
-  readonly parts: readonly Cached[]
+  readonly parts: Iterable<Cached>
   // For a merge, the hops skipped as in progress by the walks it took.
   readonly skipped: Skipped | undefined
-  readonly target: unknown
   readonly value: unknown
 }
 
@@ -288,14 +287,23 @@ interface Saved {
   readonly inlining: number
 }
 
-class OverBudget extends Error {}
+// Records nothing. It is the trace of the whole document, and of every copy
+// once exact reuse is off, since nothing reads those.
+class Untraced<T> extends Set<T> {
+  override add(): this {
+    return this
+  }
+}
+
+const UNTRACED: Trace = { cuts: new Untraced(), held: new Untraced(), parts: new Untraced() }
+
+// Thrown to unwind a conversion that ran over budget. Its stack is never read.
+const OVER_BUDGET = new Error('over budget')
 
 const BUDGET = 4
 
-const NO_CUTS: ReadonlySet<unknown> = new Set()
-
-function newTrace(): Trace {
-  return { cuts: new Set(), held: new Set(), parts: new Set() }
+function newTrace(ctx: Context): Trace {
+  return ctx.exact.on ? { cuts: new Set(), held: new Set(), parts: new Set() } : UNTRACED
 }
 
 function spend(units: number, ctx: Context): void {
@@ -303,8 +311,10 @@ function spend(units: number, ctx: Context): void {
   exact.budget -= units
   if (exact.budget < 0 && exact.on) {
     exact.on = false
+    exact.converted.clear()
+    exact.holds.clear()
     if (exact.depth > 0) {
-      throw new OverBudget()
+      throw OVER_BUDGET
     }
   }
 }
@@ -329,30 +339,44 @@ function hold(value: unknown, ctx: Context): boolean {
     return false
   }
   ctx.trace.held.add(value)
-  if (!exact.converted.has(value)) {
-    exact.converted.add(value)
-    return false
-  }
-  if (exact.again.at(-1) === value) {
+  const { size } = exact.converted
+  if (exact.converted.add(value).size > size || exact.again.at(-1) === value) {
     return false
   }
   exact.again.push(value)
   return true
 }
 
-function enter(target: unknown, trace: Trace, ctx: Context): void {
-  ctx.inlining.add(target)
-  trace.held.add(target)
-  if (ctx.exact.converted.has(target)) {
-    ctx.exact.again.push(target)
+// Starts converting `target` for a copy traced in `trace`. With `redo`, a
+// copy of it exists but none fits, so it is converted again; the outermost
+// such conversion returns the state to restore if it runs over budget.
+function enter(target: unknown, trace: Trace, redo: boolean, ctx: Context): Saved | undefined {
+  const { exact } = ctx
+  const saved = redo && exact.depth === 0 ? save(ctx) : undefined
+  if (redo) {
+    exact.depth++
   }
+  ctx.inlining.add(target)
+  if (exact.on) {
+    trace.held.add(target)
+    if (exact.converted.has(target)) {
+      exact.again.push(target)
+    }
+  }
+  return saved
 }
 
-function leave(target: unknown, ctx: Context): void {
+function leave(target: unknown, redo: boolean, ctx: Context): void {
+  const { exact } = ctx
   ctx.inlining.delete(target)
-  ctx.exact.converted.add(target)
-  if (ctx.exact.again.at(-1) === target) {
-    ctx.exact.again.pop()
+  if (redo) {
+    exact.depth--
+  }
+  if (exact.on) {
+    exact.converted.add(target)
+  }
+  if (exact.again.at(-1) === target) {
+    exact.again.pop()
   }
 }
 
@@ -379,17 +403,22 @@ function cut(target: unknown, ctx: Context): typeof DROP {
   return DROP
 }
 
-function use(cached: Cached, ctx: Context): void {
-  for (const target of cached.cuts) {
+function record(cuts: Iterable<unknown>, parts: Iterable<Cached>, ctx: Context): void {
+  for (const target of cuts) {
     ctx.trace.cuts.add(target)
   }
-  ctx.trace.parts.add(cached)
+  for (const part of parts) {
+    ctx.trace.parts.add(part)
+  }
 }
 
 // Returns `cuts` with those of `more` that are still in progress and without
-// `done`, a target whose conversion just ended. A cached copy may hold
-// `cuts`, so it is copied only if that changes it.
-function joinCuts(cuts: ReadonlySet<unknown>, more: readonly unknown[], ctx: Context, done?: unknown): ReadonlySet<unknown> {
+// `done`, a hop whose merge just ended. A cached copy may hold `cuts`, so it
+// is copied only if that changes it.
+function joinCuts(cuts: ReadonlySet<unknown>, more: readonly unknown[], done: unknown, ctx: Context): ReadonlySet<unknown> {
+  if (!ctx.exact.on) {
+    return cuts
+  }
   const added = more.filter(target => !cuts.has(target) && isInProgress(target, ctx))
   if (added.length === 0 && !cuts.has(done)) {
     return cuts
@@ -401,21 +430,22 @@ function joinCuts(cuts: ReadonlySet<unknown>, more: readonly unknown[], ctx: Con
 
 // Whether `cached`, or a copy it holds, converted `target`.
 function holds(cached: Cached, target: unknown, ctx: Context): boolean {
-  let known = ctx.exact.holds.get(target)
-  if (known === undefined) {
-    known = new Map()
-    ctx.exact.holds.set(target, known)
+  const known = cacheOf(ctx.exact.holds, target)
+  const answer = known.get(cached)
+  if (answer !== undefined) {
+    spend(1, ctx)
+    return answer
   }
   const visited = new Set([cached])
   const stack = [cached]
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
     spend(1, ctx)
-    const answer = known.get(node)
-    if (answer === true || node.held.has(target)) {
+    const nodeAnswer = known.get(node)
+    if (nodeAnswer === true || node.held.has(target)) {
       known.set(cached, true)
       return true
     }
-    if (answer === undefined) {
+    if (nodeAnswer === undefined) {
       for (const part of node.parts) {
         if (!visited.has(part)) {
           visited.add(part)
@@ -469,10 +499,11 @@ function reusable(copies: readonly Cached[] | undefined, ctx: Context): Cached |
   return undefined
 }
 
-function keep(cache: Map<unknown, Cached[]>, cached: Cached): void {
-  const copies = cache.get(cached.target)
-  if (copies === undefined) {
-    cache.set(cached.target, [cached])
+// Once exact reuse is off, only the last copy of a target is read.
+function keep(cache: Map<unknown, Cached[]>, target: unknown, cached: Cached, ctx: Context): void {
+  const copies = cache.get(target)
+  if (copies === undefined || !ctx.exact.on) {
+    cache.set(target, [cached])
   }
   else {
     copies.push(cached)
@@ -491,38 +522,35 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   const copies = cache.get(target)
   const known = reusable(copies, ctx)
   if (known !== undefined) {
-    use(known, ctx)
+    record(known.cuts, [known], ctx)
     return known.value
   }
-  const stale = ctx.exact.on ? copies?.at(-1) : undefined
-  const saved = stale !== undefined && ctx.exact.depth === 0 ? save(ctx) : undefined
-  if (stale !== undefined) {
-    ctx.exact.depth++
-  }
+  const redo = ctx.exact.on && copies !== undefined
   const identified = ctx.identified.size
-  const trace = newTrace()
+  const trace = newTrace(ctx)
+  const saved = enter(target, trace, redo, ctx)
   let value: unknown
   try {
-    enter(target, trace, ctx)
     value = convert(target, { ...ctx, seen: new Map(), trace })
-    leave(target, ctx)
   }
   catch (error) {
-    if (saved === undefined || !(error instanceof OverBudget)) {
+    if (saved === undefined || error !== OVER_BUDGET) {
       throw error
     }
     restore(saved, ctx)
-    use(stale as Cached, ctx)
-    return (stale as Cached).value
+    return inline(ref, ctx, convert)
   }
-  if (stale !== undefined) {
-    ctx.exact.depth--
+  leave(target, redo, ctx)
+  for (const cutAt of trace.cuts) {
+    if (!isInProgress(cutAt, ctx)) {
+      trace.cuts.delete(cutAt)
+    }
   }
-  const out: Cached = { cuts: joinCuts(NO_CUTS, [...trace.cuts], ctx), held: trace.held, parts: [...trace.parts], skipped: undefined, target, value }
+  const out: Cached = { cuts: trace.cuts, held: trace.held, parts: trace.parts, skipped: undefined, value }
   if (ctx.identified.size === identified) {
-    keep(cache, out)
+    keep(cache, target, out, ctx)
   }
-  use(out, ctx)
+  record(out.cuts, [out], ctx)
   return value
 }
 
@@ -535,7 +563,7 @@ function freshState(exact: boolean): Pick<Context, 'converting' | 'exact' | 'ide
     inlining: new Set(),
     merged: new Map(),
     seen: new Map(),
-    trace: newTrace(),
+    trace: UNTRACED,
   }
 }
 
@@ -642,10 +670,10 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
   return tokens !== undefined && isPathItemPointer(tokens) && ctx.dangles(ref as string)
 }
 
-type Hop = { readonly target: unknown } | { readonly again: boolean, readonly identified: number, readonly own: unknown, readonly target: unknown, readonly trace: Trace }
+type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly redo: boolean, readonly target: unknown, readonly trace: Trace }
 
 // The rest of a chain: a hop's cached merge, or the chain end.
-type Tail = Cached | Omit<Cached, 'target'>
+type Tail = Pick<Cached, 'cuts' | 'parts' | 'skipped' | 'value'>
 
 interface Walk {
   readonly hops: Hop[]
@@ -661,9 +689,9 @@ function walkChain(ref: string, ctx: Context, convert: Convert, walk: Walk): Tai
     const target = ctx.resolve(ref)
     const next = getRef(target)
     if (!followsPathItem(next, ctx)) {
-      const trace = newTrace()
+      const trace = newTrace(ctx)
       const value = inline(ref, { ...ctx, trace }, convert)
-      return { cuts: trace.cuts, held: trace.held, parts: [...trace.parts], skipped: value === DROP ? { hop: target, rest: undefined } : undefined, value }
+      return { cuts: trace.cuts, parts: trace.parts, skipped: value === DROP ? { hop: target, rest: undefined } : undefined, value }
     }
     if (isInProgress(target, ctx)) {
       walk.hops.push({ target })
@@ -672,20 +700,17 @@ function walkChain(ref: string, ctx: Context, convert: Convert, walk: Walk): Tai
       const copies = cache.get(target)
       const known = reusable(copies, ctx)
       if (known !== undefined) {
-        return known
+        return { cuts: known.cuts, parts: [known], skipped: known.skipped, value: known.value }
       }
-      const stale = ctx.exact.on ? copies?.at(-1) : undefined
-      if (stale !== undefined) {
-        if (ctx.exact.depth === 0) {
-          walk.saved = { hops: walk.hops.length, ref, state: save(ctx) }
-        }
-        ctx.exact.depth++
-      }
+      const redo = ctx.exact.on && copies !== undefined
       const { $ref: _, ...own } = target as Record<string, unknown>
       const identified = ctx.identified.size
-      const trace = newTrace()
-      enter(target, trace, ctx)
-      walk.hops.push({ again: stale !== undefined, identified, own: convert(own, { ...ctx, seen: new Map(), trace }), target, trace })
+      const trace = newTrace(ctx)
+      const saved = enter(target, trace, redo, ctx)
+      if (saved !== undefined) {
+        walk.saved = { hops: walk.hops.length, ref, state: saved }
+      }
+      walk.hops.push({ identified, own: convert(own, { ...ctx, seen: new Map(), trace }), redo, target, trace })
     }
     ref = next
   }
@@ -704,15 +729,14 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
     tail = walkChain(ref, ctx, convert, walk)
   }
   catch (error) {
-    if (walk.saved === undefined || !(error instanceof OverBudget)) {
+    if (walk.saved === undefined || error !== OVER_BUDGET) {
       throw error
     }
     restore(walk.saved.state, ctx)
     walk.hops.length = walk.saved.hops
     tail = walkChain(walk.saved.ref, ctx, convert, walk)
   }
-  let { cuts, skipped, value } = tail
-  let tailParts = 'target' in tail ? [tail] : tail.parts
+  let { cuts, parts, skipped, value } = tail
   let passed: unknown[] = []
   for (const hop of walk.hops.reverse()) {
     if (!('own' in hop)) {
@@ -720,28 +744,26 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
       skipped = { hop: hop.target, rest: skipped }
       continue
     }
-    leave(hop.target, ctx)
-    if (hop.again) {
-      ctx.exact.depth--
-    }
-    cuts = joinCuts(cuts, passed.length === 0 && hop.trace.cuts.size === 0 ? [] : [...passed, ...hop.trace.cuts], ctx, hop.target)
+    leave(hop.target, hop.redo, ctx)
+    cuts = joinCuts(cuts, [...passed, ...hop.trace.cuts], hop.target, ctx)
     passed = []
+    for (const part of parts) {
+      hop.trace.parts.add(part)
+    }
     const fields: Record<string, unknown> = {}
     mergeMissing(fields, hop.own)
     mergeMissing(fields, value)
-    const merged: Cached = { cuts, held: hop.trace.held, parts: hop.trace.parts.size === 0 ? tailParts : [...hop.trace.parts, ...tailParts], skipped, target: hop.target, value: fields }
+    const merged: Cached = { cuts, held: hop.trace.held, parts: hop.trace.parts, skipped, value: fields }
     if (ctx.identified.size === hop.identified) {
-      keep(cache, merged)
+      keep(cache, hop.target, merged, ctx)
     }
-    tailParts = [merged]
+    parts = [merged]
     value = fields
   }
-  for (const target of [...cuts, ...passed]) {
-    ctx.trace.cuts.add(target)
+  for (const target of passed) {
+    cut(target, ctx)
   }
-  for (const part of tailParts) {
-    ctx.trace.parts.add(part)
-  }
+  record(cuts, parts, ctx)
   return value
 }
 

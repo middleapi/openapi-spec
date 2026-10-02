@@ -274,6 +274,9 @@ describe('reference Objects', () => {
 })
 
 describe('path Item references', () => {
+  const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
+  const responses = { 200: { description: 'ok' } }
+
   // A Path Item `$ref` may sit beside the Path Item's own fields. The spec
   // leaves a field on both sides undefined, but says `$ref` will move toward
   // Reference Object behavior, where the referencing side's fields override
@@ -323,8 +326,6 @@ describe('path Item references', () => {
   it('converts a dense cyclic callback graph in a removed operation in linear work', async () => {
     const reads = { count: 0 }
     const k = 8
-    const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
-    const responses = { 200: { description: 'ok' } }
     const result = convertSpec({
       info: { title: 't', version: '1' },
       paths: { '/a': { $ref: pointer('h0') }, '/q': { query: { callbacks: { cb: cyclicCallbackGraph(k, pointer, reads) }, responses } } },
@@ -340,8 +341,6 @@ describe('path Item references', () => {
   // cuts it. `/b` enters `B` where `A` is not in progress, so it does not
   // reuse that merge, and its inner reference keeps the operation of `A`.
   it.each([['/a', '/b'], ['/b', '/a']])('keeps a hop cut inside another hop\'s fields where it is not in progress, converting %s first', (...order) => {
-    const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
-    const responses = { 200: { description: 'ok' } }
     const refs: Record<string, unknown> = { '/a': { $ref: pointer('A') }, '/b': { $ref: pointer('B') } }
     const pathItems = {
       A: { $ref: pointer('B'), post: { operationId: 'aPost', responses } },
