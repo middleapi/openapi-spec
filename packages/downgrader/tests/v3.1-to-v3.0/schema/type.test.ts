@@ -72,6 +72,22 @@ describe('several types', () => {
       { items: { type: 'integer' }, type: ['array', 'string', 'null'] },
       { anyOf: [{ items: { type: 'integer' }, nullable: true, type: 'array' }, { nullable: true, type: 'string' }] },
     ],
+    // `xml.wrapped` likewise applies only beside `type: "array"`:
+    // https://spec.openapis.org/oas/v3.0.4.html#xml-wrapped
+    // The rest of `xml` names the element whatever its type, so it stays.
+    [
+      'moves xml.wrapped into the array branch',
+      { type: ['array', 'string', 'null'], xml: { name: 'w', prefix: 'p', wrapped: true } },
+      {
+        anyOf: [{ items: {}, nullable: true, type: 'array', xml: { name: 'w', prefix: 'p', wrapped: true } }, { nullable: true, type: 'string' }],
+        xml: { name: 'w', prefix: 'p' },
+      },
+    ],
+    [
+      'leaves xml in place when no branch is an array',
+      { type: ['object', 'string'], xml: { name: 'w', wrapped: true } },
+      { anyOf: [{ type: 'object' }, { type: 'string' }], xml: { name: 'w', wrapped: true } },
+    ],
     [
       'leaves items in place when no branch is an array',
       { items: { type: 'integer' }, type: ['object', 'string'] },

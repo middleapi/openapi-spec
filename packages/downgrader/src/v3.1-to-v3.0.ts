@@ -232,6 +232,20 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
   return out === DROP ? loosened({}) : out
 }
 
+// 3.0 applies `items` and `xml.wrapped` only beside `type: array`, so a type
+// union moves them into its array branch. The rest of `xml` names the element
+// whatever the type, so it stays.
+function takeArrayFields(out: Record<string, unknown>): Record<string, unknown> {
+  const fields: Record<string, unknown> = { items: out.items ?? {} }
+  delete out.items
+  if (isRecord(out.xml) && Object.hasOwn(out.xml, 'wrapped')) {
+    const { wrapped, ...xml } = out.xml
+    fields.xml = { ...xml, wrapped }
+    out.xml = xml
+  }
+  return fields
+}
+
 function convertType(out: Record<string, unknown>, type: unknown): boolean {
   if (typeof type === 'string' && type !== 'null') {
     out.type = type
@@ -253,14 +267,12 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
     }
   }
   else if (rest.length > 1) {
+    const arrayFields = rest.includes('array') ? takeArrayFields(out) : {}
     addAnyOf(out, rest.map(item => ({
       type: item,
-      ...(item === 'array' && { items: out.items ?? {} }),
+      ...(item === 'array' && arrayFields),
       ...(nullable && { nullable: true }),
     })))
-    if (rest.includes('array')) {
-      delete out.items
-    }
   }
   else if (out.enum === undefined) {
     out.enum = [null]

@@ -156,7 +156,21 @@ export function allOfItems(allOf: unknown): unknown[] {
   return allOf === undefined ? [] : [{ allOf }]
 }
 
-export function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknown>): unknown {
+// 3.2 defaults a `$ref` to no node, as it does an array, so an explicit
+// `element` there wraps the referenced array.
+function describesArray(schema: Record<string, unknown>, ctx: Context): boolean {
+  if (hasType(schema.type, 'array')) {
+    return true
+  }
+  const ref = getRef(schema)
+  if (ref === undefined) {
+    return false
+  }
+  const target = ctx.resolve(skipAliases(ref, ctx, (_next, hop) => !hasType(hop.type, 'array')))
+  return isRecord(target) && hasType(target.type, 'array')
+}
+
+export function convertXml(value: unknown, ctx: Context, schema: Record<string, unknown>): unknown {
   if (!isRecord(value)) {
     return clone(value)
   }
@@ -165,8 +179,13 @@ export function convertXml(value: unknown, _ctx: Context, schema: Record<string,
   if (nodeType === 'attribute') {
     out.attribute = true
   }
-  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
+  else if (nodeType === 'element' && describesArray(schema, ctx)) {
     out.wrapped = true
+  }
+  else if (nodeType === 'text' || nodeType === 'cdata' || nodeType === 'none') {
+    // 3.2 ignores `name` on these, but an older version would name an element
+    // after it.
+    delete out.name
   }
   return out
 }

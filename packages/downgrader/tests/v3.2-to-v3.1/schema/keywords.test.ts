@@ -4,7 +4,7 @@
 
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { downgradeSchemaV32ToV31 } from '@openapi-spec/downgrader'
+import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import { convertSchema } from './helpers'
 
 describe('xml.nodeType', () => {
@@ -18,7 +18,9 @@ describe('xml.nodeType', () => {
   //   https://spec.openapis.org/oas/v3.2.0.html#modeling-element-lists
   //   https://spec.openapis.org/oas/v3.1.2.html#xml-wrapped
   // `element` on any other schema is the default anyway, and `text`,
-  // `cdata`, and `none` have no 3.1 form, so those are removed.
+  // `cdata`, and `none` have no 3.1 form, so those are removed. 3.2 ignores
+  // `name` on those three, while 3.1 would name an element after it, so it
+  // goes too.
   it.each([
     ['maps an attribute node to attribute: true', { xml: { name: 'n', nodeType: 'attribute' } }, { xml: { attribute: true, name: 'n' } }],
     ['maps an element node on an array to wrapped: true', { type: 'array', xml: { nodeType: 'element' } }, { type: 'array', xml: { wrapped: true } }],
@@ -27,10 +29,66 @@ describe('xml.nodeType', () => {
     ['removes a text node', { xml: { nodeType: 'text' } }, { xml: {} }],
     ['removes a cdata node', { xml: { nodeType: 'cdata' } }, { xml: {} }],
     ['removes a none node', { xml: { nodeType: 'none' } }, { xml: {} }],
+    ['removes the name of a text node', { type: 'string', xml: { name: 'n', nodeType: 'text' } }, { type: 'string', xml: {} }],
+    ['removes the name of a cdata node', { type: 'string', xml: { name: 'n', nodeType: 'cdata' } }, { type: 'string', xml: {} }],
+    ['removes the name of a none node', { type: 'object', xml: { name: 'n', nodeType: 'none' } }, { type: 'object', xml: {} }],
+    ['keeps the rest of a text node', { xml: { name: 'n', namespace: 'urn:x', nodeType: 'text', prefix: 'p' } }, { xml: { namespace: 'urn:x', prefix: 'p' } }],
     ['keeps an xml object without nodeType', { xml: { name: 'n', prefix: 'p' } }, { xml: { name: 'n', prefix: 'p' } }],
     ['passes a malformed xml value through', { xml: 'junk' }, { xml: 'junk' }],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
+  })
+
+  // A `$ref` also defaults to `none`, so an explicit `element` beside one
+  // wraps the referenced array, which 3.1 writes as `wrapped: true`:
+  // https://spec.openapis.org/oas/v3.2.0.html#xml-node-type
+  // The type is looked up along the whole `$ref` chain.
+  it.each([
+    [
+      'maps an element node on a $ref to an array to wrapped: true',
+      { $defs: { arr: { items: {}, type: 'array' } }, $ref: '#/$defs/arr', xml: { name: 'w', nodeType: 'element' } },
+      { $defs: { arr: { items: {}, type: 'array' } }, $ref: '#/$defs/arr', xml: { name: 'w', wrapped: true } },
+    ],
+    [
+      'follows an alias to the array',
+      { $defs: { alias: { $ref: '#/$defs/arr' }, arr: { type: ['array', 'null'] } }, $ref: '#/$defs/alias', xml: { nodeType: 'element' } },
+      { $defs: { alias: { $ref: '#/$defs/arr' }, arr: { type: ['array', 'null'] } }, $ref: '#/$defs/alias', xml: { wrapped: true } },
+    ],
+    [
+      'stops at a hop that is an array',
+      { $defs: { arr: { $ref: '#/$defs/base', type: 'array' }, base: { minItems: 1 } }, $ref: '#/$defs/arr', xml: { nodeType: 'element' } },
+      { $defs: { arr: { $ref: '#/$defs/base', type: 'array' }, base: { minItems: 1 } }, $ref: '#/$defs/arr', xml: { wrapped: true } },
+    ],
+    [
+      'removes an element node on a $ref to a non-array',
+      { $defs: { obj: { type: 'object' } }, $ref: '#/$defs/obj', xml: { nodeType: 'element' } },
+      { $defs: { obj: { type: 'object' } }, $ref: '#/$defs/obj', xml: {} },
+    ],
+    ['removes an element node on an unresolvable $ref', { $ref: '#/$defs/missing', xml: { nodeType: 'element' } }, { $ref: '#/$defs/missing', xml: {} }],
+    [
+      'removes an element node on a $ref loop',
+      { $defs: { a: { $ref: '#/$defs/b' }, b: { $ref: '#/$defs/a' } }, $ref: '#/$defs/a', xml: { nodeType: 'element' } },
+      { $defs: { a: { $ref: '#/$defs/b' }, b: { $ref: '#/$defs/a' } }, $ref: '#/$defs/a', xml: {} },
+    ],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+
+  it('maps an element node on a $ref to a component array to wrapped: true', () => {
+    const spec = {
+      components: {
+        schemas: {
+          List: { items: { type: 'string' }, type: 'array' },
+          Wrapped: { $ref: '#/components/schemas/List', xml: { name: 'w', nodeType: 'element' } },
+        },
+      },
+      info: { title: 't', version: '1' },
+      openapi: '3.2.0',
+    } satisfies OpenAPIV3_2.OpenAPIObject
+    expect(downgradeSpecV32ToV31(spec).components?.schemas?.Wrapped).toEqual({
+      $ref: '#/components/schemas/List',
+      xml: { name: 'w', wrapped: true },
+    })
   })
 })
 

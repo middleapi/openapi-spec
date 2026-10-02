@@ -52,13 +52,26 @@ describe('binary content', () => {
 describe('xml.nodeType', () => {
   // `nodeType` is a 3.2 field (https://spec.openapis.org/oas/v3.2.0.html#xml-node-type)
   // that can reach a 3.1 document written by hand or by a lenient tool. The
-  // 3.2 → 3.1 converter maps it the same way.
+  // 3.2 → 3.1 converter maps it the same way. 3.0 applies `wrapped` only
+  // beside `type: array`, so on a type union it goes into the array branch:
+  // https://spec.openapis.org/oas/v3.0.4.html#xml-wrapped
   it.each([
     ['maps attribute to attribute: true', { type: 'string', xml: { name: 'n', nodeType: 'attribute' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
     ['maps element on an array to wrapped: true', { items: {}, type: 'array', xml: { nodeType: 'element' } }, { items: {}, type: 'array', xml: { wrapped: true } }],
     ['maps element on a nullable array to wrapped: true', { type: ['array', 'null'], xml: { nodeType: 'element' } }, { items: {}, nullable: true, type: 'array', xml: { wrapped: true } }],
+    [
+      'maps element on a type union with an array to wrapped: true in the array branch',
+      { items: {}, type: ['array', 'string'], xml: { name: 'w', nodeType: 'element' } },
+      { anyOf: [{ items: {}, type: 'array', xml: { name: 'w', wrapped: true } }, { type: 'string' }], xml: { name: 'w' } },
+    ],
+    [
+      'maps element on a $ref to an array to wrapped: true',
+      { $defs: { arr: { type: 'array' } }, $ref: '#/$defs/arr', xml: { nodeType: 'element' } },
+      { allOf: [{ items: {}, type: 'array' }], xml: { wrapped: true } },
+    ],
     ['removes element on other schemas', { type: 'string', xml: { nodeType: 'element' } }, { type: 'string', xml: {} }],
-    ['removes values 3.0 cannot express', { type: 'string', xml: { name: 'n', nodeType: 'text' } }, { type: 'string', xml: { name: 'n' } }],
+    // 3.2 ignores `name` beside `text`, `cdata`, and `none`, so it goes too.
+    ['removes values 3.0 cannot express and their name', { type: 'string', xml: { name: 'n', nodeType: 'text' } }, { type: 'string', xml: {} }],
     ['keeps an xml object without nodeType', { type: 'string', xml: { attribute: true, name: 'n' } }, { type: 'string', xml: { attribute: true, name: 'n' } }],
     ['passes a malformed xml value through', { type: 'string', xml: 'junk' }, { type: 'string', xml: 'junk' }],
   ])('%s', (_name, input, expected) => {
