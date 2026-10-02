@@ -204,6 +204,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 | [`unevaluatedItems`][js-unevaluated-items] and [`unevaluatedProperties`][js-unevaluated-properties] | 3.0 has no equivalent.                                                                                                                                                                         |
 | [`contentEncoding`][js-content-encoding] and [`contentMediaType`][js-content-media-type]            | 3.0 marks binary strings with `format` instead: `base64` becomes `format: byte`, and a media type without an encoding becomes `format: binary`. Anything else is lost.                         |
 | [`examples`][js-examples]                                                                           | 3.0 has a single `example`. The first entry fills it when missing, and the rest are dropped.                                                                                                   |
+| [`readOnly` and `writeOnly`][js-read-only-write-only] when both are `true`                          | 3.0 forbids marking a property with both. Dropping these annotations loses detail, not validation. Keeping one would misstate the intent and, in 3.0, apply `required` one way only.           |
 | Empty [`enum`][js-enum]                                                                             | 3.0 requires at least one value. An empty `enum` rejects everything, so dropping it only loosens the schema.                                                                                   |
 | [`not`][js-not] over a loosened schema                                                              | Negating a looser schema would reject values the original accepts.                                                                                                                             |
 | The exclusivity of [`oneOf`][js-one-of] with a loosened branch                                      | Looser branches may overlap, so "exactly one" could reject values the original accepts. It becomes `anyOf`.                                                                                    |
@@ -234,6 +235,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 [js-content-encoding]: https://json-schema.org/draft/2020-12/json-schema-validation#name-contentencoding
 [js-content-media-type]: https://json-schema.org/draft/2020-12/json-schema-validation#name-contentmediatype
 [js-examples]: https://json-schema.org/draft/2020-12/json-schema-validation#name-examples
+[js-read-only-write-only]: https://json-schema.org/draft/2020-12/json-schema-validation#name-readonly-and-writeonly
 [js-enum]: https://json-schema.org/draft/2020-12/json-schema-validation#name-enum
 [js-not]: https://json-schema.org/draft/2020-12/json-schema-core#name-not
 [js-one-of]: https://json-schema.org/draft/2020-12/json-schema-core#name-oneof

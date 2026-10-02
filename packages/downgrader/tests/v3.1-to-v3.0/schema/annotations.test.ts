@@ -16,6 +16,30 @@ describe('examples', () => {
   })
 })
 
+describe('readOnly and writeOnly', () => {
+  // 3.1 takes both from JSON Schema, where they are annotations that may both
+  // be true: https://json-schema.org/draft/2020-12/json-schema-validation#name-readonly-and-writeonly
+  // 3.0 forbids marking a property with both:
+  // https://spec.openapis.org/oas/v3.0.4.html#schema-read-only
+  // Both are dropped, since keeping either one would claim a direction the
+  // original does not.
+  it.each([
+    ['drops both when both are true', { readOnly: true, type: 'string', writeOnly: true }, { type: 'string' }],
+    ['keeps readOnly alone', { readOnly: true }, { readOnly: true }],
+    ['keeps writeOnly alone', { writeOnly: true }, { writeOnly: true }],
+    ['keeps both when only one is true', { readOnly: true, writeOnly: false }, { readOnly: true, writeOnly: false }],
+    ['keeps both when neither is true', { readOnly: false, writeOnly: false }, { readOnly: false, writeOnly: false }],
+    ['passes malformed values through', { readOnly: 'yes', writeOnly: true }, { readOnly: 'yes', writeOnly: true }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+
+  it('drops both on a nested property', () => {
+    const schema = { properties: { id: { readOnly: true, type: 'string', writeOnly: true } }, type: 'object' }
+    expect(convertSchema(schema)).toEqual({ properties: { id: { type: 'string' } }, type: 'object' })
+  })
+})
+
 describe('binary content', () => {
   // 3.1 describes binary strings with `contentEncoding` and
   // `contentMediaType`, where 3.0 used `format: byte` and `format: binary`:

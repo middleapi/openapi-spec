@@ -104,6 +104,7 @@ const SCHEMA_FIELDS = defineFields({
   nullable: DROP,
   oneOf: list(convertSchema),
   properties: map(convertSchema),
+  readOnly: (item, _ctx, schema) => (item === true && schema.writeOnly === true ? DROP : clone(item)),
   required: (item) => {
     if (!Array.isArray(item)) {
       return clone(item)
@@ -111,6 +112,7 @@ const SCHEMA_FIELDS = defineFields({
     return item.length === 0 ? DROP : clone([...new Set(item)])
   },
   type: DROP,
+  writeOnly: (item, _ctx, schema) => (item === true && schema.readOnly === true ? DROP : clone(item)),
   xml: convertXml,
 })
 
