@@ -13,7 +13,9 @@ import {
   downgrade,
   DROP,
   enterSchema,
+  getBareRef,
   getRef,
+  has,
   hasDanglingOperationRef,
   hasType,
   HTTP_METHODS,
@@ -91,7 +93,7 @@ const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
   additionalProperties: (item, ctx, schema) => {
-    if ('patternProperties' in schema) {
+    if (has(schema, 'patternProperties')) {
       return DROP
     }
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
@@ -103,7 +105,7 @@ const SCHEMA_FIELDS = defineFields({
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
-  items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
+  items: (item, ctx, schema) => (has(schema, 'prefixItems') ? DROP : convertSchema(item, ctx)),
   not: convertSchema,
   nullable: DROP,
   oneOf: list(convertSchema),
@@ -210,7 +212,7 @@ function loosened(out: object): object {
 }
 
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key) && has(schema, key))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -296,8 +298,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     delete out.oneOf
     loose = true
   }
-  if ('const' in schema) {
-    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
+  if (has(schema, 'const')) {
+    loose ||= has(schema, 'enum') && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
     out.enum = [clone(schema.const)]
   }
   loose = convertType(out, schema.type) || loose
@@ -310,7 +312,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
-  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
+  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !has(schema, 'example')) {
     out.example = clone(schema.examples[0])
   }
   const format = schema.contentEncoding === 'base64'
@@ -332,8 +334,8 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = getRef(value)
-  if (ref !== undefined && Object.keys(value as object).length === 1) {
+  const ref = getBareRef(value)
+  if (ref !== undefined) {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
@@ -391,6 +393,9 @@ function formParts(schema: unknown, ctx: Context): Map<string, Map<unknown, stri
   for (const [node, base] of addSubschemas(body, ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
+        if (property === undefined) {
+          continue
+        }
         let part = parts.get(name)
         if (part === undefined) {
           part = new Map()
@@ -508,6 +513,9 @@ function convertRequirement(value: unknown, ctx: Context): unknown {
   const out: Record<string, unknown> = {}
   let removed = false
   for (const [name, scopes] of Object.entries(value)) {
+    if (scopes === undefined) {
+      continue
+    }
     const type = schemeType(name, ctx)
     if (type === 'mutualTLS') {
       removed = true

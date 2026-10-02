@@ -52,6 +52,8 @@ downgradeSchemaV31ToV30({ type: ['string', 'null'] })
 
 Each step can also be imported on its own from `@openapi-spec/downgrader/v3.2-to-v3.1` or `@openapi-spec/downgrader/v3.1-to-v3.0`. All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi-spec/blob/main/packages/types/README.md).
 
+Input is read as JSON would see it: a key holding `undefined`, as spreading options often leaves, counts as missing and never reaches the output.
+
 ## 3.2 → 3.1
 
 ### Spec (`downgradeSpecV32ToV31`)

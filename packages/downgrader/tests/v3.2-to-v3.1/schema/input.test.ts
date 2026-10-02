@@ -76,6 +76,13 @@ describe('copies', () => {
   })
 })
 
+describe('keys holding undefined', () => {
+  it('drops undefined values everywhere in the output', () => {
+    const input = { 'default': { a: undefined, b: 1 }, 'properties': { a: undefined }, 'x-a': undefined, 'xml': { name: 'n', nodeType: undefined } }
+    expect(convertSchema(input)).toStrictEqual({ default: { b: 1 }, properties: {}, xml: { name: 'n' } })
+  })
+})
+
 describe('object graphs', () => {
   // A dereferenced schema can contain itself. The output keeps the same
   // shape: the cycle points at the converted ancestor.
