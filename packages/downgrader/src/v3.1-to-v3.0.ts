@@ -12,6 +12,7 @@ import {
   defineFields,
   downgrade,
   DROP,
+  enterSchema,
   getRef,
   hasDanglingOperationRef,
   hasType,
@@ -20,12 +21,15 @@ import {
   isNotExtension,
   isPath,
   isRecord,
+  keepSchemaRef,
   list,
   map,
   mergeRef,
   placeholder,
+  rebasedRef,
   refOr,
   removedPrefixes,
+  resourceOf,
   setOwn,
 } from './shared'
 
@@ -225,8 +229,9 @@ function addAnyOf(out: Record<string, unknown>, variants: unknown): void {
 }
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
-  if (!ctx.dangles(ref)) {
-    return { $ref: ref }
+  const kept = keepSchemaRef(ref, ctx)
+  if (kept !== undefined) {
+    return { $ref: kept }
   }
   const out = inlineSchema(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
@@ -339,7 +344,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
-  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  const out = convertObject(value, enterSchema(value, ctx, false), SCHEMA_FIELDS, finishSchema)
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }
 
@@ -358,17 +363,27 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
 }
 
-function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
-  const nodes = new Set(schemas)
-  for (const node of nodes) {
+// Adds `schema` to `nodes` with the base its own `$ref`s resolve against: its
+// own `$id`, or else `base`, the one around it. The first place found wins.
+function place(nodes: Map<unknown, string>, schema: unknown, base: string, ctx: Context): void {
+  if (!nodes.has(schema)) {
+    nodes.set(schema, resourceOf(schema, ctx) ?? base)
+  }
+}
+
+// Adds to `nodes` each schema they apply through `$ref`, `allOf`, `anyOf`,
+// and `oneOf`.
+function addSubschemas(nodes: Map<unknown, string>, ctx: Context): Map<unknown, string> {
+  for (const [node, base] of nodes) {
     if (isRecord(node)) {
-      const ref = getRef(node)
+      const ref = rebasedRef(node, base)
       if (ref !== undefined) {
-        nodes.add(ctx.resolve(ref))
+        const location = ctx.locate(ref)
+        place(nodes, location.target, location.base, ctx)
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
-          nodes.add(item)
+          place(nodes, item, base, ctx)
         }
       }
     }
@@ -376,12 +391,19 @@ function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
   return nodes
 }
 
-function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
-  const parts = new Map<string, unknown[]>()
-  for (const node of subschemas([schema], ctx)) {
+function formParts(schema: unknown, ctx: Context): Map<string, Map<unknown, string>> {
+  const parts = new Map<string, Map<unknown, string>>()
+  const body = new Map<unknown, string>()
+  place(body, schema, ctx.base, ctx)
+  for (const [node, base] of addSubschemas(body, ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
-        parts.set(name, [...parts.get(name) ?? [], property])
+        let part = parts.get(name)
+        if (part === undefined) {
+          part = new Map()
+          parts.set(name, part)
+        }
+        place(part, property, base, ctx)
       }
     }
   }
@@ -393,8 +415,9 @@ function hasBinaryFormat(node: Record<string, unknown>): boolean {
   return format === 'binary' || format === 'byte'
 }
 
-function partContentType(schemas: readonly unknown[], ctx: Context, isItem = false): string | undefined {
-  const nodes = [...subschemas(schemas, ctx)]
+function partContentType(schemas: Map<unknown, string>, ctx: Context, isItem = false): string | undefined {
+  const bases = addSubschemas(schemas, ctx)
+  const nodes = [...bases.keys()]
   if (!nodes.every(node => isRecord(node) || node === true)) {
     return undefined
   }
@@ -416,7 +439,12 @@ function partContentType(schemas: readonly unknown[], ctx: Context, isItem = fal
   if (isItem || !kinds.has('array')) {
     return undefined
   }
-  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
+  const items = new Map<unknown, string>()
+  for (const [node, base] of bases) {
+    for (const item of [child(node, 'prefixItems') ?? [], child(node, 'items') ?? []].flat()) {
+      place(items, item, base, ctx)
+    }
+  }
   return partContentType(items, ctx, true)
 }
 

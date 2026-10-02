@@ -61,6 +61,7 @@ describe('parts that need the 3.1 default written out', () => {
     ['an array without items', { type: 'array' }],
     ['untyped anyOf branches', { anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }] }],
     ['a reference to an untyped schema', { $ref: '#/components/schemas/Raw' }],
+    ['an untyped schema reached twice', { anyOf: [{ $ref: '#/components/schemas/Raw' }, { $ref: '#/components/schemas/Raw' }] }],
   ])('sets contentType: application/octet-stream on %s', (_name, part) => {
     expect(convertForm({ schema: { properties: { part } } })).toEqual({
       encoding: { part: octetStream },
@@ -89,6 +90,26 @@ describe('parts that need the 3.1 default written out', () => {
     expect(convertForm({ schema: { $ref: '#/components/schemas/Form' } })).toEqual({
       encoding: { a: octetStream, b: octetStream },
       schema: { $ref: '#/components/schemas/Form' },
+    })
+  })
+
+  it('finds a part through a $ref inside a body schema with an $id', () => {
+    const schema = {
+      $defs: { File: { contentEncoding: 'base64url', type: 'string' } },
+      $id: 'https://example.com/upload',
+      properties: { file: { $ref: '#/$defs/File' } },
+    }
+    expect(dig(convertForm({ schema }), 'encoding')).toEqual({ file: octetStream })
+  })
+
+  // A part declared in several subschemas takes all its declarations: here
+  // the string type from one and the contentEncoding from the other.
+  it('combines a part declared in several subschemas', () => {
+    expect(convertForm({
+      schema: { allOf: [{ properties: { part: { contentEncoding: 'base64url' } } }], properties: { part: { type: 'string' } } },
+    })).toEqual({
+      encoding: { part: octetStream },
+      schema: { allOf: [{ properties: { part: {} } }], properties: { part: { type: 'string' } } },
     })
   })
 
