@@ -78,6 +78,36 @@ describe('references into removed keywords', () => {
     })
   })
 
+  // Some keywords get a new value instead of a converted one: `const`
+  // replaces the `enum` beside it, an `enum` without null under a null-only
+  // `type` sets `not: {}`, and `"null"` in `type` sets `nullable: true`.
+  // A `$ref` to the original keyword must get the original schema, not the
+  // value that replaced it.
+  it.each([
+    [
+      'a not that a null-only type replaces',
+      { not: { $ref: '#/properties/a/not' }, properties: { a: { enum: ['x'], not: { type: 'string' }, type: 'null' } } },
+      { not: { type: 'string' }, properties: { a: { enum: ['x'], not: {} } } },
+    ],
+    [
+      'an enum that const replaces',
+      { properties: { t: { const: { type: 'integer' }, enum: [{ type: 'string' }] }, x: { $ref: '#/properties/t/enum/0' } } },
+      { properties: { t: { enum: [{ type: 'integer' }] }, x: { type: 'string' } } },
+    ],
+    [
+      'an enum that a null const replaces and a null-only type narrows',
+      { properties: { t: { const: null, enum: [false], type: 'null' }, x: { $ref: '#/properties/t/enum/0' } } },
+      { properties: { t: { enum: [null] }, x: { not: {} } } },
+    ],
+    [
+      'a 3.0 nullable that null in type replaces',
+      { not: { $ref: '#/properties/a/nullable' }, properties: { a: { nullable: false, type: ['string', 'null'] } } },
+      { not: { not: {} }, properties: { a: { nullable: true, type: 'string' } } },
+    ],
+  ])('inlines a $ref to %s, rather than pointing it at the replacement', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+
   // A standalone schema has no document around it, so pointers into
   // `components` or `webhooks` cannot be checked and stay as written.
   it('leaves references and mapping entries that point outside the schema as written', () => {

@@ -1,6 +1,6 @@
 export const DROP: unique symbol = Symbol('drop')
 
-const PLACEHOLDERS = new WeakSet<object>()
+const REPLACED = new WeakMap<object, Set<string>>()
 
 export interface Context {
   readonly resolve: (ref: string) => unknown
@@ -143,10 +143,21 @@ export function hasType(type: unknown, name: string): boolean {
   return type === name || (Array.isArray(type) && type.includes(name))
 }
 
-export function placeholder(): Record<string, unknown> {
-  const out = {}
-  PLACEHOLDERS.add(out)
-  return out
+// Sets a value that stands in for whatever the source holds under `key`
+// instead of converting it. A `$ref` into that source location then dangles,
+// so it is inlined rather than kept pointing at the stand-in.
+export function replace(target: Record<string, unknown>, key: string, value: unknown): void {
+  let keys = REPLACED.get(target)
+  if (keys === undefined) {
+    keys = new Set()
+    REPLACED.set(target, keys)
+  }
+  keys.add(key)
+  setOwn(target, key, value)
+}
+
+function isReplaced(value: unknown, key: string): boolean {
+  return typeof value === 'object' && value !== null && REPLACED.get(value)?.has(key) === true
 }
 
 export function allOfItems(allOf: unknown): unknown[] {
@@ -441,7 +452,7 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
   let from = source
   let to = output
   for (const token of tokens) {
-    if (Array.isArray(from) && !(Array.isArray(to) && to.length === from.length)) {
+    if (isReplaced(to, token) || (Array.isArray(from) && !(Array.isArray(to) && to.length === from.length))) {
       to = undefined
     }
     from = child(from, token)
@@ -450,7 +461,7 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
       return false
     }
   }
-  return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
+  return to === undefined
 }
 
 export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {

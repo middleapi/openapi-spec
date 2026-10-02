@@ -23,9 +23,9 @@ import {
   list,
   map,
   mergeRef,
-  placeholder,
   refOr,
   removedPrefixes,
+  replace,
   setOwn,
 } from './shared'
 
@@ -249,7 +249,7 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
   if (rest.length === 1) {
     out.type = rest[0]
     if (nullable) {
-      out.nullable = true
+      replace(out, 'nullable', true)
     }
   }
   else if (rest.length > 1) {
@@ -272,7 +272,7 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
     out.enum = [null]
   }
   else {
-    out.not = {}
+    replace(out, 'not', {})
   }
   return false
 }
@@ -293,7 +293,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   }
   if ('const' in schema) {
     loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
-    out.enum = [clone(schema.const)]
+    replace(out, 'enum', [clone(schema.const)])
   }
   loose = convertType(out, schema.type) || loose
   const { exclusiveMaximum, exclusiveMinimum, maximum, minimum } = schema
@@ -318,7 +318,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     }
   }
   if (out.type === 'array' && out.items === undefined) {
-    out.items = placeholder()
+    replace(out, 'items', {})
   }
   return loose ? loosened(out) : out
 }

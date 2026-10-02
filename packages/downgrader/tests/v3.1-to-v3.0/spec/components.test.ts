@@ -51,6 +51,24 @@ it('keeps examples as they are, since 3.0 examples have the same fields', () => 
   })
 })
 
+// The conversion replaces this `not` with `not: {}` (see
+// schema/references.test.ts), so the `$ref` to it gets the original.
+it('inlines a schema $ref to a keyword the conversion replaced', () => {
+  expect(convertSpec({
+    components: {
+      schemas: {
+        A: { enum: ['x'], not: { type: 'string' }, type: 'null' },
+        B: { not: { $ref: '#/components/schemas/A/not' } },
+      },
+    },
+  }).components).toEqual({
+    schemas: {
+      A: { enum: ['x'], not: {} },
+      B: { not: { type: 'string' } },
+    },
+  })
+})
+
 it('clones a malformed components value unchanged', () => {
   expect(convertSpec({ components: 'junk' }).components).toBe('junk')
 })
