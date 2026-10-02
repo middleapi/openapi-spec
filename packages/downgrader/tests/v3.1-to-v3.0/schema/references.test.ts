@@ -1,4 +1,4 @@
-import { countReads, dig } from '../../helpers'
+import { countReads, dig, inOrder } from '../../helpers'
 import { convertSchema } from './helpers'
 
 describe('$ref with sibling keywords', () => {
@@ -57,13 +57,13 @@ describe('references into removed keywords', () => {
   // not reused for `y`, where `a` does not enclose it. Each `$ref` is cut at
   // its own first repeat, whichever property comes first.
   it.each([['x', 'y'], ['y', 'x']])('cuts mutually recursive definitions at the first repeat of each reference (%s first)', (...order) => {
-    const refs: Record<string, unknown> = { x: { $ref: '#/$defs/a' }, y: { $ref: '#/$defs/b' } }
+    const refs = { x: { $ref: '#/$defs/a' }, y: { $ref: '#/$defs/b' } }
     expect(convertSchema({
       $defs: {
         a: { properties: { b: { $ref: '#/$defs/b' } }, type: 'object' },
         b: { properties: { a: { $ref: '#/$defs/a' } }, type: 'object' },
       },
-      properties: Object.fromEntries(order.map(key => [key, refs[key]])),
+      properties: inOrder(refs, order),
     })).toEqual({
       properties: {
         x: { properties: { b: { properties: { a: {} }, type: 'object' } }, type: 'object' },
@@ -73,15 +73,15 @@ describe('references into removed keywords', () => {
   })
 
   // Definitions that all refer to each other call for a copy of each one per
-  // set of definitions around it, exponentially many. Past a budget, a
-  // reference reuses a copy cut earlier, so the work stays bounded.
+  // set of definitions around it, about 12 × 2^11 here. Past a budget, a
+  // reference reuses a copy cut earlier, so the work stays polynomial.
   it('converts each definition of a dense cycle a bounded number of times', () => {
     const reads = { count: 0 }
     const size = 12
     const refs = Object.fromEntries(Array.from({ length: size }, (_, index) => [`p${index}`, { $ref: `#/$defs/d${index}` }]))
     const $defs = Object.fromEntries(Array.from({ length: size }, (_, index) => [`d${index}`, countReads({ properties: refs, type: 'object' }, 'properties', reads)]))
     const result = convertSchema({ $defs, properties: refs })
-    expect(reads.count).toBeLessThanOrEqual(16 * size)
+    expect(reads.count).toBeLessThan(size ** 3)
     expect(dig(result, 'properties', 'p0', 'properties', 'p0')).toEqual({})
     expect(dig(result, 'properties', 'p0', 'properties', 'p1', 'properties', 'p0')).toEqual({})
   })

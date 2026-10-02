@@ -8,7 +8,7 @@ export interface Context {
   readonly dangles: (ref: string) => boolean
   readonly isRemovedPart: (ref: string) => boolean
   readonly markDangling: (ref: string) => void
-  readonly converting: unknown[]
+  readonly converting: Set<unknown>
   readonly copies: Map<object, unknown>
   readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, Inlined>>
@@ -82,23 +82,19 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   if (!isRecord(value)) {
     return clone(value, ctx)
   }
-  let seen = ctx.seen.get(fields)
-  if (seen === undefined) {
-    seen = new Map()
-    ctx.seen.set(fields, seen)
-  }
+  const seen = getOrCreate(ctx.seen, fields, newMap)
   const known = seen.get(value)
   if (known !== undefined) {
     return known
   }
-  if (ctx.converting.includes(value)) {
+  if (ctx.converting.has(value)) {
     ctx.trace?.cuts.add(value)
     return DROP
   }
   ctx.trace?.entered.add(value)
   const out: Record<string, unknown> = {}
   seen.set(value, out)
-  ctx.converting.push(value)
+  ctx.converting.add(value)
   for (const [key, item] of Object.entries(value)) {
     const field = fields.get(key)
     const converted = field === undefined ? clone(item, ctx) : field === DROP ? DROP : field(item, ctx, value)
@@ -107,7 +103,7 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
     }
   }
   const result = finish === undefined ? out : finish(out, value, ctx)
-  ctx.converting.pop()
+  ctx.converting.delete(value)
   if (result !== out) {
     seen.set(value, result)
   }
@@ -209,26 +205,30 @@ export function resolve(root: unknown, ref: string): unknown {
   return parsePointer(ref)?.reduce<unknown>(child, root)
 }
 
-function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Map<unknown, T> {
-  let cache = caches.get(convert)
-  if (cache === undefined) {
-    cache = new Map()
-    caches.set(convert, cache)
+function getOrCreate<K, V>(map: Map<K, V>, key: K, create: () => V): V {
+  let value = map.get(key)
+  if (value === undefined) {
+    value = create()
+    map.set(key, value)
   }
-  return cache
+  return value
+}
+
+function newMap<K, V>(): Map<K, V> {
+  return new Map()
+}
+
+function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Map<unknown, T> {
+  return getOrCreate(caches, convert, newMap<unknown, T>)
 }
 
 function isInProgress(target: unknown, ctx: Context): boolean {
-  return ctx.inlining.has(target) || ctx.converting.includes(target)
+  return ctx.inlining.has(target) || ctx.converting.has(target)
 }
 
 // A conversion is cut where it reaches an item already in progress, and it
 // enters every other item it reaches. The innermost inlined conversion records
-// both in its trace. A copy of an inlined target equals a fresh conversion
-// wherever every item it was cut at outside itself is still in progress and no
-// item it entered is, so that is where it is reused. Anywhere else it would be
-// cut where the recursion does not repeat, or unroll the recursion further,
-// which compounds as copies nest.
+// both in its trace.
 interface Trace {
   readonly cuts: Set<unknown>
   readonly entered: Set<unknown>
@@ -251,12 +251,15 @@ interface Inlined {
   readonly referrers: Set<unknown>
 }
 
-// A dense cycle can call for exponentially many copies of a target. Past one
-// copy per target referring to it, and at least this many, a reference reuses
-// a copy that enters nothing in progress, cut where that copy was, or is cut
-// itself. The copies then grow with the number of references, not with the
-// number of paths through them.
+const CUT: Copy = { cuts: undefined, entered: new Set(), value: DROP }
+
+// The copies a target keeps: at least this many, or one per target referring
+// to it.
 const COPY_BUDGET = 16
+
+function newInlined(): Inlined {
+  return { copies: [], referrers: new Set() }
+}
 
 function isStillCut(cuts: Cuts | undefined, ctx: Context): boolean {
   for (let node = cuts; node !== undefined; node = node.rest) {
@@ -267,35 +270,50 @@ function isStillCut(cuts: Cuts | undefined, ctx: Context): boolean {
   return true
 }
 
-function entersInProgress(copy: Copy, ctx: Context): boolean {
-  for (const item of ctx.inlining) {
-    if (copy.entered.has(item)) {
+function hasAny(set: ReadonlySet<unknown>, items: Iterable<unknown>): boolean {
+  for (const item of items) {
+    if (set.has(item)) {
       return true
     }
   }
-  return ctx.converting.some(item => copy.entered.has(item))
+  return false
 }
 
-function findCopy({ copies, referrers }: Inlined, ctx: Context): Copy | typeof DROP | undefined {
-  const fitting = copies.filter(copy => !entersInProgress(copy, ctx))
-  const exact = fitting.find(copy => isStillCut(copy.cuts, ctx))
-  if (exact !== undefined || copies.length < Math.max(COPY_BUDGET, referrers.size)) {
-    return exact
+function entersInProgress(entered: ReadonlySet<unknown>, ctx: Context): boolean {
+  return hasAny(entered, ctx.inlining) || hasAny(entered, ctx.converting)
+}
+
+// A copy equals a fresh conversion where every item it was cut at outside
+// itself is still in progress and no item it entered is. Reused elsewhere, it
+// would cut too early or unroll further, and nested copies compound that. A
+// dense cycle can call for exponentially many copies, so past the budget a
+// reference takes a copy that enters nothing in progress, or is cut.
+function findCopy({ copies, referrers }: Inlined, ctx: Context): Copy | undefined {
+  const full = copies.length >= Math.max(COPY_BUDGET, referrers.size)
+  let fitting: Copy | undefined
+  for (const copy of copies) {
+    const exact = isStillCut(copy.cuts, ctx)
+    if ((exact || full) && !entersInProgress(copy.entered, ctx)) {
+      if (exact) {
+        return copy
+      }
+      fitting ??= copy
+    }
   }
-  return fitting[0] ?? DROP
+  return full ? fitting ?? CUT : undefined
 }
 
-function reportCuts(cuts: Cuts | undefined, ctx: Context): void {
-  for (let node = cuts; node !== undefined && ctx.trace !== undefined; node = node.rest) {
-    ctx.trace.cuts.add(node.target)
+function reportCuts(cuts: Cuts | undefined, trace: Trace): void {
+  for (let node = cuts; node !== undefined; node = node.rest) {
+    trace.cuts.add(node.target)
   }
 }
 
-function report(copy: Copy, ctx: Context): void {
-  if (ctx.trace !== undefined) {
-    reportCuts(copy.cuts, ctx)
+function report(copy: Copy, { trace }: Context): void {
+  if (trace !== undefined) {
+    reportCuts(copy.cuts, trace)
     for (const item of copy.entered) {
-      ctx.trace.entered.add(item)
+      trace.entered.add(item)
     }
   }
 }
@@ -319,17 +337,9 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
     ctx.trace?.cuts.add(target)
     return DROP
   }
-  const cache = cacheOf(ctx.inlined, convert)
-  let inlined = cache.get(target)
-  if (inlined === undefined) {
-    inlined = { copies: [], referrers: new Set() }
-    cache.set(target, inlined)
-  }
+  const inlined = getOrCreate(cacheOf(ctx.inlined, convert), target, newInlined)
   inlined.referrers.add(ctx.trace?.target)
   const known = findCopy(inlined, ctx)
-  if (known === DROP) {
-    return DROP
-  }
   if (known !== undefined) {
     report(known, ctx)
     return known.value
@@ -348,7 +358,7 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
 }
 
 function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen' | 'trace'> {
-  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map(), trace: undefined }
+  return { converting: new Set(), identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map(), trace: undefined }
 }
 
 function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
@@ -463,10 +473,10 @@ type Hop = { readonly target: unknown } | { readonly identified: number, readonl
 
 // Each hop's merged fields are cached, so a chain is walked and its hops
 // converted once however many references enter it. A merge that skipped a hop
-// in progress is cut there, so it is reused only while every hop it skipped is
-// still in progress. Unlike an inlined copy, it keeps no trace of its own
-// fields: converted while some hop was in progress, they can lack its fields
-// too, and an inlined copy that reuses the merge does not learn of that.
+// in progress lacks that hop's fields, so it is reused only while every hop it
+// skipped is still in progress. Own fields are not cached apart from the merge,
+// nor traced with it: converted while some hop was in progress, they can lack
+// its fields too.
 function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   const cache = cacheOf(ctx.merged, convert)
   const hops: Hop[] = []
@@ -487,7 +497,9 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
       ctx.trace?.entered.add(target)
       const known = cache.get(target)
       if (known !== undefined && isStillCut(known.cuts, ctx)) {
-        reportCuts(known.cuts, ctx)
+        if (ctx.trace !== undefined) {
+          reportCuts(known.cuts, ctx.trace)
+        }
         tail = known
         break
       }

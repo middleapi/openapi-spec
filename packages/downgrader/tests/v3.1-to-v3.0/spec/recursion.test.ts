@@ -6,7 +6,7 @@
 // - on a Path Item, the inner reference keeps only its own fields
 // - anywhere else, the inner Reference Object is removed
 
-import { dig, expectAcyclic } from '../../helpers'
+import { dig, expectAcyclic, inOrder } from '../../helpers'
 import { convertSpec, webhookSchemaPointer } from './helpers'
 
 const responses = { 200: { description: 'ok' } }
@@ -112,10 +112,10 @@ it.each([['/p', '/q'], ['/q', '/p']])('keeps the operations of mutually recursiv
   const pathItem = (operationId: string, other: string) => ({
     post: { callbacks: { cb: { '{$url}': { $ref: `#/components/pathItems/${other}` } } }, operationId, responses },
   })
-  const refs: Record<string, unknown> = { '/p': { $ref: '#/components/pathItems/P' }, '/q': { $ref: '#/components/pathItems/Q' } }
+  const refs = { '/p': { $ref: '#/components/pathItems/P' }, '/q': { $ref: '#/components/pathItems/Q' } }
   const result = convertSpec({
     components: { pathItems: { P: pathItem('p', 'Q'), Q: pathItem('q', 'P') } },
-    paths: Object.fromEntries(order.map(path => [path, refs[path]])),
+    paths: inOrder(refs, order),
   })
   const converted = (operationId: string, other: unknown) => ({ post: { callbacks: { cb: { '{$url}': other } }, operationId, responses } })
   expect(result.paths).toEqual({

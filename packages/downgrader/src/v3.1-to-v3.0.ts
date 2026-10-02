@@ -331,7 +331,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (ref !== undefined && Object.keys(value as object).length === 1) {
     return convertSchemaRef(ref, ctx)
   }
-  const cyclic = ctx.converting.includes(value)
+  const cyclic = ctx.converting.has(value)
   const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }

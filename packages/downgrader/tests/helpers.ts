@@ -12,6 +12,11 @@ export function dig(value: unknown, ...path: string[]): unknown {
   return current
 }
 
+/** Copies the entries of `record` named by `keys`, in the order of `keys`. */
+export function inOrder(record: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.map(key => [key, record[key]]))
+}
+
 /** A converted document must stay plain JSON, which cannot hold a cycle. */
 export function expectAcyclic(value: unknown): void {
   expect(() => JSON.stringify(value)).not.toThrow()

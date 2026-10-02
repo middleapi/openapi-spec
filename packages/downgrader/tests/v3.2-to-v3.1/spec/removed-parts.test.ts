@@ -6,7 +6,7 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
-import { cyclicCallbackGraph, dig } from '../../helpers'
+import { cyclicCallbackGraph, dig, inOrder } from '../../helpers'
 import { expectValidAs } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
@@ -478,13 +478,13 @@ describe('recursion', () => {
   // the original accepts.
   it.each([['A', 'B'], ['B', 'A']])('cuts mutually recursive schemas at the first repeat of each reference (%s first)', (...order) => {
     const node = (other: string) => ({ schema: { properties: { next: { $ref: `#/components/mediaTypes/${other}/schema` } }, type: 'object' } })
-    const schemas: Record<string, unknown> = {
+    const schemas = {
       A: { $ref: '#/components/mediaTypes/M1/schema' },
       B: { not: { $ref: '#/components/mediaTypes/M2/schema' } },
     }
     const twoLevels = { properties: { next: { properties: { next: {} }, type: 'object' } }, type: 'object' }
     expect(convertSpec({
-      components: { mediaTypes: { M1: node('M2'), M2: node('M1') }, schemas: Object.fromEntries(order.map(name => [name, schemas[name]])) },
+      components: { mediaTypes: { M1: node('M2'), M2: node('M1') }, schemas: inOrder(schemas, order) },
     }).components?.schemas).toEqual({ A: twoLevels, B: { not: twoLevels } })
   })
 
