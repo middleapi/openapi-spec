@@ -118,7 +118,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 - A Link that names a removed operation (`query` or `additionalOperations`) by `operationId` is kept.
-- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. In a dense cycle of targets that refer to one another, where losing only those would take more than a few times the work of the rest of the conversion, copies are shared instead, so an inner reference can also be lost where it does not refer back to an enclosing target.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV32ToV31`)
@@ -138,7 +138,7 @@ Accepts the default OAS dialect. It builds on JSON Schema 2020-12 in both versio
 #### Limitations
 
 - A `$schema` naming the 3.2 dialect passes through unchanged.
-- Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts.
+- Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts. In a dense cycle of such schemas, an inner reference can also become `{}` where it does not refer back to an enclosing schema, as for Path Items above.
 - Only the first copy of a schema inlined in several places keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique. In the other copies, JSON Pointer `$ref`s that resolved against that `$id` are replaced by their converted targets, such `mapping` values are dropped, and other relative `$ref`s, such as one to an `$anchor`, resolve against the enclosing base instead.
 - Older drafts are not supported. Subschemas under keywords that only draft-07 or 2019-09 define, such as `definitions`, pass through unconverted. Convert such schemas to 2020-12 first.
 
@@ -177,7 +177,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A Link that names a webhook operation by `operationId` is kept.
-- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. In a dense cycle of targets that refer to one another, where losing only those would take more than a few times the work of the rest of the conversion, copies are shared instead, so an inner reference can also be lost where it does not refer back to an enclosing target.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV31ToV30`)
