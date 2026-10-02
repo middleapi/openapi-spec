@@ -295,6 +295,29 @@ describe('path Item references', () => {
     })
   })
 
+  // The 3.2 schema only forbids uppercase method names as `additionalOperations`
+  // keys, so a lowercase `query` or fixed method like `get` is a valid key
+  // there, and pointers through it still land in a removed part.
+  it.each(['query', 'get'])('inlines a path item $ref into additionalOperations under the lowercase key %s', (method) => {
+    const responses = { 200: { description: 'ok' } }
+    const callbacks = { c: { '{$url}': { get: { operationId: 'cg', responses } } } }
+    expect(dig(convertSpec({
+      paths: {
+        '/a': { additionalOperations: { [method]: { callbacks, responses } } },
+        '/b': { $ref: `#/paths/~1a/additionalOperations/${method}/callbacks/c/%7B$url%7D`, summary: 's' },
+      },
+    }), 'paths', '/b')).toEqual({ get: { operationId: 'cg', responses }, summary: 's' })
+  })
+
+  it('inlines a path item $ref into a removed operation of a webhook named additionalOperations', () => {
+    const responses = { 200: { description: 'ok' } }
+    const callbacks = { c: { '{$url}': { get: { operationId: 'cg', responses } } } }
+    expect(dig(convertSpec({
+      paths: { '/b': { $ref: '#/webhooks/additionalOperations/query/callbacks/c/%7B$url%7D', summary: 's' } },
+      webhooks: { additionalOperations: { query: { callbacks, responses } } },
+    }), 'paths', '/b')).toEqual({ get: { operationId: 'cg', responses }, summary: 's' })
+  })
+
   // Only pointers that actually land on a Path Item are merged as one. An
   // extension inside a Callback Object is not a Path Item, so a `$ref` to it
   // is left as written.

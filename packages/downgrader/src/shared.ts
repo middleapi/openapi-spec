@@ -309,11 +309,14 @@ export function hasDanglingOperationRef(link: unknown, ctx: Context): boolean {
 }
 
 function isOperationPointer(tokens: readonly string[]): boolean {
-  const key = tokens.at(-1) as string
-  if ((HTTP_METHODS as readonly string[]).includes(key) || key === 'query') {
-    return isPathItemPointer(tokens.slice(0, -1))
+  // `additionalOperations` keys may be lowercase, even `query` or `get`, so
+  // check it first. A webhook or callback expression may itself be named
+  // `additionalOperations`, so fall through when that reading fails.
+  if (tokens.at(-2) === 'additionalOperations' && isPathItemPointer(tokens.slice(0, -2))) {
+    return true
   }
-  return tokens.at(-2) === 'additionalOperations' && isPathItemPointer(tokens.slice(0, -2))
+  const key = tokens.at(-1) as string
+  return ((HTTP_METHODS as readonly string[]).includes(key) || key === 'query') && isPathItemPointer(tokens.slice(0, -1))
 }
 
 function isPathItemPointer(tokens: readonly string[]): boolean {
