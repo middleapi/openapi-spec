@@ -101,6 +101,7 @@ const SCHEMA_FIELDS = defineFields({
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
   items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
   not: convertSchema,
+  nullable: DROP,
   oneOf: list(convertSchema),
   properties: map(convertSchema),
   required: (item) => {

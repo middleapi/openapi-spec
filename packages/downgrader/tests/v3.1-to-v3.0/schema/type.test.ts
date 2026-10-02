@@ -37,6 +37,22 @@ describe('only null', () => {
   })
 })
 
+describe('a 3.0 nullable in the input', () => {
+  // 3.1 removed `nullable`, so in a 3.1 schema it is an unknown keyword that
+  // admits nothing: https://learn.openapis.org/upgrading/v3.0-to-v3.1.html#replace-nullable-with-type-arrays
+  // Kept, it would admit null in 3.0. Only a `"null"` entry in `type` makes
+  // the output nullable, so `nullable` never appears without a `type`.
+  it.each([
+    ['drops it beside a single type', { nullable: true, type: 'string' }, { type: 'string' }],
+    ['drops it beside a null-only type', { nullable: true, type: 'null' }, { enum: [null] }],
+    ['drops it beside several types', { nullable: true, type: ['string', 'integer'] }, { anyOf: [{ type: 'string' }, { type: 'integer' }] }],
+    ['drops it without a type', { nullable: true }, {}],
+    ['lets null in type override nullable: false', { nullable: false, type: ['string', 'null'] }, { nullable: true, type: 'string' }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+})
+
 describe('several types', () => {
   // A union of types has no 3.0 `type` form, so each type becomes its own
   // `anyOf` branch. When null was listed, every branch is nullable.
