@@ -10,12 +10,14 @@ export interface Context {
   readonly markDangling: (ref: string) => void
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
+  readonly exact: Exact
   readonly identified: Set<unknown>
-  readonly inlined: Map<Convert, Map<unknown, unknown>>
+  readonly inlined: Map<Convert, Map<unknown, Cached[]>>
   readonly inlining: Set<unknown>
-  readonly merged: Map<Convert, Map<unknown, Merged>>
+  readonly merged: Map<Convert, Map<unknown, Cached[]>>
   readonly removals: Map<string, boolean | undefined>
   readonly seen: Map<Fields, Map<object, unknown>>
+  readonly trace: Trace
 }
 
 export type Convert = (value: unknown, ctx: Context) => unknown
@@ -91,8 +93,10 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
     return known
   }
   if (ctx.converting.includes(value)) {
-    return DROP
+    return cut(value, ctx)
   }
+  work(ctx)
+  const again = hold(value, ctx)
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(value)
@@ -105,6 +109,9 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   }
   const result = finish === undefined ? out : finish(out, value, ctx)
   ctx.converting.pop()
+  if (again) {
+    ctx.exact.again.pop()
+  }
   if (result !== out) {
     seen.set(value, result)
   }
@@ -219,27 +226,317 @@ function isInProgress(target: unknown, ctx: Context): boolean {
   return ctx.inlining.has(target) || ctx.converting.includes(target)
 }
 
-export function inline(ref: string, ctx: Context, convert: Convert): unknown {
-  const target = ctx.resolve(ref)
-  if (target === undefined || isInProgress(target, ctx)) {
-    return DROP
+// Copying a target that is in progress, an enclosing object or inlined
+// target, would never end, so a copy is cut there instead, and what a copy
+// holds depends on what was in progress where it was made. Each copy traces
+// the targets it cut at, the objects and targets it converted, and the cached
+// copies it holds, and a cached copy is reused only where it comes out the
+// same (see `isExact`). So a copy is cut only where it refers back to
+// something that encloses it.
+//
+// Copies of a dense cycle that fit that way are exponentially many, as for k
+// Path Items whose callbacks all reference one another. So the work of
+// converting targets again because no copy fits is limited to `BUDGET` times
+// the rest of the work. Past that, the conversion that started it is unwound,
+// and copies are shared as before for the rest of the run: an inlined target
+// as soon as it is cached, and a merge while the hops it skipped are still in
+// progress. A copy can then be cut at a target that enclosed the place where
+// it was made but not the place where it is reused.
+interface Trace {
+  readonly cuts: Set<unknown>
+  readonly held: Set<unknown>
+  readonly parts: Set<Cached>
+}
+
+interface Skipped {
+  readonly hop: unknown
+  readonly rest: Skipped | undefined
+}
+
+interface Cached {
+  // The targets it cut at outside itself, still in progress when it was done.
+  readonly cuts: ReadonlySet<unknown>
+  // The objects and targets it converted, apart from those in `parts`.
+  readonly held: ReadonlySet<unknown>
+  // The cached copies it holds, made or reused while it was converted.
+  readonly parts: readonly Cached[]
+  // For a merge, the hops skipped as in progress by the walks it took.
+  readonly skipped: Skipped | undefined
+  readonly target: unknown
+  readonly value: unknown
+}
+
+interface Exact {
+  on: boolean
+  // Each unit of work adds `BUDGET`, except that each unit of converting a
+  // target again because no copy fit, or of checking whether a copy fits,
+  // takes one instead.
+  budget: number
+  // How many conversions of a target again are in progress.
+  depth: number
+  // The objects and targets in progress that were converted before,
+  // innermost last.
+  readonly again: unknown[]
+  readonly converted: Set<unknown>
+  readonly holds: Map<unknown, Map<Cached, boolean>>
+}
+
+interface Saved {
+  readonly again: number
+  readonly converting: number
+  readonly identified: number
+  readonly inlining: number
+}
+
+class OverBudget extends Error {}
+
+const BUDGET = 4
+
+const NO_CUTS: ReadonlySet<unknown> = new Set()
+
+function newTrace(): Trace {
+  return { cuts: new Set(), held: new Set(), parts: new Set() }
+}
+
+function spend(units: number, ctx: Context): void {
+  const { exact } = ctx
+  exact.budget -= units
+  if (exact.budget < 0 && exact.on) {
+    exact.on = false
+    if (exact.depth > 0) {
+      throw new OverBudget()
+    }
   }
-  const cache = cacheOf(ctx.inlined, convert)
-  if (cache.has(target)) {
-    return cache.get(target)
+}
+
+function work(ctx: Context): void {
+  if (ctx.exact.on) {
+    if (ctx.exact.depth === 0) {
+      ctx.exact.budget += BUDGET
+    }
+    else {
+      spend(1, ctx)
+    }
   }
-  const identified = ctx.identified.size
+}
+
+// Traces `value` as converted by the current copy. If it was converted
+// before, it goes on `again` until its conversion ends, unless `enter` just
+// put it there as an inlined target. Returns whether it was put there.
+function hold(value: unknown, ctx: Context): boolean {
+  const { exact } = ctx
+  if (!exact.on) {
+    return false
+  }
+  ctx.trace.held.add(value)
+  if (!exact.converted.has(value)) {
+    exact.converted.add(value)
+    return false
+  }
+  if (exact.again.at(-1) === value) {
+    return false
+  }
+  exact.again.push(value)
+  return true
+}
+
+function enter(target: unknown, trace: Trace, ctx: Context): void {
   ctx.inlining.add(target)
-  const out = convert(target, { ...ctx, seen: new Map() })
-  ctx.inlining.delete(target)
-  if (ctx.identified.size === identified) {
-    cache.set(target, out)
+  trace.held.add(target)
+  if (ctx.exact.converted.has(target)) {
+    ctx.exact.again.push(target)
   }
+}
+
+function leave(target: unknown, ctx: Context): void {
+  ctx.inlining.delete(target)
+  ctx.exact.converted.add(target)
+  if (ctx.exact.again.at(-1) === target) {
+    ctx.exact.again.pop()
+  }
+}
+
+function save(ctx: Context): Saved {
+  return { again: ctx.exact.again.length, converting: ctx.converting.length, identified: ctx.identified.size, inlining: ctx.inlining.size }
+}
+
+// Unwinds a conversion that ran over budget. What it added to the caches
+// stays, since each of those copies was finished and fits where it was made.
+function restore(saved: Saved, ctx: Context): void {
+  ctx.converting.length = saved.converting
+  for (const target of [...ctx.inlining].slice(saved.inlining)) {
+    ctx.inlining.delete(target)
+  }
+  for (const schema of [...ctx.identified].slice(saved.identified)) {
+    ctx.identified.delete(schema)
+  }
+  ctx.exact.again.length = saved.again
+  ctx.exact.depth = 0
+}
+
+function cut(target: unknown, ctx: Context): typeof DROP {
+  ctx.trace.cuts.add(target)
+  return DROP
+}
+
+function use(cached: Cached, ctx: Context): void {
+  for (const target of cached.cuts) {
+    ctx.trace.cuts.add(target)
+  }
+  ctx.trace.parts.add(cached)
+}
+
+// Returns `cuts` with those of `more` that are still in progress and without
+// `done`, a target whose conversion just ended. A cached copy may hold
+// `cuts`, so it is copied only if that changes it.
+function joinCuts(cuts: ReadonlySet<unknown>, more: readonly unknown[], ctx: Context, done?: unknown): ReadonlySet<unknown> {
+  const added = more.filter(target => !cuts.has(target) && isInProgress(target, ctx))
+  if (added.length === 0 && !cuts.has(done)) {
+    return cuts
+  }
+  const out = new Set([...cuts, ...added])
+  out.delete(done)
   return out
 }
 
-function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen'> {
-  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }
+// Whether `cached`, or a copy it holds, converted `target`.
+function holds(cached: Cached, target: unknown, ctx: Context): boolean {
+  let known = ctx.exact.holds.get(target)
+  if (known === undefined) {
+    known = new Map()
+    ctx.exact.holds.set(target, known)
+  }
+  const visited = new Set([cached])
+  const stack = [cached]
+  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
+    spend(1, ctx)
+    const answer = known.get(node)
+    if (answer === true || node.held.has(target)) {
+      known.set(cached, true)
+      return true
+    }
+    if (answer === undefined) {
+      for (const part of node.parts) {
+        if (!visited.has(part)) {
+          visited.add(part)
+          stack.push(part)
+        }
+      }
+    }
+  }
+  for (const node of visited) {
+    known.set(node, false)
+  }
+  return false
+}
+
+// A copy comes out the same where every target it cut at is still in
+// progress, and nothing it converted is in progress again, which a
+// conversion there would cut instead. Nothing in progress for the first time
+// can have been converted by a copy.
+function isExact(cached: Cached, ctx: Context): boolean {
+  spend(cached.cuts.size + ctx.exact.again.length, ctx)
+  for (const target of cached.cuts) {
+    if (!isInProgress(target, ctx)) {
+      return false
+    }
+  }
+  return ctx.exact.again.every(target => cached.cuts.has(target) || !holds(cached, target, ctx))
+}
+
+function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
+  for (let node = skipped; node !== undefined; node = node.rest) {
+    if (!isInProgress(node.hop, ctx)) {
+      return false
+    }
+  }
+  return true
+}
+
+function reusable(copies: readonly Cached[] | undefined, ctx: Context): Cached | undefined {
+  if (copies === undefined) {
+    return undefined
+  }
+  if (!ctx.exact.on) {
+    const last = copies.at(-1) as Cached
+    return isStillSkipped(last.skipped, ctx) ? last : undefined
+  }
+  for (let index = copies.length - 1; index >= 0; index--) {
+    if (isExact(copies[index] as Cached, ctx)) {
+      return copies[index]
+    }
+  }
+  return undefined
+}
+
+function keep(cache: Map<unknown, Cached[]>, cached: Cached): void {
+  const copies = cache.get(cached.target)
+  if (copies === undefined) {
+    cache.set(cached.target, [cached])
+  }
+  else {
+    copies.push(cached)
+  }
+}
+
+export function inline(ref: string, ctx: Context, convert: Convert): unknown {
+  const target = ctx.resolve(ref)
+  if (target === undefined) {
+    return DROP
+  }
+  if (isInProgress(target, ctx)) {
+    return cut(target, ctx)
+  }
+  const cache = cacheOf(ctx.inlined, convert)
+  const copies = cache.get(target)
+  const known = reusable(copies, ctx)
+  if (known !== undefined) {
+    use(known, ctx)
+    return known.value
+  }
+  const stale = ctx.exact.on ? copies?.at(-1) : undefined
+  const saved = stale !== undefined && ctx.exact.depth === 0 ? save(ctx) : undefined
+  if (stale !== undefined) {
+    ctx.exact.depth++
+  }
+  const identified = ctx.identified.size
+  const trace = newTrace()
+  let value: unknown
+  try {
+    enter(target, trace, ctx)
+    value = convert(target, { ...ctx, seen: new Map(), trace })
+    leave(target, ctx)
+  }
+  catch (error) {
+    if (saved === undefined || !(error instanceof OverBudget)) {
+      throw error
+    }
+    restore(saved, ctx)
+    use(stale as Cached, ctx)
+    return (stale as Cached).value
+  }
+  if (stale !== undefined) {
+    ctx.exact.depth--
+  }
+  const out: Cached = { cuts: joinCuts(NO_CUTS, [...trace.cuts], ctx), held: trace.held, parts: [...trace.parts], skipped: undefined, target, value }
+  if (ctx.identified.size === identified) {
+    keep(cache, out)
+  }
+  use(out, ctx)
+  return value
+}
+
+function freshState(exact: boolean): Pick<Context, 'converting' | 'exact' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen' | 'trace'> {
+  return {
+    converting: [],
+    exact: { again: [], budget: 0, converted: new Set(), depth: 0, holds: new Map(), on: exact },
+    identified: new Set(),
+    inlined: new Map(),
+    inlining: new Set(),
+    merged: new Map(),
+    seen: new Map(),
+    trace: newTrace(),
+  }
 }
 
 function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
@@ -247,7 +544,7 @@ function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
     return ctx.removals.get(ref) === true
   }
   ctx.removals.set(ref, undefined)
-  const removed = inline(ref, { ...ctx, ...freshState() }, convert) === DROP
+  const removed = inline(ref, { ...ctx, ...freshState(false) }, convert) === DROP
   ctx.removals.set(ref, removed)
   return removed
 }
@@ -345,75 +642,107 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
   return tokens !== undefined && isPathItemPointer(tokens) && ctx.dangles(ref as string)
 }
 
-interface Skipped {
-  readonly hop: unknown
-  readonly rest: Skipped | undefined
+type Hop = { readonly target: unknown } | { readonly again: boolean, readonly identified: number, readonly own: unknown, readonly target: unknown, readonly trace: Trace }
+
+// The rest of a chain: a hop's cached merge, or the chain end.
+type Tail = Cached | Omit<Cached, 'target'>
+
+interface Walk {
+  readonly hops: Hop[]
+  saved?: { readonly hops: number, readonly ref: string, readonly state: Saved }
 }
 
-interface Merged {
-  readonly fields: unknown
-  readonly skipped: Skipped | undefined
-}
-
-type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly target: unknown }
-
-function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
-  for (let node = skipped; node !== undefined; node = node.rest) {
-    if (!isInProgress(node.hop, ctx)) {
-      return false
-    }
-  }
-  return true
-}
-
-// Each hop's merged fields are cached, so a chain is walked and its hops
-// converted once however many references enter it. A merge that skipped a hop
-// in progress lacks that hop's fields, so it is reused only while every hop it
-// skipped is still in progress. Own fields are not cached apart from the merge:
-// converted while some hop was in progress, they can lack its fields too.
-function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
+// Walks the chain from `ref`, converting the own fields of each hop that is
+// not in progress, up to the chain end or a hop with a copy to reuse.
+function walkChain(ref: string, ctx: Context, convert: Convert, walk: Walk): Tail {
   const cache = cacheOf(ctx.merged, convert)
-  const hops: Hop[] = []
-  let tail: Merged
   for (;;) {
+    work(ctx)
     const target = ctx.resolve(ref)
     const next = getRef(target)
     if (!followsPathItem(next, ctx)) {
-      const fields = inline(ref, ctx, convert)
-      tail = { fields, skipped: fields === DROP ? { hop: target, rest: undefined } : undefined }
-      break
+      const trace = newTrace()
+      const value = inline(ref, { ...ctx, trace }, convert)
+      return { cuts: trace.cuts, held: trace.held, parts: [...trace.parts], skipped: value === DROP ? { hop: target, rest: undefined } : undefined, value }
     }
     if (isInProgress(target, ctx)) {
-      hops.push({ target })
+      walk.hops.push({ target })
     }
     else {
-      const known = cache.get(target)
-      if (known !== undefined && isStillSkipped(known.skipped, ctx)) {
-        tail = known
-        break
+      const copies = cache.get(target)
+      const known = reusable(copies, ctx)
+      if (known !== undefined) {
+        return known
+      }
+      const stale = ctx.exact.on ? copies?.at(-1) : undefined
+      if (stale !== undefined) {
+        if (ctx.exact.depth === 0) {
+          walk.saved = { hops: walk.hops.length, ref, state: save(ctx) }
+        }
+        ctx.exact.depth++
       }
       const { $ref: _, ...own } = target as Record<string, unknown>
       const identified = ctx.identified.size
-      ctx.inlining.add(target)
-      hops.push({ identified, own: convert(own, { ...ctx, seen: new Map() }), target })
+      const trace = newTrace()
+      enter(target, trace, ctx)
+      walk.hops.push({ again: stale !== undefined, identified, own: convert(own, { ...ctx, seen: new Map(), trace }), target, trace })
     }
     ref = next
   }
-  for (const hop of hops.reverse()) {
+}
+
+// Each hop's merged fields are cached like an inlined target, so a chain is
+// walked and its hops converted once however many references enter it, as
+// long as the copies fit. A merge cuts where the own fields of its hops or
+// the chain end cut, and at each hop it skipped as in progress. A skipped hop
+// adds nothing, so a later hop's fields fill in for it.
+function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
+  const cache = cacheOf(ctx.merged, convert)
+  const walk: Walk = { hops: [] }
+  let tail: Tail
+  try {
+    tail = walkChain(ref, ctx, convert, walk)
+  }
+  catch (error) {
+    if (walk.saved === undefined || !(error instanceof OverBudget)) {
+      throw error
+    }
+    restore(walk.saved.state, ctx)
+    walk.hops.length = walk.saved.hops
+    tail = walkChain(walk.saved.ref, ctx, convert, walk)
+  }
+  let { cuts, skipped, value } = tail
+  let tailParts = 'target' in tail ? [tail] : tail.parts
+  let passed: unknown[] = []
+  for (const hop of walk.hops.reverse()) {
     if (!('own' in hop)) {
-      tail = { ...tail, skipped: { hop: hop.target, rest: tail.skipped } }
+      passed.push(hop.target)
+      skipped = { hop: hop.target, rest: skipped }
       continue
     }
-    ctx.inlining.delete(hop.target)
+    leave(hop.target, ctx)
+    if (hop.again) {
+      ctx.exact.depth--
+    }
+    cuts = joinCuts(cuts, passed.length === 0 && hop.trace.cuts.size === 0 ? [] : [...passed, ...hop.trace.cuts], ctx, hop.target)
+    passed = []
     const fields: Record<string, unknown> = {}
     mergeMissing(fields, hop.own)
-    mergeMissing(fields, tail.fields)
-    tail = { ...tail, fields }
+    mergeMissing(fields, value)
+    const merged: Cached = { cuts, held: hop.trace.held, parts: hop.trace.parts.size === 0 ? tailParts : [...hop.trace.parts, ...tailParts], skipped, target: hop.target, value: fields }
     if (ctx.identified.size === hop.identified) {
-      cache.set(hop.target, tail)
+      keep(cache, merged)
     }
+    tailParts = [merged]
+    value = fields
   }
-  return tail.fields
+  for (const target of [...cuts, ...passed]) {
+    ctx.trace.cuts.add(target)
+  }
+  for (const part of tailParts) {
+    ctx.trace.parts.add(part)
+  }
+  return value
 }
 
 export function mergeRef(convert: Convert): Finish {
@@ -497,7 +826,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
   for (;;) {
     const kept = new Set<string>()
     const out = convert(root, {
-      ...freshState(),
+      ...freshState(true),
       aliasEnd,
       copies: new Map(),
       dangles: (ref) => {
