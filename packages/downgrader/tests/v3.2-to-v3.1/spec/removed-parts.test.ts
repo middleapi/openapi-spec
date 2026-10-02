@@ -274,6 +274,9 @@ describe('reference Objects', () => {
 })
 
 describe('path Item references', () => {
+  const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
+  const responses = { 200: { description: 'ok' } }
+
   // A Path Item `$ref` may sit beside the Path Item's own fields. The spec
   // leaves a field on both sides undefined, but says `$ref` will move toward
   // Reference Object behavior, where the referencing side's fields override
@@ -316,24 +319,38 @@ describe('path Item references', () => {
   })
 
   // The Path Items of the cyclic callback graph live in the callbacks of the
-  // removed `query` operation. Each is converted once and shared: inlining
-  // each path through this graph separately would convert them about k! times.
-  it('converts each path item of a cyclic callback graph in a removed operation once', async () => {
+  // removed `query` operation. Inlining each path through this graph
+  // separately would convert them about k! times, and cutting each copy only
+  // at the Path Items that enclose it would still take about 2^k copies. Past
+  // a budget, copies are shared even where they would come out differently.
+  it('converts a dense cyclic callback graph in a removed operation in linear work', async () => {
     const reads = { count: 0 }
     const k = 8
-    const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
-    const responses = { 200: { description: 'ok' } }
     const result = convertSpec({
       info: { title: 't', version: '1' },
       paths: { '/a': { $ref: pointer('h0') }, '/q': { query: { callbacks: { cb: cyclicCallbackGraph(k, pointer, reads) }, responses } } },
     })
-    expect(reads.count).toBe(k)
+    expect(reads.count).toBeLessThan(3 * k)
     await expectValidAs(result, '3.1')
     expect(dig(result, 'paths', '/q')).toEqual({})
-    const callbacks = dig(result, 'paths', '/a', 'post', 'callbacks')
-    expect(dig(callbacks, 'c0', '{$request.body#/url}')).toEqual({ get: { responses } })
-    expect(dig(callbacks, 'c2', '{$request.body#/url}', 'post'))
-      .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
+    expect(dig(result, 'paths', '/a', 'post', 'callbacks', 'c0', '{$request.body#/url}')).toEqual({ get: { responses } })
+  })
+
+  // Converting `/a` merges `B` as a later hop of `A`, so the own fields of `B`
+  // are converted while `A` is in progress, and their reference back to `A`
+  // cuts it. `/b` enters `B` where `A` is not in progress, so it does not
+  // reuse that merge, and its inner reference keeps the operation of `A`.
+  it.each([['/a', '/b'], ['/b', '/a']])('keeps a hop cut inside another hop\'s fields where it is not in progress, converting %s first', (...order) => {
+    const refs: Record<string, unknown> = { '/a': { $ref: pointer('A') }, '/b': { $ref: pointer('B') } }
+    const pathItems = {
+      A: { $ref: pointer('B'), post: { operationId: 'aPost', responses } },
+      B: { $ref: pointer('T'), get: { callbacks: { cb: { '{$url}': { $ref: pointer('A') } } }, responses } },
+      T: { summary: 't' },
+    }
+    const result = convertSpec({
+      paths: { ...Object.fromEntries(order.map(path => [path, refs[path]])), '/q': { query: { callbacks: { cb: pathItems }, responses } } },
+    })
+    expect(dig(result, 'paths', '/b', 'get', 'callbacks', 'cb', '{$url}')).toMatchObject({ post: { operationId: 'aPost', responses }, summary: 't' })
   })
 })
 

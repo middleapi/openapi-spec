@@ -75,7 +75,9 @@ describe('discriminator', () => {
     expect(convertSchema(schema)).toEqual(schema)
   })
 
-  it('passes a malformed discriminator through', () => {
+  it('passes a malformed discriminator or mapping value through', () => {
     expect(convertSchema({ discriminator: 'junk' })).toEqual({ discriminator: 'junk' })
+    const mapping = { discriminator: { mapping: { a: 1, b: { c: 'd' } }, propertyName: 'kind' } }
+    expect(convertSchema(mapping)).toEqual(mapping)
   })
 })
