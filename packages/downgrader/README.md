@@ -123,7 +123,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 ### Schema (`downgradeSchemaV32ToV31`)
 
-Accepts JSON Schema draft-07 to 2020-12 and the default OAS dialect. 3.1 allows the same dialects, so everything not listed below passes through.
+Accepts the default OAS dialect. It builds on JSON Schema 2020-12 in both versions, so everything not listed below passes through. Every schema is read as 2020-12, whatever `$schema` or `jsonSchemaDialect` names.
 
 #### Removed
 
@@ -140,7 +140,7 @@ Accepts JSON Schema draft-07 to 2020-12 and the default OAS dialect. 3.1 allows 
 - A `$schema` naming the 3.2 dialect passes through unchanged.
 - Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts.
 - Only the first copy of a schema inlined in several places keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique. In the other copies, JSON Pointer `$ref`s that resolved against that `$id` are replaced by their converted targets, and other relative `$ref`s, such as one to an `$anchor`, resolve against the enclosing base instead.
-- Subschemas under keywords that only draft-07 or 2019-09 define, such as `definitions`, pass through unconverted.
+- Older drafts are not supported. Subschemas under keywords that only draft-07 or 2019-09 define, such as `definitions`, pass through unconverted. Convert such schemas to 2020-12 first.
 
 ## 3.1 → 3.0
 
@@ -182,7 +182,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 ### Schema (`downgradeSchemaV31ToV30`)
 
-Accepts JSON Schema draft-07 to 2020-12 and the default OAS dialect, which adds `discriminator`, `xml`, `externalDocs`, and `example` to 2020-12. Every schema is read as 2020-12, whatever `$schema` or `jsonSchemaDialect` names.
+Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDocs`, and `example` to JSON Schema 2020-12. Every schema is read as 2020-12, whatever `$schema` or `jsonSchemaDialect` names.
 
 A schema is _loosened_ when the conversion removes a restriction from it or a subschema, or when it contains an object cycle, as in a dereferenced document.
 
@@ -207,6 +207,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 | Empty [`enum`][js-enum]                                                                             | 3.0 requires at least one value. An empty `enum` rejects everything, so dropping it only loosens the schema.                                                                                   |
 | [`not`][js-not] over a loosened schema                                                              | Negating a looser schema would reject values the original accepts.                                                                                                                             |
 | The exclusivity of [`oneOf`][js-one-of] with a loosened branch                                      | Looser branches may overlap, so "exactly one" could reject values the original accepts. It becomes `anyOf`.                                                                                    |
+| [`nullable`][3.0-schema-nullable], a 3.0 keyword                                                    | 3.1 ignores it, but in 3.0 it admits null, so keeping it would accept null where the original rejects it. Only `"null"` in `type` becomes `nullable: true`.                                    |
 | XML [`nodeType`][3.2-xml-node-type], a 3.2 field                                                    | As in 3.2 → 3.1, kept only as `attribute: true` or `wrapped: true`.                                                                                                                            |
 
 [js-schema]: https://json-schema.org/draft/2020-12/json-schema-core#name-the-schema-keyword
@@ -236,10 +237,11 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 [js-enum]: https://json-schema.org/draft/2020-12/json-schema-validation#name-enum
 [js-not]: https://json-schema.org/draft/2020-12/json-schema-core#name-not
 [js-one-of]: https://json-schema.org/draft/2020-12/json-schema-core#name-oneof
+[3.0-schema-nullable]: https://spec.openapis.org/oas/v3.0.4.html#schema-nullable
 
 #### Limitations
 
-- Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, array-form `items`, `additionalItems`, and `$recursiveRef`, pass through unconverted. Siblings of a `$ref` apply, although draft-07 ignores them. Convert such schemas to 2020-12 first.
+- Older drafts are not supported. Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, array-form `items`, `additionalItems`, and `$recursiveRef`, pass through unconverted. Siblings of a `$ref` apply, although draft-07 ignores them. Convert such schemas to 2020-12 first.
 - `$ref`s to an `$anchor`, or to a URI resolved against an `$id` base, are left as written and dangle. Rewrite them as JSON Pointers first.
 - A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts.
 - A schema without `type` that has `contentEncoding: base64`, or `contentMediaType` without `contentEncoding`, gains `type: string`, so non-string values the original accepts are rejected.
