@@ -10,7 +10,13 @@ const validator = new Validator()
 /**
  * Resolves a local `$ref` such as `#/components/schemas/Pet` against `root`.
  * The fragment is percent-decoded first (RFC 3986) and then split into
- * JSON Pointer tokens with `~1` and `~0` unescaped (RFC 6901).
+ * JSON Pointer tokens with `~1` and `~0` unescaped (RFC 6901). A fragment
+ * that does not start with `/`, such as the anchor `#pet`, is not a pointer.
+ * Only an index without leading zeros selects an array element.
+ *
+ * This duplicates `parsePointer` and `child` in `src/shared.ts` on purpose.
+ * The conversion uses them to decide which references dangle, so an oracle
+ * built on them would agree with any bug in them.
  */
 function resolvePointer(root: unknown, ref: string): unknown {
   if (!ref.startsWith('#')) {
@@ -26,10 +32,18 @@ function resolvePointer(root: unknown, ref: string): unknown {
   if (pointer === '') {
     return root
   }
+  if (!pointer.startsWith('/')) {
+    return undefined
+  }
   let current = root
   for (const token of pointer.slice(1).split('/')) {
     const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (typeof current !== 'object' || current === null || !Object.hasOwn(current, key)) {
+    if (
+      typeof current !== 'object'
+      || current === null
+      || (Array.isArray(current) && !/^(?:0|[1-9]\d*)$/.test(key))
+      || !Object.hasOwn(current, key)
+    ) {
       return undefined
     }
     current = (current as Record<string, unknown>)[key]

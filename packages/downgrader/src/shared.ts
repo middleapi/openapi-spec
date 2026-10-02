@@ -731,7 +731,7 @@ function isRemovedAlias(ref: string, ctx: Context, convert: Convert): boolean {
   return end !== undefined && ctx.dangles(end) && convertsToDrop(end, ctx, convert)
 }
 
-export function skipAliases(ref: string, ctx: Context, follow: (next: string, target: Record<string, unknown>) => boolean): string {
+function skipAliases(ref: string, ctx: Context, follow: (next: string, target: Record<string, unknown>) => boolean): string {
   const hops = new Set([ref])
   let hop = ref
   for (;;) {
@@ -822,6 +822,28 @@ function isPathItemPointer(tokens: readonly string[]): boolean {
     && tokens.at(-3) === 'callbacks'
     && !(tokens.at(-1) as string).startsWith('x-')
     && (tokens.length === 4 ? first === 'components' : isOperationPointer(tokens.slice(0, -3)))
+}
+
+// Whether `tokens` points at or into one of `fields`, which converting a Path
+// Item drops, so the target is known to be gone before a pass ends. A Path
+// Item that is copied rather than converted keeps every field, so the walk
+// rejects those: extensions of `paths`, and anything under a Callback Object
+// that is a Reference Object or under a value that is not an object.
+function isInDroppedPathItemField(root: unknown, tokens: readonly string[] | undefined, fields: readonly string[]): boolean {
+  if (tokens === undefined || (tokens[0] === 'paths' && !isPath(tokens[1] ?? ''))) {
+    return false
+  }
+  let node = root
+  for (const [index, token] of tokens.entries()) {
+    if (!isRecord(node) || (tokens[index - 2] === 'callbacks' && getRef(node) !== undefined)) {
+      return false
+    }
+    if (fields.includes(token) && isPathItemPointer(tokens.slice(0, index))) {
+      return true
+    }
+    node = child(node, token)
+  }
+  return false
 }
 
 function mergeMissing(out: Record<string, unknown>, target: unknown): void {
@@ -947,10 +969,20 @@ export function mergeRef(convert: Convert): Finish {
   }
 }
 
-export function removedPrefixes(tables: Readonly<Record<string, Fields>>): string[] {
-  return Object.entries(tables).flatMap(([base, fields]) =>
-    [...fields].filter(([, field]) => field === DROP).map(([key]) => `#${base}/${key}/`),
-  )
+export interface Removed {
+  readonly pathItemFields: readonly string[]
+  readonly prefixes: readonly string[]
+}
+
+function droppedKeys(fields: Fields): string[] {
+  return [...fields].filter(([, field]) => field === DROP).map(([key]) => key)
+}
+
+export function removedParts(tables: Readonly<Record<string, Fields>>, pathItem: Fields): Removed {
+  return {
+    pathItemFields: droppedKeys(pathItem),
+    prefixes: Object.entries(tables).flatMap(([base, fields]) => droppedKeys(fields).map(key => `#${base}/${key}/`)),
+  }
 }
 
 function danglesIn(output: unknown, source: unknown, tokens: readonly string[] | undefined): boolean {
@@ -972,7 +1004,7 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
   return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
 }
 
-export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
+export function downgrade(root: unknown, convert: Convert, removed: Removed = { pathItemFields: [], prefixes: [] }): unknown {
   const locations = new Map<string, Location>()
   const locateRef = (ref: string): Location => {
     let location = locations.get(ref)
@@ -1015,7 +1047,13 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     return (isRecord(target) || typeof target === 'boolean') && aliasEnd(ref) !== undefined
   }
   const dangling = new Set<string>()
-  const isRemovedPart = (ref: string): boolean => removed.some(prefix => ref.startsWith(prefix))
+  const isRemovedPart = (ref: string): boolean => removed.prefixes.some(prefix => ref.startsWith(prefix))
+  // Without this, a reference into a dropped Path Item field would only be
+  // found dangling once a pass ends, costing a second pass over everything.
+  // Links and mappings still go by `isRemovedPart` alone, so one into such a
+  // field is removed only when its target dangles, as before.
+  const isKnownGone = (ref: string): boolean =>
+    isRemovedPart(ref) || isInDroppedPathItemField(root, parsePointer(ref), removed.pathItemFields)
   let previous = root
   for (;;) {
     const kept = new Set<string>()
@@ -1026,7 +1064,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
-          if ((isRemovedPart(ref) || (previous !== root && danglesIn(previous, root, parsePointer(ref)))) && isInlinable(ref)) {
+          if ((isKnownGone(ref) || (previous !== root && danglesIn(previous, root, parsePointer(ref)))) && isInlinable(ref)) {
             dangling.add(ref)
           }
           else {

@@ -27,8 +27,7 @@ import {
   map,
   mergeRef,
   refOr,
-  removedPrefixes,
-  skipAliases,
+  removedParts,
 } from './shared'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
@@ -181,7 +180,7 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: map(convertPathItem),
 })
 
-const REMOVED = removedPrefixes({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS })
+const REMOVED = removedParts({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS }, PATH_ITEM_FIELDS)
 
 function convertServer(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SERVER_FIELDS)
@@ -269,7 +268,11 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
 
 function convertContentEntry(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref === undefined ? convertMediaType(value, ctx) : inline(skipAliases(ref, ctx, () => true), ctx, convertContentEntry)
+  if (ref === undefined) {
+    return convertMediaType(value, ctx)
+  }
+  const end = ctx.aliasEnd(ref)
+  return end === undefined ? DROP : inline(end, ctx, convertMediaType)
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {

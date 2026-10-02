@@ -30,7 +30,7 @@ import {
   placeholder,
   rebasedRef,
   refOr,
-  removedPrefixes,
+  removedParts,
   resourceOf,
   setOwn,
 } from './shared'
@@ -192,7 +192,7 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: DROP,
 })
 
-const REMOVED = removedPrefixes({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS })
+const REMOVED = removedParts({ '': DOCUMENT_FIELDS, '/components': COMPONENTS_FIELDS }, PATH_ITEM_FIELDS)
 
 function reference(value: Record<string, unknown>): unknown {
   return { $ref: value.$ref }

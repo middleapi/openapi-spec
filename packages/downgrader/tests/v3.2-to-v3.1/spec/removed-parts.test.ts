@@ -6,7 +6,7 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
-import { cyclicCallbackGraph, dig } from '../../helpers'
+import { countReads, cyclicCallbackGraph, dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
@@ -214,6 +214,25 @@ describe('reference Objects', () => {
     })
   })
 
+  // Every Path Item conversion drops `query` and `additionalOperations`, so
+  // references into them are known to dangle from the input alone. Finding
+  // that out only when a pass ends would convert the whole document again.
+  it('handles references into query and additionalOperations in a single pass', () => {
+    const reads = { count: 0 }
+    const result = convertSpec({
+      components: {
+        links: { L: { operationRef: '#/paths/~1a/query' } },
+        responses: { R: { $ref: '#/paths/~1a/additionalOperations/COPY/responses/200' } },
+      },
+      paths: {
+        '/a': { additionalOperations: { COPY: { responses: { 200: { summary: 'Copied' } } } }, query: {} },
+        '/b': countReads({ get: { responses: {} } }, 'get', reads),
+      },
+    })
+    expect(reads.count).toBe(1)
+    expect(result.components).toEqual({ links: {}, responses: { R: { description: 'Copied' } } })
+  })
+
   it('follows chains through removed parts and keeps the reference where a chain reaches a surviving part', () => {
     const result = convertSpec({
       components: {
@@ -400,6 +419,27 @@ describe('references left as written', () => {
       '/b': {},
       '/c': { get: { responses: { 200: { $ref: '#/components/responses/Loop' } } } },
     })
+  })
+
+  // Only converted Path Items lose `query`. An extension of `paths`, and a
+  // Callback Object that is a Reference Object, are copied with all their
+  // fields, so references into them still resolve.
+  it('leaves references into a query field that the conversion copies as written', () => {
+    const responses = { 200: { description: 'kept' } }
+    const references = {
+      Callback: { $ref: '#/components/callbacks/C/{$url}/query/responses/200' },
+      Extension: { $ref: '#/paths/x-shared/query/responses/200' },
+    }
+    const result = convertSpec({
+      components: {
+        callbacks: { C: { '$ref': '#/components/callbacks/D', '{$url}': { query: { responses } } }, D: {} },
+        responses: references,
+      },
+      paths: { 'x-shared': { query: { responses } } },
+    })
+    expect(dig(result, 'components', 'responses')).toEqual(references)
+    expect(dig(result, 'components', 'callbacks', 'C', '{$url}', 'query')).toEqual({ responses })
+    expect(dig(result, 'paths', 'x-shared', 'query')).toEqual({ responses })
   })
 
   it('leaves references whose alias chain loops as written', () => {
