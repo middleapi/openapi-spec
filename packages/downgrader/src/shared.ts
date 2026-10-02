@@ -1,7 +1,5 @@
 export const DROP: unique symbol = Symbol('drop')
 
-const PLACEHOLDERS = new WeakSet<object>()
-
 export interface Context {
   readonly resolve: (ref: string) => unknown
   readonly aliasEnd: (ref: string) => string | undefined
@@ -141,12 +139,6 @@ export function isNotExtension(key: string): boolean {
 
 export function hasType(type: unknown, name: string): boolean {
   return type === name || (Array.isArray(type) && type.includes(name))
-}
-
-export function placeholder(): Record<string, unknown> {
-  const out = {}
-  PLACEHOLDERS.add(out)
-  return out
 }
 
 export function allOfItems(allOf: unknown): unknown[] {
@@ -450,7 +442,7 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
       return false
     }
   }
-  return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to)) || !isTarget(to)
+  return to === undefined || !isTarget(to)
 }
 
 export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = [], isTarget: (value: unknown) => boolean = () => true): unknown {

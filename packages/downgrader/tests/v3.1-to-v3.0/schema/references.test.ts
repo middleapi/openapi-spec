@@ -91,10 +91,12 @@ describe('references into removed keywords', () => {
 
 describe('references to a boolean additionalProperties', () => {
   // `additionalProperties` is the one place 3.0 still takes a boolean, so it
-  // stays one (see subschemas.test.ts). A `$ref` used as a schema must still
-  // resolve to a Schema Object, which in 3.0 is never a boolean:
+  // stays one (see subschemas.test.ts). But a 3.0 `$ref` never resolves to a
+  // boolean: a Schema Object is always an object.
   // https://spec.openapis.org/oas/v3.0.4.html#schema-object
-  // Such a `$ref` is replaced by the converted boolean schema instead.
+  // Such a `$ref` is replaced by the converted boolean schema instead. A
+  // boolean schema converted in place becomes a Schema Object, so a `$ref`
+  // to it stays as written.
   it.each([
     [
       'inlines a $ref to a false additionalProperties',
@@ -128,16 +130,12 @@ describe('references to a boolean additionalProperties', () => {
         },
       },
     ],
+    [
+      'keeps a $ref to a boolean schema converted in place',
+      { items: false, properties: { a: { $ref: '#/items' } } },
+      { items: { not: {} }, properties: { a: { $ref: '#/items' } } },
+    ],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
-  })
-
-  // Elsewhere a boolean schema converts to a Schema Object, so a `$ref` to it
-  // keeps working and stays as written.
-  it('keeps a $ref to a boolean schema converted in place', () => {
-    expect(convertSchema({ items: false, properties: { a: { $ref: '#/items' } } })).toEqual({
-      items: { not: {} },
-      properties: { a: { $ref: '#/items' } },
-    })
   })
 })

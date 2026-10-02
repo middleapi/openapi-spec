@@ -23,7 +23,6 @@ import {
   list,
   map,
   mergeRef,
-  placeholder,
   refOr,
   removedPrefixes,
   setOwn,
@@ -65,6 +64,8 @@ const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?
 const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
 
 const LOOSE = new WeakSet<object>()
+
+const PLACEHOLDERS = new WeakSet<object>()
 
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -193,7 +194,13 @@ function reference(value: Record<string, unknown>): unknown {
 }
 
 function isRefTarget(value: unknown): boolean {
-  return typeof value !== 'boolean'
+  return typeof value !== 'boolean' && !PLACEHOLDERS.has(value as object)
+}
+
+function placeholder(): object {
+  const out = {}
+  PLACEHOLDERS.add(out)
+  return out
 }
 
 function isLoose(value: unknown): boolean {
