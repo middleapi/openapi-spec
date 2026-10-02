@@ -4,6 +4,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 import type { Context } from './shared'
 import {
   allOfItems,
+  claim,
   clone,
   convertMappingRef,
   convertObject,
@@ -14,7 +15,6 @@ import {
   getRef,
   hasDanglingOperationRef,
   HTTP_METHODS,
-  identify,
   inline,
   inlineSchema,
   isNotExtension,
@@ -189,13 +189,10 @@ function convertTag(value: unknown, ctx: Context): unknown {
 }
 
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
-  if (ctx.identified.has(schema)) {
+  if (('$id' in schema || '$anchor' in schema || '$dynamicAnchor' in schema) && !claim(schema, ctx)) {
     delete out.$id
     delete out.$anchor
     delete out.$dynamicAnchor
-  }
-  else if ('$id' in schema || '$anchor' in schema || '$dynamicAnchor' in schema) {
-    identify(schema, ctx)
   }
   if (typeof schema.$ref === 'string' && !('$ref' in out)) {
     const target = inlineSchema(schema.$ref, ctx, convertSchema)
