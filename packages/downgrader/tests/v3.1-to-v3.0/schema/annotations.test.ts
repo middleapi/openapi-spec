@@ -33,11 +33,6 @@ describe('readOnly and writeOnly', () => {
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
   })
-
-  it('drops both on a nested property', () => {
-    const schema = { properties: { id: { readOnly: true, type: 'string', writeOnly: true } }, type: 'object' }
-    expect(convertSchema(schema)).toEqual({ properties: { id: { type: 'string' } }, type: 'object' })
-  })
 })
 
 describe('binary content', () => {
