@@ -122,3 +122,26 @@ describe('object graphs', () => {
     expect(leaf).toEqual({ nullable: true, type: 'string' })
   })
 })
+
+describe('keys holding undefined', () => {
+  it.each([
+    ['ignores an undefined const', { const: undefined, type: 'string' }, { type: 'string' }],
+    ['ignores an undefined const beside a null-only type', { const: undefined, type: ['null'] }, { enum: [null] }],
+    ['keeps items beside an undefined prefixItems', { items: { type: 'string' }, prefixItems: undefined, type: 'array' }, { items: { type: 'string' }, type: 'array' }],
+    ['keeps additionalProperties beside an undefined patternProperties', { additionalProperties: false, patternProperties: undefined }, { additionalProperties: false }],
+    ['promotes examples beside an undefined example', { example: undefined, examples: ['a'] }, { example: 'a' }],
+    ['keeps a reference with only undefined siblings bare', { $ref: '#/components/schemas/A', description: undefined }, { $ref: '#/components/schemas/A' }],
+    ['drops undefined values everywhere in the output', { 'default': { a: undefined, b: 1 }, 'properties': { a: undefined }, 'x-a': undefined }, { default: { b: 1 }, properties: {} }],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toStrictEqual(expected)
+  })
+
+  // An undefined removed keyword or enum loosens nothing, so the `not` stays
+  // (see loosening.test.ts).
+  it.each([
+    ['an undefined removed keyword', { if: undefined, type: 'string' }, { type: 'string' }],
+    ['a const beside an undefined enum', { const: 1, enum: undefined }, { enum: [1] }],
+  ])('keeps a not whose operand has %s', (_name, operand, expected) => {
+    expect(convertSchema({ not: operand })).toStrictEqual({ not: expected })
+  })
+})

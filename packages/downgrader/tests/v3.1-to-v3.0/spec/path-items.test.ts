@@ -198,13 +198,17 @@ describe('recursion', () => {
 })
 
 // A hop is a Path Item with its own fields and a `$ref` to the next one. Like
-// any inlined target, each hop is converted once and shared, so the work grows
-// with the number of references, not with the number of paths through them.
+// any inlined target, each hop is converted once and shared wherever that copy
+// comes out the same, so the work grows with the number of references, not
+// with the number of paths through them. Converting again where it would not
+// is limited to a few times the rest of the work.
 // Each test counts reads of the field the conversion walks into: a hop's
 // operation each time its own fields are converted, or its `$ref` at each step
 // along a chain.
 describe('hops converted once', () => {
   const pointer = (name: string): string => `#/components/pathItems/${name}`
+  const url = '{$request.body#/url}'
+  const callbacks = (result: unknown): unknown => dig(result, 'paths', '/a', 'post', 'callbacks')
 
   it('shares a hop that many paths point at', () => {
     const reads = { count: 0 }
@@ -241,21 +245,31 @@ describe('hops converted once', () => {
   })
 
   // Inlining each path through this graph separately would convert the
-  // webhooks about k! times.
-  it('converts each hop of a cyclic callback graph once', async () => {
+  // webhooks about k! times, and cutting each copy only at the webhooks that
+  // enclose it would still take about 2^k copies. Past the budget, copies are
+  // shared even where they would come out differently.
+  it('converts a dense cyclic callback graph in linear work', async () => {
     const reads = { count: 0 }
     const k = 8
     const webhooks = cyclicCallbackGraph(k, name => `#/webhooks/${name}`, reads)
     const result = convertSpec({ paths: { '/a': { $ref: '#/webhooks/h0' } }, webhooks })
-    expect(reads.count).toBe(k)
+    expect(reads.count).toBeLessThan(3 * k)
     await expectValidAs(result, '3.0')
-    const callbacks = dig(result, 'paths', '/a', 'post', 'callbacks')
     // `h0` is in progress inside its own callbacks, so the reference back to
     // it keeps only the fields of `base`.
-    expect(dig(callbacks, 'c0', '{$request.body#/url}')).toEqual({ get: { responses } })
-    // `h2` is converted inside `h1`, and that copy is shared with `h0`.
-    expect(dig(callbacks, 'c2', '{$request.body#/url}', 'post'))
-      .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
+    expect(dig(callbacks(result), 'c0', url)).toEqual({ get: { responses } })
+  })
+
+  // Within the budget, each copy is cut only at the webhooks that enclose it.
+  // Inside `h0`, the copy of `h2` keeps the operation of `h1`, which does not
+  // enclose it there, although `h2` is converted inside `h1` first.
+  it('cuts a small cyclic callback graph only at the webhooks that enclose each copy', () => {
+    const webhooks = cyclicCallbackGraph(3, name => `#/webhooks/${name}`, { count: 0 })
+    const result = convertSpec({ paths: { '/a': { $ref: '#/webhooks/h0' } }, webhooks })
+    const cut = { get: { responses } }
+    const innermost = { get: { responses }, post: { callbacks: { c0: { [url]: cut }, c1: { [url]: cut }, c2: { [url]: cut } }, responses } }
+    expect(dig(callbacks(result), 'c1', url, 'post', 'callbacks', 'c2', url)).toEqual(innermost)
+    expect(dig(callbacks(result), 'c2', url, 'post', 'callbacks', 'c1', url)).toEqual(innermost)
   })
 
   // The callbacks of `B` enter the chain A0 → … → A99 → B → T, which passes
@@ -293,5 +307,24 @@ describe('hops converted once', () => {
       paths: { '/t': { $ref: pointer('T') }, '/n': { $ref: pointer('N') } },
     })
     expect(dig(result, 'paths', '/n', 'post', 'callbacks', 'self', '{$url}')).toMatchObject({ get: { responses }, summary: 'inner' })
+  })
+
+  // Converting `/a` merges `B` as a later hop of `A`, so the own fields of `B`
+  // are converted while `A` is in progress, and their reference back to `A`
+  // cuts it. `/b` enters `B` where `A` is not in progress, so it does not
+  // reuse that merge, and its inner reference keeps the operation of `A`.
+  it.each([['/a', '/b'], ['/b', '/a']])('keeps a hop cut inside another hop\'s fields where it is not in progress, converting %s first', (...order) => {
+    const refs: Record<string, unknown> = { '/a': { $ref: pointer('A') }, '/b': { $ref: pointer('B') } }
+    const result = convertSpec({
+      components: {
+        pathItems: {
+          A: { $ref: pointer('B'), post: { operationId: 'aPost', responses } },
+          B: { $ref: pointer('T'), get: { callbacks: { cb: { '{$url}': { $ref: pointer('A') } } }, responses } },
+          T: { summary: 't' },
+        },
+      },
+      paths: Object.fromEntries(order.map(path => [path, refs[path]])),
+    })
+    expect(dig(result, 'paths', '/b', 'get', 'callbacks', 'cb', '{$url}')).toMatchObject({ post: { operationId: 'aPost', responses }, summary: 't' })
   })
 })
