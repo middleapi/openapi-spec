@@ -215,19 +215,6 @@ function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Ma
   return cache
 }
 
-function convertOnce(target: unknown, ctx: Context, convert: Convert): unknown {
-  const cache = cacheOf(ctx.inlined, convert)
-  if (cache.has(target)) {
-    return cache.get(target)
-  }
-  const identified = ctx.identified.size
-  const out = convert(target, { ...ctx, seen: new Map() })
-  if (ctx.identified.size === identified) {
-    cache.set(target, out)
-  }
-  return out
-}
-
 function isInProgress(target: unknown, ctx: Context): boolean {
   return ctx.inlining.has(target) || ctx.converting.includes(target)
 }
@@ -237,9 +224,17 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   if (target === undefined || isInProgress(target, ctx)) {
     return DROP
   }
+  const cache = cacheOf(ctx.inlined, convert)
+  if (cache.has(target)) {
+    return cache.get(target)
+  }
+  const identified = ctx.identified.size
   ctx.inlining.add(target)
-  const out = convertOnce(target, ctx, convert)
+  const out = convert(target, { ...ctx, seen: new Map() })
   ctx.inlining.delete(target)
+  if (ctx.identified.size === identified) {
+    cache.set(target, out)
+  }
   return out
 }
 
@@ -371,12 +366,12 @@ function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
   return true
 }
 
-// Two caches keep this linear. A hop's own fields are converted once and
-// shared whatever is in progress, like any inlined target. Its merged fields
-// also depend on which later hops were skipped for being in progress, so a
-// merge is reused only while every hop it skipped is still in progress: a
-// reference from outside the cycle keeps those hops' fields.
-function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Convert): unknown {
+// Each hop's merged fields are cached, so a chain is walked and its hops
+// converted once however many references enter it. A merge that skipped a hop
+// in progress lacks that hop's fields, so it is reused only while every hop it
+// skipped is still in progress. Own fields are not cached apart from the merge:
+// converted while some hop was in progress, they can lack its fields too.
+function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   const cache = cacheOf(ctx.merged, convert)
   const hops: Hop[] = []
   let tail: Merged
@@ -397,9 +392,10 @@ function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Con
         tail = known
         break
       }
+      const { $ref: _, ...own } = target as Record<string, unknown>
       const identified = ctx.identified.size
       ctx.inlining.add(target)
-      hops.push({ identified, own: convertOnce(target, ctx, convertOwn), target })
+      hops.push({ identified, own: convert(own, { ...ctx, seen: new Map() }), target })
     }
     ref = next
   }
@@ -421,17 +417,13 @@ function mergeChain(ref: string, ctx: Context, convert: Convert, convertOwn: Con
 }
 
 export function mergeRef(convert: Convert): Finish {
-  const convertOwn: Convert = (value, ctx) => {
-    const { $ref: _, ...own } = value as Record<string, unknown>
-    return convert(own, ctx)
-  }
   return (out, source, ctx) => {
     const ref = getRef(source)
     if (!followsPathItem(ref, ctx)) {
       return out
     }
     delete out.$ref
-    mergeMissing(out, mergeChain(ref, ctx, convert, convertOwn))
+    mergeMissing(out, mergeChain(ref, ctx, convert))
     return out
   }
 }

@@ -277,4 +277,21 @@ describe('hops converted once', () => {
     expect(result.paths['/p']).toEqual({ get: { callbacks: inner, responses }, summary: 't' })
     expect(result.paths['/q']).toEqual(result.paths['/p'])
   })
+
+  // `/t` is converted first, and the callbacks of `T` enter `N` while `T` is in
+  // progress, so that copy of the inner reference back to `N` cuts `T` too.
+  // `/n` enters `N` from outside, where only `N` is in progress, so its inner
+  // reference skips `N` and still merges `T`, operation included.
+  it('keeps the hops after a re-entered hop, whichever path is converted first', () => {
+    const result = convertSpec({
+      components: {
+        pathItems: {
+          N: { $ref: pointer('T'), post: { callbacks: { self: { '{$url}': { $ref: pointer('N'), summary: 'inner' } } }, responses } },
+          T: { get: { callbacks: { back: { '{$url}': { $ref: pointer('N') } } }, responses } },
+        },
+      },
+      paths: { '/t': { $ref: pointer('T') }, '/n': { $ref: pointer('N') } },
+    })
+    expect(dig(result, 'paths', '/n', 'post', 'callbacks', 'self', '{$url}')).toMatchObject({ get: { responses }, summary: 'inner' })
+  })
 })
