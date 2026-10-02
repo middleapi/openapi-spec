@@ -6,7 +6,8 @@
 // - parameter lists that lost `querystring` entries, since the indices of
 //   the entries after a removed one shift
 
-import { dig } from '../../helpers'
+import { cyclicCallbackGraph, dig } from '../../helpers'
+import { expectValidAs } from '../../validate'
 import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
 const petRef = { $ref: '#/components/mediaTypes/Pet/schema' }
@@ -312,6 +313,27 @@ describe('path Item references', () => {
       P: { description: 'inlined' },
       X: { $ref: '#/components/callbacks/C/x-cb' },
     })
+  })
+
+  // The Path Items of the cyclic callback graph live in the callbacks of the
+  // removed `query` operation. Each is converted once and shared: inlining
+  // each path through this graph separately would convert them about k! times.
+  it('converts each path item of a cyclic callback graph in a removed operation once', async () => {
+    const reads = { count: 0 }
+    const k = 8
+    const pointer = (name: string): string => `#/paths/~1q/query/callbacks/cb/${name}`
+    const responses = { 200: { description: 'ok' } }
+    const result = convertSpec({
+      info: { title: 't', version: '1' },
+      paths: { '/a': { $ref: pointer('h0') }, '/q': { query: { callbacks: { cb: cyclicCallbackGraph(k, pointer, reads) }, responses } } },
+    })
+    expect(reads.count).toBe(k)
+    await expectValidAs(result, '3.1')
+    expect(dig(result, 'paths', '/q')).toEqual({})
+    const callbacks = dig(result, 'paths', '/a', 'post', 'callbacks')
+    expect(dig(callbacks, 'c0', '{$request.body#/url}')).toEqual({ get: { responses } })
+    expect(dig(callbacks, 'c2', '{$request.body#/url}', 'post'))
+      .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
   })
 })
 
