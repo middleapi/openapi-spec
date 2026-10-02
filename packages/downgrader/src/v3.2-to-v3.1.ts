@@ -12,7 +12,9 @@ import {
   downgrade,
   DROP,
   enterSchema,
+  getBareRef,
   getRef,
+  has,
   hasDanglingOperationRef,
   HTTP_METHODS,
   inline,
@@ -90,7 +92,7 @@ const EXAMPLE_FIELDS = defineFields({
 })
 
 const PARAMETER_FIELDS = defineFields({
-  allowReserved: (item, _ctx, parameter) => (!('in' in parameter) || parameter.in === 'query' ? clone(item) : DROP),
+  allowReserved: (item, _ctx, parameter) => (!has(parameter, 'in') || parameter.in === 'query' ? clone(item) : DROP),
   content: convertContent,
   examples: map(convertExampleRef),
   schema: convertSchema,
@@ -195,7 +197,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     delete out.$anchor
     delete out.$dynamicAnchor
   }
-  else if ('$id' in schema || '$anchor' in schema || '$dynamicAnchor' in schema) {
+  else if (has(schema, '$id') || has(schema, '$anchor') || has(schema, '$dynamicAnchor')) {
     ctx.identified.add(schema)
   }
   if (typeof schema.$ref === 'string' && !('$ref' in out)) {
@@ -208,19 +210,19 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
 }
 
 function convertSchema(value: unknown, ctx: Context): unknown {
-  const ref = getRef(value)
-  const out = ref !== undefined && Object.keys(value as object).length === 1 && keepSchemaRef(ref, ctx) === undefined
+  const ref = getBareRef(value)
+  const out = ref !== undefined && keepSchemaRef(ref, ctx) === undefined
     ? inlineSchema(ref, ctx, convertSchema)
     : convertObject(value, enterSchema(value, ctx, !ctx.identified.has(value)), SCHEMA_FIELDS, finishSchema)
   return out === DROP ? {} : out
 }
 
 function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): unknown {
-  if (!('value' in example || 'externalValue' in example)) {
-    if ('dataValue' in example) {
+  if (!(has(example, 'value') || has(example, 'externalValue'))) {
+    if (has(example, 'dataValue')) {
       out.value = clone(example.dataValue)
     }
-    else if ('serializedValue' in example) {
+    else if (has(example, 'serializedValue')) {
       out.value = clone(example.serializedValue)
     }
   }
@@ -236,7 +238,7 @@ function finishParameter(out: Record<string, unknown>, parameter: Record<string,
     return out
   }
   if (Object.keys(out.content as object).length === 0) {
-    return Object.keys(parameter.content).length > 0 ? DROP : out
+    return Object.values(parameter.content).some(item => item !== undefined) ? DROP : out
   }
   delete out.example
   delete out.examples
@@ -255,7 +257,7 @@ function convertEncoding(value: unknown, ctx: Context): unknown {
 }
 
 function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
-  if ('itemSchema' in mediaType && !('schema' in mediaType)) {
+  if (has(mediaType, 'itemSchema') && !has(mediaType, 'schema')) {
     out.schema = { items: convertSchema(mediaType.itemSchema, ctx), type: 'array' }
   }
   return out

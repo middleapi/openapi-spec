@@ -13,7 +13,9 @@ import {
   downgrade,
   DROP,
   enterSchema,
+  getBareRef,
   getRef,
+  has,
   hasDanglingOperationRef,
   hasType,
   HTTP_METHODS,
@@ -64,9 +66,13 @@ const ANNOTATION_KEYWORDS = [
   'examples',
 ]
 
-const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?:;|$))/i
+const MULTIPART_MEDIA_TYPE = /^multipart\//i
 
-const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
+const URL_ENCODED_MEDIA_TYPE = /^application\/x-www-form-urlencoded\s*(?:;|$)/i
+
+const RFC6570_ENCODING_FIELDS = ['allowReserved', 'explode', 'style']
+
+const CONTENT_TYPE_OVERRIDES = ['contentType', ...RFC6570_ENCODING_FIELDS]
 
 const LOOSE = new WeakSet<object>()
 
@@ -91,7 +97,7 @@ const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries([...LOOSENING_KEYWORDS, ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
   additionalProperties: (item, ctx, schema) => {
-    if ('patternProperties' in schema) {
+    if (has(schema, 'patternProperties')) {
       return DROP
     }
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
@@ -103,11 +109,12 @@ const SCHEMA_FIELDS = defineFields({
   enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   exclusiveMaximum: item => (typeof item === 'number' ? DROP : clone(item)),
   exclusiveMinimum: item => (typeof item === 'number' ? DROP : clone(item)),
-  items: (item, ctx, schema) => ('prefixItems' in schema ? DROP : convertSchema(item, ctx)),
+  items: (item, ctx, schema) => (has(schema, 'prefixItems') ? DROP : convertSchema(item, ctx)),
   not: convertSchema,
   nullable: DROP,
   oneOf: list(convertSchema),
   properties: map(convertSchema),
+  readOnly: (item, _ctx, schema) => (item === true && schema.writeOnly === true ? DROP : clone(item)),
   required: (item) => {
     if (!Array.isArray(item)) {
       return clone(item)
@@ -115,6 +122,7 @@ const SCHEMA_FIELDS = defineFields({
     return item.length === 0 ? DROP : clone([...new Set(item)])
   },
   type: DROP,
+  writeOnly: (item, _ctx, schema) => (item === true && schema.readOnly === true ? DROP : clone(item)),
   xml: convertXml,
 })
 
@@ -130,10 +138,17 @@ const MEDIA_TYPE_FIELDS = defineFields({
   schema: convertSchema,
 })
 
-const FORM_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+const URL_ENCODED_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+
+const MULTIPART_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS).set('encoding', map(convertMultipartEncoding))
 
 const ENCODING_FIELDS = defineFields({
   headers: map(convertParameterRef),
+})
+
+const MULTIPART_ENCODING_FIELDS = defineFields({
+  ...Object.fromEntries(ENCODING_FIELDS),
+  ...Object.fromEntries(RFC6570_ENCODING_FIELDS.map(key => [key, DROP])),
 })
 
 const REQUEST_BODY_FIELDS = defineFields({
@@ -210,7 +225,7 @@ function loosened(out: object): object {
 }
 
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key))
+  return Object.keys(schema).some(key => LOOSENING_KEYWORDS.has(key) && has(schema, key))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
@@ -296,8 +311,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     delete out.oneOf
     loose = true
   }
-  if ('const' in schema) {
-    loose ||= 'enum' in schema && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
+  if (has(schema, 'const')) {
+    loose ||= has(schema, 'enum') && !(Array.isArray(schema.enum) && schema.enum.includes(schema.const))
     replace(out, 'enum', [clone(schema.const)])
   }
   loose = convertType(out, schema.type) || loose
@@ -310,7 +325,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
-  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
+  if (Array.isArray(schema.examples) && schema.examples.length > 0 && !has(schema, 'example')) {
     out.example = clone(schema.examples[0])
   }
   const format = schema.contentEncoding === 'base64'
@@ -332,8 +347,8 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = getRef(value)
-  if (ref !== undefined && Object.keys(value as object).length === 1) {
+  const ref = getBareRef(value)
+  if (ref !== undefined) {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
@@ -391,6 +406,9 @@ function formParts(schema: unknown, ctx: Context): Map<string, Map<unknown, stri
   for (const [node, base] of addSubschemas(body, ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
+        if (property === undefined) {
+          continue
+        }
         let part = parts.get(name)
         if (part === undefined) {
           part = new Map()
@@ -453,13 +471,20 @@ function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<str
 }
 
 function convertRequestMediaType(value: unknown, ctx: Context, type: string): unknown {
-  return FORM_MEDIA_TYPE.test(type)
-    ? convertObject(value, ctx, FORM_MEDIA_TYPE_FIELDS, finishFormMediaType)
+  if (MULTIPART_MEDIA_TYPE.test(type)) {
+    return convertObject(value, ctx, MULTIPART_MEDIA_TYPE_FIELDS, finishFormMediaType)
+  }
+  return URL_ENCODED_MEDIA_TYPE.test(type)
+    ? convertObject(value, ctx, URL_ENCODED_MEDIA_TYPE_FIELDS, finishFormMediaType)
     : convertMediaType(value, ctx)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
+}
+
+function convertMultipartEncoding(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, MULTIPART_ENCODING_FIELDS)
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {
@@ -508,6 +533,9 @@ function convertRequirement(value: unknown, ctx: Context): unknown {
   const out: Record<string, unknown> = {}
   let removed = false
   for (const [name, scopes] of Object.entries(value)) {
+    if (scopes === undefined) {
+      continue
+    }
     const type = schemeType(name, ctx)
     if (type === 'mutualTLS') {
       removed = true
