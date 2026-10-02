@@ -88,6 +88,17 @@ describe('parts that need the 3.1 default written out', () => {
     expect(dig(convertForm({ schema }), 'encoding')).toEqual({ file: octetStream })
   })
 
+  // A part declared in several subschemas takes all its declarations: here
+  // the string type from one and the contentEncoding from the other.
+  it('combines a part declared in several subschemas', () => {
+    expect(convertForm({
+      schema: { allOf: [{ properties: { part: { contentEncoding: 'base64url' } } }], properties: { part: { type: 'string' } } },
+    })).toEqual({
+      encoding: { part: octetStream },
+      schema: { allOf: [{ properties: { part: {} } }], properties: { part: { type: 'string' } } },
+    })
+  })
+
   it('writes a part named like an Object.prototype member as an own key', () => {
     const encoding = dig(convertForm({ schema: { properties: JSON.parse('{"__proto__":{}}') } }), 'encoding') as object
     expect(Object.getPrototypeOf(encoding)).toBe(Object.prototype)

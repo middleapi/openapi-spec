@@ -29,6 +29,7 @@ import {
   rebasedRef,
   refOr,
   removedPrefixes,
+  resourceOf,
   setOwn,
 } from './shared'
 
@@ -68,9 +69,6 @@ const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?
 const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
 
 const LOOSE = new WeakSet<object>()
-
-// A schema, with the base of the resource around it.
-type Placed = readonly [schema: unknown, base: string]
 
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -358,28 +356,27 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
 }
 
-// Maps each schema that `schemas` apply through `$ref`, `allOf`, `anyOf`,
-// and `oneOf` to the base its own `$ref`s resolve against.
-function subschemas(schemas: readonly Placed[], ctx: Context): Map<unknown, string> {
-  const nodes = new Map<unknown, string>()
-  const add = (node: unknown, base: string): void => {
-    if (!nodes.has(node)) {
-      nodes.set(node, ctx.resourceOf(node) ?? base)
-    }
+// Adds `schema` to `nodes` with the base its own `$ref`s resolve against: its
+// own `$id`, or else `base`, the one around it. The first place found wins.
+function place(nodes: Map<unknown, string>, schema: unknown, base: string, ctx: Context): void {
+  if (!nodes.has(schema)) {
+    nodes.set(schema, resourceOf(schema, ctx) ?? base)
   }
-  for (const [schema, base] of schemas) {
-    add(schema, base)
-  }
+}
+
+// Adds to `nodes` each schema they apply through `$ref`, `allOf`, `anyOf`,
+// and `oneOf`.
+function addSubschemas(nodes: Map<unknown, string>, ctx: Context): Map<unknown, string> {
   for (const [node, base] of nodes) {
     if (isRecord(node)) {
       const ref = rebasedRef(node, base)
       if (ref !== undefined) {
         const location = ctx.locate(ref)
-        add(location.target, location.base)
+        place(nodes, location.target, location.base, ctx)
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
-          add(item, base)
+          place(nodes, item, base, ctx)
         }
       }
     }
@@ -387,20 +384,27 @@ function subschemas(schemas: readonly Placed[], ctx: Context): Map<unknown, stri
   return nodes
 }
 
-function formParts(schema: unknown, ctx: Context): Map<string, Placed[]> {
-  const parts = new Map<string, Placed[]>()
-  for (const [node, base] of subschemas([[schema, ctx.base]], ctx)) {
+function formParts(schema: unknown, ctx: Context): Map<string, Map<unknown, string>> {
+  const parts = new Map<string, Map<unknown, string>>()
+  const body = new Map<unknown, string>()
+  place(body, schema, ctx.base, ctx)
+  for (const [node, base] of addSubschemas(body, ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
-        parts.set(name, [...parts.get(name) ?? [], [property, base]])
+        let part = parts.get(name)
+        if (part === undefined) {
+          part = new Map()
+          parts.set(name, part)
+        }
+        place(part, property, base, ctx)
       }
     }
   }
   return parts
 }
 
-function defaultsToOctetStream(schemas: readonly Placed[], ctx: Context, isItem = false): boolean {
-  const bases = subschemas(schemas, ctx)
+function defaultsToOctetStream(schemas: Map<unknown, string>, ctx: Context, isItem = false): boolean {
+  const bases = addSubschemas(schemas, ctx)
   const nodes = [...bases.keys()]
   if (!nodes.every(node => isRecord(node) || node === true)) {
     return false
@@ -417,9 +421,16 @@ function defaultsToOctetStream(schemas: readonly Placed[], ctx: Context, isItem 
   if (kinds.has('string')) {
     return records.some(node => node.contentEncoding !== undefined)
   }
-  const items = [...bases].flatMap(([node, base]) =>
-    [child(node, 'prefixItems') ?? [], child(node, 'items') ?? []].flat().map((item): Placed => [item, base]))
-  return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
+  if (isItem || !kinds.has('array')) {
+    return false
+  }
+  const items = new Map<unknown, string>()
+  for (const [node, base] of bases) {
+    for (const item of [child(node, 'prefixItems') ?? [], child(node, 'items') ?? []].flat()) {
+      place(items, item, base, ctx)
+    }
+  }
+  return items.size === 0 || defaultsToOctetStream(items, ctx, true)
 }
 
 function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
