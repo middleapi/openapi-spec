@@ -1,9 +1,20 @@
 export const DROP: unique symbol = Symbol('drop')
 
+// The document root as a `$ref`, and the base outside any schema with an `$id`.
+const ROOT = '#'
+
 const PLACEHOLDERS = new WeakSet<object>()
 
 export interface Context {
   readonly resolve: (ref: string) => unknown
+  /** The base the `$ref`s in the target of `ref` resolve against: its own `$id`, or the nearest one around it. */
+  readonly baseOf: (ref: string) => string
+  /** Where `value` sits, when it is a schema with an `$id` that starts a new resource. */
+  readonly resourceOf: (value: unknown) => string | undefined
+  /** The resource the value being converted is in: `$ref`s written there resolve against it. */
+  readonly base: string
+  /** The resource whose `$id` the output keeps around the value being converted, or the root. */
+  readonly outputBase: string
   readonly aliasEnd: (ref: string) => string | undefined
   readonly dangles: (ref: string) => boolean
   readonly isRemovedPart: (ref: string) => boolean
@@ -182,6 +193,19 @@ export function child(value: unknown, token: string): unknown {
   return isRecord(value) && Object.hasOwn(value, token) ? value[token] : undefined
 }
 
+// An `$id` sets a new base URI, unless it is empty or only a fragment, such
+// as a draft-07 plain name (`#name`), which leaves the base as it is.
+function isResource(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && typeof value.$id === 'string' && value.$id !== '' && !value.$id.startsWith('#')
+}
+
+// Escapes a JSON Pointer token (RFC 6901), then percent-encodes what a URI
+// fragment cannot hold (RFC 3986). A lone surrogate has no encoding and
+// stays as it is.
+function encodeToken(token: string): string {
+  return token.replaceAll('~', '~0').replaceAll('/', '~1').replace(/[^\w!$&'()*+,.:;=?@~\p{Cs}-]/gu, encodeURIComponent)
+}
+
 function parsePointer(ref: string): string[] | undefined {
   if (!ref.startsWith('#')) {
     return undefined
@@ -202,8 +226,75 @@ function parsePointer(ref: string): string[] | undefined {
   return pointer.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
 
-export function resolve(root: unknown, ref: string): unknown {
-  return parsePointer(ref)?.reduce<unknown>(child, root)
+interface Location {
+  readonly base: string
+  readonly target: unknown
+}
+
+// Resolves `ref` against `root`, noting the last schema resource on the way:
+// the target itself, or the nearest one around it.
+function locate(root: unknown, ref: string): Location {
+  const tokens = parsePointer(ref)
+  if (tokens === undefined) {
+    return { base: ROOT, target: undefined }
+  }
+  let target = root
+  let depth = 0
+  for (const [index, token] of tokens.entries()) {
+    target = child(target, token)
+    if (isResource(target)) {
+      depth = index + 1
+    }
+  }
+  return { base: ROOT + tokens.slice(0, depth).map(token => `/${encodeToken(token)}`).join(''), target }
+}
+
+// Finds each schema resource at its shortest pointer from the root, visiting
+// every object once even where the document shares or cycles.
+function findResources(root: unknown): Map<object, string> {
+  const resources = new Map<object, string>()
+  const seen = new Set([root])
+  const queue: [unknown, string][] = [[root, ROOT]]
+  for (const [value, pointer] of queue) {
+    if (isResource(value)) {
+      resources.set(value, pointer)
+    }
+    if (Array.isArray(value) || isRecord(value)) {
+      for (const [key, item] of Object.entries(value)) {
+        if (typeof item === 'object' && item !== null && !seen.has(item)) {
+          seen.add(item)
+          queue.push([item, `${pointer}/${encodeToken(key)}`])
+        }
+      }
+    }
+  }
+  return resources
+}
+
+/**
+ * Rebases `ref`, written inside the resource at `base`, onto the root. Only
+ * a JSON Pointer can be rebased, so any other `$ref`, such as an external
+ * one or one to an `$anchor`, is returned as written.
+ */
+export function rebase(ref: string, base: string): string {
+  return base === ROOT || parsePointer(ref) === undefined ? ref : base + ref.slice(1)
+}
+
+// The `$ref` of the value `ref` points at, rebased onto the root.
+function nextHop(ref: string, ctx: Pick<Context, 'baseOf' | 'resolve'>): string | undefined {
+  const next = getRef(ctx.resolve(ref))
+  return next === undefined ? undefined : rebase(next, ctx.baseOf(ref))
+}
+
+/**
+ * The context to convert `schema` in. A schema with an `$id` starts a new
+ * resource, which the `$ref`s inside it resolve against. `keepsId` says
+ * whether its output keeps that `$id`, and with it everything inside the
+ * schema in place, so that those `$ref`s still resolve as written.
+ */
+export function enterSchema(schema: unknown, ctx: Context, keepsId: boolean): Context {
+  const base = ctx.resourceOf(schema)
+  return base === undefined ? ctx : { ...ctx, base, outputBase: keepsId ? base : ctx.outputBase }
 }
 
 function cacheOf<T>(caches: Map<Convert, Map<unknown, T>>, convert: Convert): Map<unknown, T> {
@@ -230,7 +321,7 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   }
   const identified = ctx.identified.size
   ctx.inlining.add(target)
-  const out = convert(target, { ...ctx, seen: new Map() })
+  const out = convert(target, { ...ctx, base: ctx.baseOf(ref), seen: new Map() })
   ctx.inlining.delete(target)
   if (ctx.identified.size === identified) {
     cache.set(target, out)
@@ -265,7 +356,7 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
   let hop = ref
   for (;;) {
     const target = ctx.resolve(hop)
-    const next = getRef(target)
+    const next = nextHop(hop, ctx)
     if (next === undefined || hops.has(next) || !follow(next, target as Record<string, unknown>)) {
       return hop
     }
@@ -274,8 +365,27 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
   }
 }
 
+/** Inlines the target of a schema `$ref` written in the current resource. */
 export function inlineSchema(ref: string, ctx: Context, convert: Convert): unknown {
-  return inline(skipAliases(ref, ctx, (next, target) => Object.keys(target).length === 1 && ctx.dangles(next)), ctx, convert)
+  const start = rebase(ref, ctx.base)
+  return inline(skipAliases(start, ctx, (next, target) => Object.keys(target).length === 1 && ctx.dangles(next)), ctx, convert)
+}
+
+/**
+ * The `$ref` to write in place of a schema `$ref` written in the current
+ * resource, or `undefined` when its target dangles and must be inlined with
+ * `inlineSchema` instead.
+ *
+ * Where the output keeps the `$id` of that resource, the `$ref` resolves as
+ * written. Elsewhere the output resolves it against the document, so it is
+ * rebased onto the root, even when that leaves it dangling as in the source.
+ */
+export function keepSchemaRef(ref: string, ctx: Context): string | undefined {
+  if (ctx.base !== ROOT && ctx.base === ctx.outputBase) {
+    return ref
+  }
+  const rebased = rebase(ref, ctx.base)
+  return ctx.dangles(rebased) ? undefined : rebased
 }
 
 export function refOr(convert: Convert, keep: (value: Record<string, unknown>) => unknown = clone): Convert {
@@ -454,12 +564,24 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
 }
 
 export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
-  const targets = new Map<string, unknown>()
-  const resolveRef = (ref: string): unknown => {
-    if (!targets.has(ref)) {
-      targets.set(ref, resolve(root, ref))
+  const locations = new Map<string, Location>()
+  const locateRef = (ref: string): Location => {
+    let location = locations.get(ref)
+    if (location === undefined) {
+      location = locate(root, ref)
+      locations.set(ref, location)
     }
-    return targets.get(ref)
+    return location
+  }
+  const resolveRef = (ref: string): unknown => locateRef(ref).target
+  const baseOf = (ref: string): string => locateRef(ref).base
+  let resources: Map<object, string> | undefined
+  const resourceOf = (value: unknown): string | undefined => {
+    if (!isResource(value)) {
+      return undefined
+    }
+    resources ??= findResources(root)
+    return resources.get(value)
   }
   const ends = new Map<string, string | undefined>()
   const aliasEnd = (ref: string): string | undefined => {
@@ -475,7 +597,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         break
       }
       path.add(hop)
-      const next = getRef(resolveRef(hop))
+      const next = nextHop(hop, { baseOf, resolve: resolveRef })
       if (next === undefined) {
         end = hop
         break
@@ -499,6 +621,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     const out = convert(root, {
       ...freshState(),
       aliasEnd,
+      base: ROOT,
+      baseOf,
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
@@ -514,7 +638,9 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       isRemovedPart,
       removals: new Map(),
       markDangling: ref => dangling.add(ref),
+      outputBase: ROOT,
       resolve: resolveRef,
+      resourceOf,
     })
     let stale = false
     for (const ref of kept) {

@@ -12,6 +12,7 @@ import {
   defineFields,
   downgrade,
   DROP,
+  enterSchema,
   getRef,
   hasDanglingOperationRef,
   hasType,
@@ -20,10 +21,12 @@ import {
   isNotExtension,
   isPath,
   isRecord,
+  keepSchemaRef,
   list,
   map,
   mergeRef,
   placeholder,
+  rebase,
   refOr,
   removedPrefixes,
   setOwn,
@@ -65,6 +68,9 @@ const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?
 const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
 
 const LOOSE = new WeakSet<object>()
+
+// A schema, with the base of the resource around it.
+type Placed = readonly [schema: unknown, base: string]
 
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -224,8 +230,9 @@ function addAnyOf(out: Record<string, unknown>, variants: unknown): void {
 }
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
-  if (!ctx.dangles(ref)) {
-    return { $ref: ref }
+  const kept = keepSchemaRef(ref, ctx)
+  if (kept !== undefined) {
+    return { $ref: kept }
   }
   const out = inlineSchema(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
@@ -331,7 +338,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     return convertSchemaRef(ref, ctx)
   }
   const cyclic = ctx.converting.includes(value)
-  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  const out = convertObject(value, enterSchema(value, ctx, false), SCHEMA_FIELDS, finishSchema)
   return cyclic ? loosened(out === DROP ? {} : out as object) : out
 }
 
@@ -350,17 +357,28 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
 }
 
-function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
-  const nodes = new Set(schemas)
-  for (const node of nodes) {
+// Maps each schema that `schemas` apply through `$ref`, `allOf`, `anyOf`,
+// and `oneOf` to the base its own `$ref`s resolve against.
+function subschemas(schemas: readonly Placed[], ctx: Context): Map<unknown, string> {
+  const nodes = new Map<unknown, string>()
+  const add = (node: unknown, base: string): void => {
+    if (!nodes.has(node)) {
+      nodes.set(node, ctx.resourceOf(node) ?? base)
+    }
+  }
+  for (const [schema, base] of schemas) {
+    add(schema, base)
+  }
+  for (const [node, base] of nodes) {
     if (isRecord(node)) {
       const ref = getRef(node)
       if (ref !== undefined) {
-        nodes.add(ctx.resolve(ref))
+        const target = rebase(ref, base)
+        add(ctx.resolve(target), ctx.baseOf(target))
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
-          nodes.add(item)
+          add(item, base)
         }
       }
     }
@@ -368,24 +386,24 @@ function subschemas(schemas: readonly unknown[], ctx: Context): Set<unknown> {
   return nodes
 }
 
-function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
-  const parts = new Map<string, unknown[]>()
-  for (const node of subschemas([schema], ctx)) {
+function formParts(schema: unknown, ctx: Context): Map<string, Placed[]> {
+  const parts = new Map<string, Placed[]>()
+  for (const [node, base] of subschemas([[schema, ctx.base]], ctx)) {
     if (isRecord(node) && isRecord(node.properties)) {
       for (const [name, property] of Object.entries(node.properties)) {
-        parts.set(name, [...parts.get(name) ?? [], property])
+        parts.set(name, [...parts.get(name) ?? [], [property, base]])
       }
     }
   }
   return parts
 }
 
-function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem = false): boolean {
-  const nodes = [...subschemas(schemas, ctx)]
-  if (!nodes.every(node => isRecord(node) || node === true)) {
+function defaultsToOctetStream(schemas: readonly Placed[], ctx: Context, isItem = false): boolean {
+  const nodes = subschemas(schemas, ctx)
+  if (![...nodes.keys()].every(node => isRecord(node) || node === true)) {
     return false
   }
-  const records = nodes.filter(isRecord)
+  const records = [...nodes.keys()].filter(isRecord)
   const types = records.flatMap(node => [node.type ?? []].flat())
   const kinds = new Set(types.filter(type => type !== 'null'))
   if (types.length === 0) {
@@ -397,7 +415,7 @@ function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem
   if (kinds.has('string')) {
     return records.some(node => node.contentEncoding !== undefined)
   }
-  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
+  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat().map((item): Placed => [item, nodes.get(node) as string]))
   return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
 }
 

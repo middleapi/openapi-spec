@@ -88,3 +88,108 @@ describe('references into removed keywords', () => {
     expect(convertSchema(schema)).toEqual(schema)
   })
 })
+
+describe('references inside a schema with an $id', () => {
+  // An `$id` starts a new schema resource, and a `$ref` inside it resolves
+  // against that resource rather than the document root:
+  // https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.1
+  // 3.0 has no `$id`, so the output resolves every `$ref` against the root.
+  // A JSON pointer inside such a schema is rebased onto the root, and its
+  // target inlined where the rebased pointer dangles.
+  it('inlines the definition of the enclosing resource, not the root definition of the same name', () => {
+    expect(convertSchema({
+      $defs: { A: { type: 'string' } },
+      properties: {
+        x: { $defs: { A: { type: 'number' } }, $id: 'https://example.com/x', properties: { y: { $ref: '#/$defs/A' } } },
+      },
+    })).toEqual({ properties: { x: { properties: { y: { type: 'number' } } } } })
+  })
+
+  it('reads # as the enclosing resource and cuts its recursion into {}', () => {
+    expect(convertSchema({
+      $defs: {
+        Tree: { $id: 'https://example.com/tree', properties: { kids: { items: { $ref: '#' }, type: 'array' } }, type: 'object' },
+      },
+      properties: { t: { $ref: '#/$defs/Tree' } },
+      required: ['must'],
+    })).toEqual({
+      properties: { t: { properties: { kids: { items: {}, type: 'array' } }, type: 'object' } },
+      required: ['must'],
+    })
+  })
+
+  it('rebases a pointer whose target survives onto the root', () => {
+    expect(convertSchema({
+      properties: {
+        x: { $id: 'https://example.com/x', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } },
+      },
+    })).toEqual({
+      properties: { x: { properties: { a: { type: 'string' }, b: { $ref: '#/properties/x/properties/a' } } } },
+    })
+  })
+
+  // A `$ref` beside an `$id` resolves against that `$id` too.
+  it('resolves a $ref beside an $id against that $id', () => {
+    expect(convertSchema({
+      $defs: { A: { type: 'string' } },
+      properties: { x: { $defs: { A: { type: 'number' } }, $id: 'https://example.com/x', $ref: '#/$defs/A', minimum: 1 } },
+    })).toEqual({ properties: { x: { allOf: [{ type: 'number' }], minimum: 1 } } })
+  })
+
+  it('resolves the references inside an inlined target and along an alias chain against the resource holding them', () => {
+    expect(convertSchema({
+      $defs: {
+        A: { type: 'string' },
+        X: {
+          $defs: { A: { type: 'number' }, B: { $ref: '#/$defs/A' } },
+          $id: 'https://example.com/x',
+          properties: { p: { $ref: '#/$defs/A' } },
+        },
+      },
+      properties: { alias: { $ref: '#/$defs/X/$defs/B' }, nested: { $ref: '#/$defs/X/properties/p' } },
+    })).toEqual({ properties: { alias: { type: 'number' }, nested: { type: 'number' } } })
+  })
+
+  // A pointer that dangles inside its resource dangles in the source too.
+  // Rebased, it keeps dangling rather than reaching the root target of the
+  // same name.
+  it('rebases a pointer that dangles inside its resource instead of binding it to the root', () => {
+    expect(convertSchema({
+      $defs: { A: { type: 'string' } },
+      properties: { x: { $id: 'https://example.com/x', properties: { y: { $ref: '#/$defs/A' } } } },
+    })).toEqual({ properties: { x: { properties: { y: { $ref: '#/properties/x/$defs/A' } } } } })
+  })
+
+  it('percent-encodes the rebased pointer where a key needs it', () => {
+    expect(convertSchema({
+      properties: {
+        'a b/c~%': { $id: 'https://example.com/x', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } },
+      },
+    })).toEqual({
+      properties: {
+        'a b/c~%': { properties: { a: { type: 'string' }, b: { $ref: '#/properties/a%20b~1c~0%25/properties/a' } } },
+      },
+    })
+  })
+
+  // Only JSON pointers can be rebased. `$anchor` and `$id` are removed, so
+  // references through them are left as written and dangle.
+  it('leaves references to an $anchor or a URI as written', () => {
+    expect(convertSchema({
+      properties: {
+        x: { $id: 'https://example.com/x', properties: { a: { $ref: '#node' }, b: { $ref: 'node.json' }, c: { $ref: 'https://example.com/x' } } },
+      },
+    })).toEqual({
+      properties: { x: { properties: { a: { $ref: '#node' }, b: { $ref: 'node.json' }, c: { $ref: 'https://example.com/x' } } } },
+    })
+  })
+
+  // `$id: "#name"` is a draft-07 plain-name fragment, and an empty `$id`
+  // repeats the current base. Neither starts a new resource.
+  it('resolves against the root through an $id that starts no new resource', () => {
+    expect(convertSchema({
+      $defs: { A: { type: 'string' } },
+      properties: { x: { $id: '#x', properties: { y: { $ref: '#/$defs/A' } } }, z: { $id: '', $ref: '#/$defs/A' } },
+    })).toEqual({ properties: { x: { properties: { y: { type: 'string' } } }, z: { allOf: [{ type: 'string' }] } } })
+  })
+})

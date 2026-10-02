@@ -47,6 +47,7 @@ describe('parts that need the 3.1 default written out', () => {
     ['an array without items', { type: 'array' }],
     ['untyped anyOf branches', { anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }] }],
     ['a reference to an untyped schema', { $ref: '#/components/schemas/Raw' }],
+    ['an untyped schema reached twice', { anyOf: [{ $ref: '#/components/schemas/Raw' }, { $ref: '#/components/schemas/Raw' }] }],
   ])('sets contentType: application/octet-stream on %s', (_name, part) => {
     expect(convertForm({ schema: { properties: { part } } })).toEqual({
       encoding: { part: octetStream },
@@ -76,6 +77,16 @@ describe('parts that need the 3.1 default written out', () => {
       encoding: { a: octetStream, b: octetStream },
       schema: { $ref: '#/components/schemas/Form' },
     })
+  })
+
+  // A `$ref` inside a schema with an `$id` resolves against that schema.
+  it('finds a part through a $ref inside a body schema with an $id', () => {
+    const schema = {
+      $defs: { File: { contentEncoding: 'base64url', type: 'string' } },
+      $id: 'https://example.com/upload',
+      properties: { file: { $ref: '#/$defs/File' } },
+    }
+    expect(dig(convertForm({ schema }), 'encoding')).toEqual({ file: octetStream })
   })
 
   it('writes a part named like an Object.prototype member as an own key', () => {

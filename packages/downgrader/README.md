@@ -139,7 +139,7 @@ Accepts JSON Schema draft-07 to 2020-12 and the default OAS dialect. 3.1 allows 
 
 - A `$schema` naming the 3.2 dialect passes through unchanged.
 - Where a schema inlined for a `$ref` whose target is removed or moved refers back to itself, the inner reference becomes `{}`, so an enclosing `not`, `oneOf`, `if`, or `unevaluated*` can reject values the original accepts.
-- Only the first copy of a schema inlined in several places keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique. The other copies resolve their relative `$ref`s against the enclosing base instead.
+- Only the first copy of a schema inlined in several places keeps its `$id`, `$anchor`, and `$dynamicAnchor`, so each identifier stays unique. In the other copies, JSON Pointer `$ref`s that resolved against that `$id` are replaced by their converted targets, and other relative `$ref`s, such as one to an `$anchor`, resolve against the enclosing base instead.
 - Subschemas under keywords that only draft-07 or 2019-09 define, such as `definitions`, pass through unconverted.
 
 ## 3.1 → 3.0
@@ -191,7 +191,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 | API                                                                                                 | Why                                                                                                                                                                                            |
 | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`$schema`][js-schema] and [`$vocabulary`][js-vocabulary]                                           | 3.0 has one fixed dialect.                                                                                                                                                                     |
-| [`$id`][js-id] and [`$anchor`][js-anchor]                                                           | 3.0 identifies schemas only by location. `$ref`s through them are left as written.                                                                                                             |
+| [`$id`][js-id] and [`$anchor`][js-anchor]                                                           | 3.0 identifies schemas only by location. A JSON Pointer `$ref` inside a schema with an `$id` resolves against it, and is rewritten from the root or inlined. Others are left as written.       |
 | [`$defs`][js-defs]                                                                                  | 3.0 has no local definitions. Each `$ref` into `$defs` is replaced by its converted target, and a reference back into a target being inlined becomes `{}`, so recursion stops after one level. |
 | [`$dynamicRef` and `$dynamicAnchor`][js-dynamic]                                                    | 3.0 has no dynamic references.                                                                                                                                                                 |
 | [`$comment`][js-comment] and [`contentSchema`][js-content-schema]                                   | Annotations with no 3.0 equivalent.                                                                                                                                                            |
@@ -240,7 +240,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 #### Limitations
 
 - Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, array-form `items`, `additionalItems`, and `$recursiveRef`, pass through unconverted. Siblings of a `$ref` apply, although draft-07 ignores them. Convert such schemas to 2020-12 first.
-- `$ref`s to an `$anchor` or resolved against an `$id` base are left as written and dangle. Rewrite them as JSON pointers first.
+- `$ref`s to an `$anchor`, or to a URI resolved against an `$id` base, are left as written and dangle. Rewrite them as JSON Pointers first.
 - A `not` or `oneOf` that reaches a loosened schema through a `$ref` kept in the output can reject values the original accepts.
 - A schema without `type` that has `contentEncoding: base64`, or `contentMediaType` without `contentEncoding`, gains `type: string`, so non-string values the original accepts are rejected.
 - Non-standard keywords are kept, although the official 3.0 schema forbids them.
