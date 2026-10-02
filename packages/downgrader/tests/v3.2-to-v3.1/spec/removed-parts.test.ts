@@ -423,12 +423,16 @@ describe('references left as written', () => {
 
   // Only converted Path Items lose `query`. An extension of `paths`, and a
   // Callback Object that is a Reference Object, are copied with all their
-  // fields, so references into them still resolve.
-  it('leaves references into a query field that the conversion copies as written', () => {
+  // fields, and a component or a file may just be named `query`, so
+  // references to them still resolve.
+  it('leaves references to a query that the conversion keeps as written', () => {
     const responses = { 200: { description: 'kept' } }
     const references = {
       Callback: { $ref: '#/components/callbacks/C/{$url}/query/responses/200' },
       Extension: { $ref: '#/paths/x-shared/query/responses/200' },
+      File: { $ref: 'query.yaml' },
+      Named: { $ref: '#/components/responses/query' },
+      query: { description: 'named' },
     }
     const result = convertSpec({
       components: {

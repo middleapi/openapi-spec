@@ -830,12 +830,16 @@ function isPathItemPointer(tokens: readonly string[]): boolean {
 // a Callback Object that is a Reference Object or under a value that is not
 // an object.
 function isInDroppedPathItemField(root: unknown, tokens: readonly string[] | undefined, fields: readonly string[]): boolean {
-  if (tokens === undefined || (tokens[0] === 'paths' && !isPath(tokens[1] ?? ''))) {
+  if (tokens === undefined) {
     return false
   }
   let node = root
   for (const [index, token] of tokens.entries()) {
-    if (!isRecord(node) || (tokens[index - 2] === 'callbacks' && getRef(node) !== undefined)) {
+    if (
+      !isRecord(node)
+      || (index === 1 && tokens[0] === 'paths' && !isPath(token))
+      || (tokens[index - 2] === 'callbacks' && getRef(node) !== undefined)
+    ) {
       return false
     }
     if (fields.includes(token) && isPathItemPointer(tokens.slice(0, index))) {
