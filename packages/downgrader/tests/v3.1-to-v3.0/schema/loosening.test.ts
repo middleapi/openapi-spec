@@ -34,6 +34,9 @@ describe('not', () => {
     ['keeps a not whose const lies inside its enum', { not: { const: 1, enum: [1, 2] } }, { not: { enum: [1] } }],
     ['keeps a not whose operand converts exactly', { not: { type: ['string', 'null'] } }, { not: { nullable: true, type: 'string' } }],
     ['keeps a not whose null-only operand matches nothing exactly', { not: { const: 'a', type: 'null' } }, { not: { enum: ['a'], not: {} } }],
+    // 3.1 ignores `nullable`, so this accepts null. Dropping `nullable` is
+    // exact, so the not stays and keeps accepting null.
+    ['keeps a not whose operand had a 3.0 nullable', { not: { nullable: true, type: 'string' } }, { not: { type: 'string' } }],
     ['keeps a not over a boolean schema', { not: false }, { not: { not: {} } }],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
@@ -49,6 +52,13 @@ describe('oneOf', () => {
       { allOf: [{ anyOf: [{}] }], anyOf: [{ type: 'string' }] },
     ],
     ['keeps a oneOf whose branches convert exactly', { oneOf: [{ type: ['integer', 'null'] }, { type: 'string' }] }, { oneOf: [{ nullable: true, type: 'integer' }, { type: 'string' }] }],
+    // 3.1 ignores `nullable`, so only the second branch accepts null. Kept, it
+    // would make both accept null, and oneOf would reject it.
+    [
+      'keeps a oneOf whose branch had a 3.0 nullable',
+      { oneOf: [{ nullable: true, type: 'string' }, { type: 'null' }] },
+      { oneOf: [{ type: 'string' }, { enum: [null] }] },
+    ],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
   })

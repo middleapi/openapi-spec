@@ -207,6 +207,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 | Empty [`enum`][js-enum]                                                                             | 3.0 requires at least one value. An empty `enum` rejects everything, so dropping it only loosens the schema.                                                                                   |
 | [`not`][js-not] over a loosened schema                                                              | Negating a looser schema would reject values the original accepts.                                                                                                                             |
 | The exclusivity of [`oneOf`][js-one-of] with a loosened branch                                      | Looser branches may overlap, so "exactly one" could reject values the original accepts. It becomes `anyOf`.                                                                                    |
+| [`nullable`][3.0-schema-nullable], a 3.0 keyword                                                    | 3.1 ignores it, but in 3.0 it admits null, so keeping it would accept null where the original rejects it. Only `"null"` in `type` becomes `nullable: true`.                                    |
 | XML [`nodeType`][3.2-xml-node-type], a 3.2 field                                                    | As in 3.2 → 3.1, kept only as `attribute: true` or `wrapped: true`.                                                                                                                            |
 
 [js-schema]: https://json-schema.org/draft/2020-12/json-schema-core#name-the-schema-keyword
@@ -236,6 +237,7 @@ A schema is _loosened_ when the conversion removes a restriction from it or a su
 [js-enum]: https://json-schema.org/draft/2020-12/json-schema-validation#name-enum
 [js-not]: https://json-schema.org/draft/2020-12/json-schema-core#name-not
 [js-one-of]: https://json-schema.org/draft/2020-12/json-schema-core#name-oneof
+[3.0-schema-nullable]: https://spec.openapis.org/oas/v3.0.4.html#schema-nullable
 
 #### Limitations
 
