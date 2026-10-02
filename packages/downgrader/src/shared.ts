@@ -36,6 +36,21 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
+/**
+ * Whether `object` has an own `key` whose value is not `undefined`. A key
+ * holding `undefined` disappears in JSON, and objects built in JavaScript
+ * often carry one, for example from spreading options, so the conversion
+ * treats it as missing.
+ */
+export function has(object: Record<string, unknown>, key: string): boolean {
+  return Object.hasOwn(object, key) && object[key] !== undefined
+}
+
+/** The own entries of `object`, without those holding `undefined` (see `has`). */
+export function entries(object: object): [string, unknown][] {
+  return Object.entries(object).filter(([, item]) => item !== undefined)
+}
+
 export function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
   if (key === '__proto__') {
     Object.defineProperty(target, key, { configurable: true, enumerable: true, value, writable: true })
@@ -71,7 +86,7 @@ function copy(value: unknown, seen: Map<object, unknown>): unknown {
   }
   const out: Record<string, unknown> = {}
   seen.set(value, out)
-  for (const [key, item] of Object.entries(value)) {
+  for (const [key, item] of entries(value)) {
     setOwn(out, key, copy(item, seen))
   }
   return out
@@ -96,7 +111,7 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(value)
-  for (const [key, item] of Object.entries(value)) {
+  for (const [key, item] of entries(value)) {
     const field = fields.get(key)
     const converted = field === undefined ? clone(item, ctx) : field === DROP ? DROP : field(item, ctx, value)
     if (converted !== DROP) {
@@ -117,7 +132,7 @@ export function map(convert: (value: unknown, ctx: Context, key: string) => unkn
       return clone(value, ctx)
     }
     const out: Record<string, unknown> = {}
-    for (const [key, item] of Object.entries(value)) {
+    for (const [key, item] of entries(value)) {
       const converted = isEntry(key) ? convert(item, ctx, key) : clone(item, ctx)
       if (converted !== DROP) {
         setOwn(out, key, converted)
@@ -275,7 +290,7 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
 }
 
 export function inlineSchema(ref: string, ctx: Context, convert: Convert): unknown {
-  return inline(skipAliases(ref, ctx, (next, target) => Object.keys(target).length === 1 && ctx.dangles(next)), ctx, convert)
+  return inline(skipAliases(ref, ctx, (next, target) => entries(target).length === 1 && ctx.dangles(next)), ctx, convert)
 }
 
 export function refOr(convert: Convert, keep: (value: Record<string, unknown>) => unknown = clone): Convert {

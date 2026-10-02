@@ -7,8 +7,9 @@ import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
 import { downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 
-import { dig } from '../../helpers'
-import { convertPathItem, convertSpec, info } from './helpers'
+import { corpusV31 } from '../../corpus'
+import { dig, withUndefinedKeys } from '../../helpers'
+import { convertComponent, convertPathItem, convertSpec, info } from './helpers'
 
 describe('the input document', () => {
   it('is never mutated', () => {
@@ -87,6 +88,29 @@ describe('keys', () => {
     expect(Object.getOwnPropertyDescriptor(data, '__proto__')?.value).toEqual({ polluted: true })
     expect(Object.getOwnPropertyDescriptor(schemas, '__proto__')?.value).toEqual({ nullable: true, type: 'string' })
     expect('polluted' in {}).toBe(false)
+  })
+})
+
+// Builders that spread options often leave a key holding `undefined`. JSON
+// drops such a key, so the conversion treats it as missing, and the output
+// never holds one.
+describe('keys holding undefined', () => {
+  it.each(corpusV31)('converts %s as if the undefined keys were missing', (_name, doc) => {
+    const sprinkled = withUndefinedKeys(doc) as OpenAPIV3_1.OpenAPIObject
+    expect(downgradeSpecV31ToV30(sprinkled)).toStrictEqual(downgradeSpecV31ToV30(doc))
+  })
+
+  it('writes the default contentType of a form part whose contentType is undefined', () => {
+    const mediaType = { encoding: { part: { contentType: undefined } }, schema: { properties: { part: {} } } }
+    const result = convertComponent('requestBodies', { content: { 'multipart/form-data': mediaType } })
+    expect(dig(result, 'content', 'multipart/form-data', 'encoding')).toStrictEqual({ part: { contentType: 'application/octet-stream' } })
+  })
+
+  // `{ mtls: undefined }` is the empty requirement `{}`, which needs no
+  // security (see security.test.ts), rather than a mutualTLS requirement.
+  it('keeps a requirement whose scheme names hold undefined as the empty requirement', () => {
+    const result = convertSpec({ components: { securitySchemes: { mtls: { type: 'mutualTLS' } } }, security: [{ mtls: undefined }] })
+    expect(result.security).toStrictEqual([{}])
   })
 })
 
