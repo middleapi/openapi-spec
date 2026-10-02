@@ -13,7 +13,7 @@ export interface Context {
   readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, unknown>>
   readonly inlining: Set<unknown>
-  readonly merged: Map<Convert, Map<unknown, Merge>>
+  readonly merged: Map<Convert, Map<unknown, Cached>>
   readonly removals: Map<string, boolean | undefined>
   readonly seen: Map<Fields, Map<object, unknown>>
 }
@@ -355,16 +355,16 @@ interface Merged {
   readonly skipped: Skipped | undefined
 }
 
-interface Merge extends Merged {
+interface Cached extends Merged {
   readonly conversions: number
   readonly own: unknown
 }
 
-// `identified` is missing where the hop's own fields are reused from its merge.
-type Hop = { readonly target: unknown } | { readonly identified: number | undefined, readonly own: unknown, readonly target: unknown }
+type Hop = { readonly target: unknown } | { readonly conversions: number, readonly identified: number, readonly own: unknown, readonly target: unknown }
 
-// How many times a hop's own fields are converted, each for a merge that the
-// cached one does not fit.
+// The most times a hop's own fields are converted. Any bound keeps the work
+// linear. Random documents with cyclic callbacks needed at most 8, so this one
+// is reached only where hops reach one another in many more ways.
 const HOP_CONVERSIONS = 16
 
 function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
@@ -381,29 +381,15 @@ function convertOwn(hop: unknown, ctx: Context, convert: Convert): unknown {
   return convert(own, { ...ctx, seen: new Map() })
 }
 
-// Merges the own fields of consecutive hops, listed last hop first, over
-// `fields`, the merge of the hops after them.
-function mergeOwn(owns: readonly unknown[], fields: unknown): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (let index = owns.length - 1; index >= 0; index--) {
-    mergeMissing(out, owns[index])
-  }
-  mergeMissing(out, fields)
-  return out
-}
-
 // Each hop's merged fields are cached, so a chain is walked and its hops
 // converted once however many references enter it. A merge that skipped a hop
 // in progress lacks that hop's fields, so it is reused only while every hop it
-// skipped is still in progress. Own fields are not cached apart from the merge:
-// converted while some hop was in progress, they can lack its fields too.
-//
-// Hops whose operations reference one another can reach a hop with
-// exponentially many sets of hops in progress, so its own fields are converted
-// at most `HOP_CONVERSIONS` times. Past that, the own fields of its merge are
-// reused and merged with the rest of the chain, walked again. They can lack
-// the fields of a hop that was in progress only where they were converted, as
-// a copy reused by `inline()` can, but no hop of the chain is lost.
+// skipped is still in progress. Own fields converted while some hop was in
+// progress can lack its fields too, so they are converted again for each merge
+// that does not fit. Hops whose operations reference one another can reach a
+// hop with exponentially many sets of hops in progress, so past
+// `HOP_CONVERSIONS`, the hop's last own fields are merged with the rest of the
+// chain instead, as `inline()` reuses a copy cut where it was made.
 function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   const cache = cacheOf(ctx.merged, convert)
   const hops: Hop[] = []
@@ -426,31 +412,29 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
         break
       }
       const reused = known !== undefined && known.conversions >= HOP_CONVERSIONS
-      const identified = reused ? undefined : ctx.identified.size
+      const identified = ctx.identified.size
       ctx.inlining.add(target)
-      hops.push({ identified, own: reused ? known.own : convertOwn(target, ctx, convert), target })
+      hops.push(reused
+        ? { conversions: known.conversions, identified, own: known.own, target }
+        : { conversions: (known?.conversions ?? 0) + 1, identified, own: convertOwn(target, ctx, convert), target })
     }
     ref = next
   }
-  // The own fields of the hops since the last merge made.
-  const owns: unknown[] = []
   for (const hop of hops.reverse()) {
     if (!('own' in hop)) {
-      tail = { fields: tail.fields, skipped: { hop: hop.target, rest: tail.skipped } }
+      tail = { ...tail, skipped: { hop: hop.target, rest: tail.skipped } }
       continue
     }
     ctx.inlining.delete(hop.target)
-    owns.push(hop.own)
-    if (hop.identified === undefined) {
-      continue
-    }
-    tail = { fields: mergeOwn(owns, tail.fields), skipped: tail.skipped }
-    owns.length = 0
+    const fields: Record<string, unknown> = {}
+    mergeMissing(fields, hop.own)
+    mergeMissing(fields, tail.fields)
+    tail = { ...tail, fields }
     if (ctx.identified.size === hop.identified) {
-      cache.set(hop.target, { ...tail, conversions: (cache.get(hop.target)?.conversions ?? 0) + 1, own: hop.own })
+      cache.set(hop.target, { ...tail, conversions: hop.conversions, own: hop.own })
     }
   }
-  return owns.length === 0 ? tail.fields : mergeOwn(owns, tail.fields)
+  return tail.fields
 }
 
 export function mergeRef(convert: Convert): Finish {
