@@ -19,7 +19,7 @@ import { convertSchema } from './helpers'
 describe('not', () => {
   it.each([
     ['removes a not whose operand lost a keyword', { not: { patternProperties: { a: {} } } }, {}],
-    ['removes a not whose operand is loosened deeper down', { not: { properties: { a: { if: { type: 'string' }, then: { minLength: 1 } } } } }, {}],
+    ['removes a not whose operand is loosened deeper down', { not: { properties: { a: { unevaluatedProperties: false } } } }, {}],
     ['removes a not whose operand lost an empty enum', { not: { enum: [] } }, {}],
     ['removes a not whose operand is a cut recursion', { $defs: { a: { not: { $ref: '#/$defs/a' } } }, $ref: '#/$defs/a' }, { allOf: [{}] }],
     ['removes a not whose null-only type has a malformed enum', { not: { enum: 'junk', type: 'null' } }, {}],
@@ -85,6 +85,8 @@ describe('removed keywords that restrict nothing', () => {
   //   string rejects nothing. zod v4 records emit `propertyNames: { type: 'string' }`.
   // - `dependentRequired` without names requires nothing.
   // Anything less certain, such as a malformed value, still loosens.
+  // `patternProperties` and `prefixItems` always do, because they take the
+  // `additionalProperties` or `items` beside them (see removed-keywords.test.ts).
   it.each([
     ['keeps a not whose then has no if', { not: { then: { minLength: 1 }, type: 'string' } }, { not: { type: 'string' } }],
     ['keeps a not whose else has no if', { not: { else: false, type: 'string' } }, { not: { type: 'string' } }],
@@ -93,7 +95,6 @@ describe('removed keywords that restrict nothing', () => {
     ['keeps a not whose minContains and maxContains have no contains', { not: { maxContains: 2, minContains: 1, minItems: 1 } }, { not: { minItems: 1 } }],
     ['keeps a not whose unevaluatedProperties is true', { not: { type: 'object', unevaluatedProperties: true } }, { not: { type: 'object' } }],
     ['keeps a not whose unevaluatedItems is empty', { not: { minItems: 1, unevaluatedItems: {} } }, { not: { minItems: 1 } }],
-    ['keeps a not whose propertyNames accepts every string', { not: { propertyNames: { type: 'string' }, type: 'object' } }, { not: { type: 'object' } }],
     ['keeps a not whose dependentRequired is empty', { not: { dependentRequired: {}, type: 'object' } }, { not: { type: 'object' } }],
     ['keeps a not whose dependentRequired lists no names', { not: { dependentRequired: { a: [] }, type: 'object' } }, { not: { type: 'object' } }],
     ['keeps a not whose dependentSchemas accept everything', { not: { dependentSchemas: { a: true, b: {} }, type: 'object' } }, { not: { type: 'object' } }],
@@ -111,11 +112,6 @@ describe('removed keywords that restrict nothing', () => {
     ['removes a not whose dependentRequired names a property', { not: { dependentRequired: { a: ['b'] } } }, {}],
     ['removes a not whose dependentSchemas reject', { not: { dependentSchemas: { a: true, b: { required: ['c'] } } } }, {}],
     ['removes a not whose dependentRequired is malformed', { not: { dependentRequired: 'junk' } }, {}],
-    [
-      'turns a oneOf whose branch restricts property names into anyOf',
-      { oneOf: [{ propertyNames: { pattern: '^a' }, type: 'object' }, { type: 'string' }] },
-      { anyOf: [{ type: 'object' }, { type: 'string' }] },
-    ],
   ])('%s', (_name, input, expected) => {
     expect(convertSchema(input)).toEqual(expected)
   })

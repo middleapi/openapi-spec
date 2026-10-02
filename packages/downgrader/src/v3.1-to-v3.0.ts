@@ -31,24 +31,27 @@ import {
 
 type Restricts = (value: unknown, schema: Record<string, unknown>) => boolean
 
-// Keywords with no 3.0 form, each with whether dropping it from `schema`
-// removes a restriction, which loosens the schema. When unsure, it does.
-const LOOSENING_KEYWORDS: ReadonlyMap<string, Restricts> = new Map(Object.entries({
+// Keywords with no 3.0 form, besides annotations, each with whether dropping
+// it from `schema` removes a restriction, which loosens the schema. When
+// unsure, it does.
+const REMOVED_KEYWORDS: ReadonlyMap<string, Restricts> = new Map(Object.entries({
   $dynamicRef: () => true,
   contains: () => true,
-  dependentRequired: value => !isRecord(value) || Object.values(value).some(names => !(Array.isArray(names) && names.length === 0)),
+  dependentRequired: value => !isRecord(value) || !Object.values(value).every(names => Array.isArray(names) && names.length === 0),
   dependentSchemas: value => !isRecord(value) || !Object.values(value).every(acceptsAll),
   else: (value, schema) => 'if' in schema && !acceptsAll(value),
   if: () => false,
   maxContains: (_value, schema) => 'contains' in schema,
   minContains: (_value, schema) => 'contains' in schema,
+  // These two also take the `additionalProperties` or `items` beside them, so
+  // their presence alone can remove a restriction.
   patternProperties: () => true,
   prefixItems: () => true,
   propertyNames: value => !acceptsAllStrings(value),
   then: (value, schema) => 'if' in schema && !acceptsAll(value),
   unevaluatedItems: value => !acceptsAll(value),
   unevaluatedProperties: value => !acceptsAll(value),
-} satisfies Record<string, Restricts>))
+}))
 
 const ANNOTATION_KEYWORDS = [
   '$anchor',
@@ -88,7 +91,7 @@ const DISCRIMINATOR_FIELDS = defineFields({
 })
 
 const SCHEMA_FIELDS = defineFields({
-  ...Object.fromEntries([...LOOSENING_KEYWORDS.keys(), ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
+  ...Object.fromEntries([...REMOVED_KEYWORDS.keys(), ...ANNOTATION_KEYWORDS].map(key => [key, DROP])),
   $ref: item => (typeof item === 'string' ? DROP : clone(item)),
   additionalProperties: (item, ctx, schema) => {
     if ('patternProperties' in schema) {
@@ -214,7 +217,7 @@ function acceptsAll(schema: unknown): boolean {
 }
 
 function acceptsAllStrings(schema: unknown): boolean {
-  return schema === true || (isRecord(schema) && Object.entries(schema).every(([key, item]) => key === 'type' && hasType(item, 'string')))
+  return acceptsAll(schema) || (isRecord(schema) && Object.keys(schema).length === 1 && hasType(schema.type, 'string'))
 }
 
 // Compares JSON values as `const` and `enum` do: https://json-schema.org/draft/2020-12/json-schema-core#section-4.2.2
@@ -239,7 +242,7 @@ function isEqual(a: unknown, b: unknown, ancestors: readonly unknown[] = []): bo
 }
 
 function isLooseSchema(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
-  return Object.entries(schema).some(([key, value]) => LOOSENING_KEYWORDS.get(key)?.(value, schema) === true)
+  return Object.keys(schema).some(key => REMOVED_KEYWORDS.get(key)?.(schema[key], schema))
     || (Array.isArray(schema.enum) && schema.enum.length === 0)
     || isLoose(out.items)
     || isLoose(out.additionalProperties)
