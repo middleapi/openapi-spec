@@ -434,7 +434,7 @@ export function removedPrefixes(tables: Readonly<Record<string, Fields>>): strin
   )
 }
 
-function danglesIn(output: unknown, source: unknown, tokens: readonly string[] | undefined): boolean {
+function danglesIn(output: unknown, source: unknown, tokens: readonly string[] | undefined, isTarget: (value: unknown) => boolean): boolean {
   if (tokens === undefined) {
     return false
   }
@@ -450,10 +450,10 @@ function danglesIn(output: unknown, source: unknown, tokens: readonly string[] |
       return false
     }
   }
-  return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to))
+  return to === undefined || (isRecord(to) && PLACEHOLDERS.has(to)) || !isTarget(to)
 }
 
-export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = []): unknown {
+export function downgrade(root: unknown, convert: Convert, removed: readonly string[] = [], isTarget: (value: unknown) => boolean = () => true): unknown {
   const targets = new Map<string, unknown>()
   const resolveRef = (ref: string): unknown => {
     if (!targets.has(ref)) {
@@ -502,7 +502,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
-          if ((isRemovedPart(ref) || (previous !== root && danglesIn(previous, root, parsePointer(ref)))) && isInlinable(ref)) {
+          if ((isRemovedPart(ref) || (previous !== root && danglesIn(previous, root, parsePointer(ref), isTarget))) && isInlinable(ref)) {
             dangling.add(ref)
           }
           else {
@@ -518,7 +518,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     })
     let stale = false
     for (const ref of kept) {
-      if ((dangling.has(ref) || danglesIn(out, root, parsePointer(ref))) && isInlinable(ref)) {
+      if ((dangling.has(ref) || danglesIn(out, root, parsePointer(ref), isTarget)) && isInlinable(ref)) {
         dangling.add(ref)
         stale = true
       }

@@ -88,3 +88,56 @@ describe('references into removed keywords', () => {
     expect(convertSchema(schema)).toEqual(schema)
   })
 })
+
+describe('references to a boolean additionalProperties', () => {
+  // `additionalProperties` is the one place 3.0 still takes a boolean, so it
+  // stays one (see subschemas.test.ts). A `$ref` used as a schema must still
+  // resolve to a Schema Object, which in 3.0 is never a boolean:
+  // https://spec.openapis.org/oas/v3.0.4.html#schema-object
+  // Such a `$ref` is replaced by the converted boolean schema instead.
+  it.each([
+    [
+      'inlines a $ref to a false additionalProperties',
+      { additionalProperties: false, properties: { a: { $ref: '#/additionalProperties' } } },
+      { additionalProperties: false, properties: { a: { not: {} } } },
+    ],
+    [
+      'inlines a $ref to a true additionalProperties under not',
+      { additionalProperties: true, properties: { a: { not: { $ref: '#/additionalProperties' } } } },
+      { additionalProperties: true, properties: { a: { not: {} } } },
+    ],
+    [
+      'inlines a $ref with siblings into allOf',
+      { $ref: '#/additionalProperties', additionalProperties: false },
+      { additionalProperties: false, allOf: [{ not: {} }] },
+    ],
+    [
+      'keeps a $ref to the location that now holds the inlined schema',
+      {
+        properties: {
+          a: { $ref: '#/properties/m/additionalProperties' },
+          b: { $ref: '#/properties/a' },
+          m: { additionalProperties: false, type: 'object' },
+        },
+      },
+      {
+        properties: {
+          a: { not: {} },
+          b: { $ref: '#/properties/a' },
+          m: { additionalProperties: false, type: 'object' },
+        },
+      },
+    ],
+  ])('%s', (_name, input, expected) => {
+    expect(convertSchema(input)).toEqual(expected)
+  })
+
+  // Elsewhere a boolean schema converts to a Schema Object, so a `$ref` to it
+  // keeps working and stays as written.
+  it('keeps a $ref to a boolean schema converted in place', () => {
+    expect(convertSchema({ items: false, properties: { a: { $ref: '#/items' } } })).toEqual({
+      items: { not: {} },
+      properties: { a: { $ref: '#/items' } },
+    })
+  })
+})

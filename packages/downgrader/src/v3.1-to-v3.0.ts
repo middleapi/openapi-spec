@@ -192,6 +192,10 @@ function reference(value: Record<string, unknown>): unknown {
   return { $ref: value.$ref }
 }
 
+function isRefTarget(value: unknown): boolean {
+  return typeof value !== 'boolean'
+}
+
 function isLoose(value: unknown): boolean {
   return LOOSE.has(value as object)
 }
@@ -504,9 +508,9 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
-  return downgrade(spec, convertDocument, REMOVED) as OpenAPIV3_0.OpenAPIObject
+  return downgrade(spec, convertDocument, REMOVED, isRefTarget) as OpenAPIV3_0.OpenAPIObject
 }
 
 export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
+  return downgrade(schema, convertSchema, [], isRefTarget) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
 }

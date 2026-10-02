@@ -37,6 +37,36 @@ it('converts component callbacks and schemas, including boolean schemas', () => 
   })
 })
 
+// 3.0 keeps a boolean `additionalProperties`, but a Schema Object is never a
+// boolean, so a `$ref` to one is replaced by the converted boolean schema
+// (see schema/references.test.ts).
+it('inlines schema $refs to a boolean additionalProperties', () => {
+  const closed = '#/components/schemas/Closed/additionalProperties'
+  const open = '#/components/schemas/Open/additionalProperties'
+  const result = convertSpec({
+    components: {
+      schemas: {
+        Anything: { $ref: open },
+        Closed: { additionalProperties: false, type: 'object' },
+        Nothing: { $ref: closed },
+        NotAnything: { not: { $ref: open } },
+        Open: { additionalProperties: true, type: 'object' },
+      },
+    },
+    paths: { '/a': { get: { responses: { 200: { content: { 'application/json': { schema: { $ref: closed } } }, description: 'ok' } } } } },
+  })
+  expect(result.components).toEqual({
+    schemas: {
+      Anything: {},
+      Closed: { additionalProperties: false, type: 'object' },
+      Nothing: { not: {} },
+      NotAnything: { not: {} },
+      Open: { additionalProperties: true, type: 'object' },
+    },
+  })
+  expect(dig(result, 'paths', '/a', 'get', 'responses', '200', 'content', 'application/json', 'schema')).toEqual({ not: {} })
+})
+
 it('strips the overrides from a callback reference to a missing path item', () => {
   expect(convertComponent('callbacks', { $ref: '#/components/pathItems/Reusable', summary: 's' })).toEqual({
     $ref: '#/components/pathItems/Reusable',
