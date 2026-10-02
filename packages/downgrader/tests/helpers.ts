@@ -48,3 +48,20 @@ export function cyclicCallbackGraph(k: number, pointer: (name: string) => string
   }
   return items
 }
+
+/**
+ * Builds Path Items `h0` … `h<k-1>`, keyed by name, where `h0` has only a
+ * `get`, and every other `h<i>` has a `$ref` to `h<i-1>`, the fields `fields`
+ * returns for `i`, and a `post` whose callbacks point at every `h<j>`, itself
+ * included. `pointer` says where they live. `reads` counts reads of each
+ * `post`, that is how many times the own fields of a hop are converted.
+ */
+export function chainedCallbackGraph(k: number, pointer: (name: string) => string, reads: { count: number }, fields: (index: number) => Record<string, unknown>): Record<string, unknown> {
+  const responses = { 200: { description: 'ok' } }
+  const items: Record<string, unknown> = { h0: { get: { responses } } }
+  for (let i = 1; i < k; i++) {
+    const callbacks = Object.fromEntries(Array.from({ length: k }, (_, j) => [`c${j}`, { '{$url}': { $ref: pointer(`h${j}`) } }]))
+    items[`h${i}`] = countReads({ $ref: pointer(`h${i - 1}`), post: { callbacks, responses }, ...fields(i) }, 'post', reads)
+  }
+  return items
+}

@@ -118,7 +118,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 - A Link that names a removed operation (`query` or `additionalOperations`) by `operationId` is kept.
-- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed or moved, such as a `components.mediaTypes` entry or a parameter after a removed one, is replaced by its converted target without the Reference Object's own `summary` and `description`. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. Where many Path Items reference one another through `$ref` chains and callbacks, an inner reference can also lose the fields of a Path Item that does not enclose it, which keeps the work bounded.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV32ToV31`)
@@ -177,7 +177,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A Link that names a webhook operation by `operationId` is kept.
-- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference.
+- A `$ref` whose target is removed, such as a webhook or a `components.pathItems` entry, is replaced by its converted target. A Path Item referenced from several places then repeats its `operationId`s, and a target that refers back to itself loses that inner reference. Where many Path Items reference one another through `$ref` chains and callbacks, an inner reference can also lose the fields of a Path Item that does not enclose it, which keeps the work bounded.
 - `$ref`s that are external, use an `$anchor`, loop, already dangle, or point at a value other than an object or boolean schema are left as written, so they can dangle.
 
 ### Schema (`downgradeSchemaV31ToV30`)

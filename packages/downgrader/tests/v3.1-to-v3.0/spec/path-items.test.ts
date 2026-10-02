@@ -8,7 +8,7 @@
 // https://spec.openapis.org/oas/v3.1.2.html#path-item-ref
 // So when a Path Item `$ref` is inlined, its own fields win.
 
-import { countReads, cyclicCallbackGraph, dig } from '../../helpers'
+import { chainedCallbackGraph, countReads, cyclicCallbackGraph, dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
 import { convertPathItem, convertSpec } from './helpers'
 
@@ -256,6 +256,26 @@ describe('hops converted once', () => {
     // `h2` is converted inside `h1`, and that copy is shared with `h0`.
     expect(dig(callbacks, 'c2', '{$request.body#/url}', 'post'))
       .toBe(dig(callbacks, 'c1', '{$request.body#/url}', 'post', 'callbacks', 'c2', '{$request.body#/url}', 'post'))
+  })
+
+  // Each hop of the chain h15 → … → h0 has callbacks to every hop, so where a
+  // hop is reached, any set of the hops after it can be in progress, and a
+  // merge that skipped some of them fits only where they all are. Converting
+  // the hop's own fields again for each set would take about 2^k conversions,
+  // so they are converted a bounded number of times. Past that, the chain is
+  // still merged, so `/p` keeps the fields of every hop.
+  it.each([
+    ['only an operation', (): Record<string, unknown> => ({})],
+    ['a field of their own', (index: number): Record<string, unknown> => ({ [`x-h${index}`]: index })],
+  ])('converts the hops of a chain they re-enter through callbacks a bounded number of times, with %s', (_name, fields) => {
+    const reads = { count: 0 }
+    const k = 16
+    const webhooks = chainedCallbackGraph(k, name => `#/webhooks/${name}`, reads, fields)
+    const result = convertSpec({ paths: { '/p': { $ref: `#/webhooks/h${k - 1}` } }, webhooks })
+    expect(reads.count).toBeLessThan(k ** 2)
+    const own = Array.from({ length: k - 1 }, (_, index) => Object.keys(fields(k - 1 - index)))
+    expect(Object.keys(dig(result, 'paths', '/p') as object)).toEqual(['post', ...own.flat(), 'get'])
+    expect(Object.keys(dig(result, 'paths', '/p', 'post', 'callbacks') as object)).toHaveLength(k)
   })
 
   // The callbacks of `B` enter the chain A0 → … → A99 → B → T, which passes
