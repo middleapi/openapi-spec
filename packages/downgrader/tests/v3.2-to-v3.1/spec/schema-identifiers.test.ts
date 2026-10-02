@@ -3,9 +3,14 @@
 // to identify more than one schema":
 // https://json-schema.org/draft/2020-12/json-schema-core#section-9.1.2
 // Inlining a schema in several places would copy its identifiers, so only
-// the first copy keeps them. A copy that loses its `$id` resolves its own
-// relative `$ref`s against the enclosing base instead (a known limitation
-// listed in the README).
+// the first copy keeps them.
+//
+// A `$ref` inside a schema with an `$id` resolves against that `$id`:
+// https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.1
+// Where the `$id` survives, such a `$ref` still resolves the same, because
+// converting a schema keeps everything inside it in place. A copy that
+// loses its `$id` would resolve it against the enclosing base instead, so
+// there its target is inlined.
 
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
@@ -13,7 +18,7 @@ import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
-import { convertPathItem, convertSpec } from './helpers'
+import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
 it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {
   const pet = { $id: 'https://example.com/pet', properties: { name: { $anchor: 'name', type: 'string' } }, type: 'object' }
@@ -121,4 +126,40 @@ it('shares one identifier-free copy among the places after the first', () => {
   const schemas = dig(result, 'components', 'schemas')
   expect(schemas).toEqual({ A: pet, B: { type: 'object' }, C: { type: 'object' } })
   expect(dig(schemas, 'C')).toBe(dig(schemas, 'B'))
+})
+
+it('leaves a $ref or mapping value inside a schema with an $id as written, rather than resolving it to a removed document target of the same name', () => {
+  const own = {
+    $id: 'https://example.com/own',
+    components: { mediaTypes: { M: { schema: { type: 'number' } } } },
+    discriminator: { mapping: { m: '#/components/mediaTypes/M/schema' }, propertyName: 'kind' },
+    properties: { y: { $ref: '#/components/mediaTypes/M/schema' } },
+  }
+  expect(convertComponent('schemas', own, { mediaTypes: { M: { schema: { type: 'string' } } } })).toEqual(own)
+})
+
+// A `mapping` value cannot be inlined, so the copies drop it instead.
+it('inlines the targets of relative $refs in the copies that lose the $id, cutting recursion into {}', () => {
+  const tree = {
+    $defs: { Name: { type: 'string' } },
+    $id: 'https://example.com/tree',
+    discriminator: { mapping: { tree: '#' }, propertyName: 'kind' },
+    properties: { kids: { items: { $ref: '#' }, type: 'array' }, name: { $ref: '#/$defs/Name' } },
+    type: 'object',
+  }
+  const result = convertSpec({
+    components: {
+      mediaTypes: { Tree: { schema: tree } },
+      schemas: { A: { $ref: '#/components/mediaTypes/Tree/schema' }, B: { $ref: '#/components/mediaTypes/Tree/schema' } },
+    },
+  })
+  expect(dig(result, 'components', 'schemas')).toEqual({
+    A: tree,
+    B: {
+      $defs: { Name: { type: 'string' } },
+      discriminator: { mapping: {}, propertyName: 'kind' },
+      properties: { kids: { items: {}, type: 'array' }, name: { type: 'string' } },
+      type: 'object',
+    },
+  })
 })
