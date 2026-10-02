@@ -14,6 +14,7 @@ import {
   getRef,
   hasDanglingOperationRef,
   HTTP_METHODS,
+  identify,
   inline,
   inlineSchema,
   isNotExtension,
@@ -194,7 +195,7 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     delete out.$dynamicAnchor
   }
   else if ('$id' in schema || '$anchor' in schema || '$dynamicAnchor' in schema) {
-    ctx.identified.add(schema)
+    identify(schema, ctx)
   }
   if (typeof schema.$ref === 'string' && !('$ref' in out)) {
     const target = inlineSchema(schema.$ref, ctx, convertSchema)

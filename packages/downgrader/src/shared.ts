@@ -13,6 +13,7 @@ export interface Context {
   readonly identified: Set<unknown>
   readonly inlined: Map<Convert, Map<unknown, unknown>>
   readonly inlining: Set<unknown>
+  readonly log: unknown[]
   readonly merged: Map<Convert, Map<unknown, Merged>>
   readonly removals: Map<string, boolean | undefined>
   readonly seen: Map<Fields, Map<object, unknown>>
@@ -77,6 +78,28 @@ function copy(value: unknown, seen: Map<object, unknown>): unknown {
   return out
 }
 
+// Every write to a cache or to `identified` is logged, so a conversion whose
+// output is discarded can undo its writes. Otherwise a later conversion could
+// reuse what it cached, or treat a schema it identified as already taken, and
+// lose identifiers that no copy in the output keeps.
+function store<K>(map: Map<K, unknown>, key: K, value: unknown, ctx: Context): void {
+  map.set(key, value)
+  ctx.log.push(map, key)
+}
+
+export function identify(value: unknown, ctx: Context): void {
+  ctx.identified.add(value)
+  ctx.log.push(ctx.identified, value)
+}
+
+function undoSince(mark: number, ctx: Context): void {
+  const { log } = ctx
+  for (let index = mark; index < log.length; index += 2) {
+    (log[index] as Map<unknown, unknown> | Set<unknown>).delete(log[index + 1])
+  }
+  log.length = mark
+}
+
 export function convertObject(value: unknown, ctx: Context, fields: Fields, finish?: Finish): unknown {
   if (!isRecord(value)) {
     return clone(value, ctx)
@@ -93,8 +116,9 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   if (ctx.converting.includes(value)) {
     return DROP
   }
+  const mark = ctx.log.length
   const out: Record<string, unknown> = {}
-  seen.set(value, out)
+  store(seen, value, out, ctx)
   ctx.converting.push(value)
   for (const [key, item] of Object.entries(value)) {
     const field = fields.get(key)
@@ -105,8 +129,11 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
   }
   const result = finish === undefined ? out : finish(out, value, ctx)
   ctx.converting.pop()
+  if (result === DROP) {
+    undoSince(mark, ctx)
+  }
   if (result !== out) {
-    seen.set(value, result)
+    store(seen, value, result, ctx)
   }
   return result
 }
@@ -233,13 +260,13 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   const out = convert(target, { ...ctx, seen: new Map() })
   ctx.inlining.delete(target)
   if (ctx.identified.size === identified) {
-    cache.set(target, out)
+    store(cache, target, out, ctx)
   }
   return out
 }
 
-function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen'> {
-  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }
+function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'log' | 'merged' | 'seen'> {
+  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), log: [], merged: new Map(), seen: new Map() }
 }
 
 function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
@@ -355,7 +382,12 @@ interface Merged {
   readonly skipped: Skipped | undefined
 }
 
-type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly target: unknown }
+interface Part {
+  readonly fields: unknown
+  readonly redone: boolean
+}
+
+type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly redone: boolean, readonly target: unknown }
 
 function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
   for (let node = skipped; node !== undefined; node = node.rest) {
@@ -366,21 +398,59 @@ function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
   return true
 }
 
+function omit(value: Record<string, unknown>, keys: ReadonlySet<string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (!keys.has(key)) {
+      setOwn(out, key, item)
+    }
+  }
+  return out
+}
+
+function convertWhileInlining(target: unknown, fields: Record<string, unknown>, ctx: Context, convert: Convert): unknown {
+  ctx.inlining.add(target)
+  const out = convert(fields, { ...ctx, seen: new Map() })
+  ctx.inlining.delete(target)
+  return out
+}
+
+// `first` converts `fields`, what `target` adds to a merge. The referrer and
+// the hops before `target` win every key in `taken`, so the merge drops what
+// `target` has under those keys. If that conversion identified a schema, the
+// dropped part may hold the copy that kept the identifiers while the copies
+// after it lost them. So the conversion is undone and redone without the keys
+// in `taken`. The redone part depends on `taken`, so it is not cached.
+function convertPart(target: unknown, fields: Record<string, unknown>, taken: ReadonlySet<string>, ctx: Context, convert: Convert, first: () => unknown): Part {
+  const identified = ctx.identified.size
+  const mark = ctx.log.length
+  const out = first()
+  if (ctx.identified.size === identified || !isRecord(out) || !Object.keys(out).some(key => taken.has(key))) {
+    return { fields: out, redone: false }
+  }
+  undoSince(mark, ctx)
+  return { fields: convertWhileInlining(target, omit(fields, taken), ctx, convert), redone: true }
+}
+
 // Each hop's merged fields are cached, so a chain is walked and its hops
 // converted once however many references enter it. A merge that skipped a hop
 // in progress lacks that hop's fields, so it is reused only while every hop it
 // skipped is still in progress. Own fields are not cached apart from the merge:
 // converted while some hop was in progress, they can lack its fields too.
-function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
+// `taken` starts with the keys the referrer sets itself and gains the own keys
+// of each hop, which win over the hops after it.
+function mergeChain(ref: string, ctx: Context, convert: Convert, taken: Set<string>): unknown {
   const cache = cacheOf(ctx.merged, convert)
   const hops: Hop[] = []
   let tail: Merged
+  let redone = false
   for (;;) {
     const target = ctx.resolve(ref)
     const next = getRef(target)
     if (!followsPathItem(next, ctx)) {
-      const fields = inline(ref, ctx, convert)
-      tail = { fields, skipped: fields === DROP ? { hop: target, rest: undefined } : undefined }
+      const part = convertPart(target, target as Record<string, unknown>, taken, ctx, convert, () => inline(ref, ctx, convert))
+      redone = part.redone
+      tail = { fields: part.fields, skipped: part.fields === DROP ? { hop: target, rest: undefined } : undefined }
       break
     }
     if (isInProgress(target, ctx)) {
@@ -394,8 +464,12 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
       }
       const { $ref: _, ...own } = target as Record<string, unknown>
       const identified = ctx.identified.size
+      const part = convertPart(target, own, taken, ctx, convert, () => convertWhileInlining(target, own, ctx, convert))
       ctx.inlining.add(target)
-      hops.push({ identified, own: convert(own, { ...ctx, seen: new Map() }), target })
+      hops.push({ identified, own: part.fields, redone: part.redone, target })
+      for (const key of Object.keys(part.fields as object)) {
+        taken.add(key)
+      }
     }
     ref = next
   }
@@ -409,8 +483,9 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
     mergeMissing(fields, hop.own)
     mergeMissing(fields, tail.fields)
     tail = { ...tail, fields }
-    if (ctx.identified.size === hop.identified) {
-      cache.set(hop.target, tail)
+    redone ||= hop.redone
+    if (!redone && ctx.identified.size === hop.identified) {
+      store(cache, hop.target, tail, ctx)
     }
   }
   return tail.fields
@@ -423,7 +498,7 @@ export function mergeRef(convert: Convert): Finish {
       return out
     }
     delete out.$ref
-    mergeMissing(out, mergeChain(ref, ctx, convert))
+    mergeMissing(out, mergeChain(ref, ctx, convert, new Set(Object.keys(out))))
     return out
   }
 }
