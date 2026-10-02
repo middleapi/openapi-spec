@@ -277,6 +277,15 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
   return false
 }
 
+function contentFormat(schema: Record<string, unknown>): string | undefined {
+  if (schema.type !== undefined && !hasType(schema.type, 'string')) {
+    return undefined
+  }
+  return schema.contentEncoding === 'base64'
+    ? 'byte'
+    : schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string' ? 'binary' : undefined
+}
+
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): unknown {
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...allOfItems(out.allOf)]
@@ -308,10 +317,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && !('example' in schema)) {
     out.example = clone(schema.examples[0])
   }
-  const format = schema.contentEncoding === 'base64'
-    ? 'byte'
-    : schema.contentEncoding === undefined && typeof schema.contentMediaType === 'string' ? 'binary' : undefined
-  if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
+  const format = contentFormat(schema)
+  if (format !== undefined) {
     out.format ??= format
     if (schema.type === undefined) {
       out.type = 'string'
@@ -382,7 +389,7 @@ function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
 }
 
 function hasBinaryFormat(node: Record<string, unknown>): boolean {
-  const format = node.format ?? (typeof node.contentMediaType === 'string' ? 'binary' : undefined)
+  const format = node.format ?? contentFormat(node)
   return format === 'binary' || format === 'byte'
 }
 
@@ -410,7 +417,7 @@ function partContentType(schemas: readonly unknown[], ctx: Context, isItem = fal
     return undefined
   }
   const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
-  return items.length === 0 ? 'application/octet-stream' : partContentType(items, ctx, true)
+  return partContentType(items, ctx, true)
 }
 
 function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
