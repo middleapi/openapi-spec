@@ -381,25 +381,36 @@ function formParts(schema: unknown, ctx: Context): Map<string, unknown[]> {
   return parts
 }
 
-function defaultsToOctetStream(schemas: readonly unknown[], ctx: Context, isItem = false): boolean {
+function hasBinaryFormat(node: Record<string, unknown>): boolean {
+  const format = node.format ?? (typeof node.contentMediaType === 'string' ? 'binary' : undefined)
+  return format === 'binary' || format === 'byte'
+}
+
+function partContentType(schemas: readonly unknown[], ctx: Context, isItem = false): string | undefined {
   const nodes = [...subschemas(schemas, ctx)]
   if (!nodes.every(node => isRecord(node) || node === true)) {
-    return false
+    return undefined
   }
   const records = nodes.filter(isRecord)
   const types = records.flatMap(node => [node.type ?? []].flat())
   const kinds = new Set(types.filter(type => type !== 'null'))
   if (types.length === 0) {
-    return true
+    return 'application/octet-stream'
   }
   if (kinds.size !== 1) {
-    return false
+    return undefined
   }
   if (kinds.has('string')) {
-    return records.some(node => node.contentEncoding !== undefined)
+    if (records.some(node => node.contentEncoding !== undefined)) {
+      return 'application/octet-stream'
+    }
+    return records.some(hasBinaryFormat) ? 'text/plain' : undefined
+  }
+  if (isItem || !kinds.has('array')) {
+    return undefined
   }
   const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat())
-  return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
+  return items.length === 0 ? 'application/octet-stream' : partContentType(items, ctx, true)
 }
 
 function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): unknown {
@@ -409,12 +420,12 @@ function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<str
   }
   for (const [name, schemas] of formParts(mediaType.schema, ctx)) {
     const entry = child(encoding, name) ?? {}
-    if (
-      isRecord(entry)
-      && !CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))
-      && defaultsToOctetStream(schemas, ctx)
-    ) {
-      setOwn(encoding, name, { ...entry, contentType: 'application/octet-stream' })
+    if (!isRecord(entry) || CONTENT_TYPE_OVERRIDES.some(key => Object.hasOwn(entry, key))) {
+      continue
+    }
+    const contentType = partContentType(schemas, ctx)
+    if (contentType !== undefined) {
+      setOwn(encoding, name, { ...entry, contentType })
       out.encoding = encoding
     }
   }

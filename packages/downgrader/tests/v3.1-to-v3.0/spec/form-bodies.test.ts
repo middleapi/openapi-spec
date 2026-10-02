@@ -12,11 +12,18 @@
 //   other strings → text/plain, `object` → application/json,
 //   `array` → the default of its `items`, and nothing for a missing `type`
 //
-// The schema conversion keeps most of these aligned, but not an untyped
-// part (`{}` has no 3.0 default) or a `contentEncoding` that `format: byte`
-// cannot express (such as base64url, which becomes a plain string and so
-// text/plain). For those parts the 3.1 default, application/octet-stream,
-// is written into the Encoding Object so the wire format stays the same.
+// The schema conversion keeps most of these aligned, but not:
+// - an untyped part (`{}` has no 3.0 default) or a `contentEncoding` that
+//   `format: byte` cannot express (such as base64url, which becomes a plain
+//   string and so text/plain). 3.1 sends these as application/octet-stream.
+// - a string without `contentEncoding` that has `format: binary` or `byte`,
+//   or gains `format: binary` from `contentMediaType`. 3.1 sends these as
+//   text/plain, 3.0 as application/octet-stream.
+// For those parts the 3.1 default is written into the Encoding Object so
+// the wire format stays the same. `contentMediaType` does not change the
+// 3.1 default, and a contradicting one is ignored
+// (https://spec.openapis.org/oas/v3.1.2.html#working-with-binary-data),
+// so it does not become the part's `contentType`.
 //
 // An Encoding Object that sets `style`, `explode`, or `allowReserved`
 // switches the part to RFC6570-style serialization, where `contentType`
@@ -28,7 +35,14 @@ import { convertComponent, convertSpec } from './helpers'
 
 const octetStream = { contentType: 'application/octet-stream' }
 
-const schemas = { Form: { allOf: [{ properties: { a: {} } }], properties: { b: {} } }, Pet: { type: 'object' }, Raw: {} }
+const textPlain = { contentType: 'text/plain' }
+
+const schemas = {
+  Form: { allOf: [{ properties: { a: {} } }], properties: { b: {} } },
+  Pet: { type: 'object' },
+  Png: { contentMediaType: 'image/png', type: 'string' },
+  Raw: {},
+}
 
 function convertForm(mediaType: unknown, type = 'multipart/form-data'): unknown {
   return dig(convertComponent('requestBodies', { content: { [type]: mediaType } }, { schemas }), 'content', type)
@@ -83,11 +97,29 @@ describe('parts that need the 3.1 default written out', () => {
     expect(Object.getPrototypeOf(encoding)).toBe(Object.prototype)
     expect(Object.getOwnPropertyDescriptor(encoding, '__proto__')?.value).toEqual(octetStream)
   })
+
+  it.each([
+    ['a string with contentMediaType', { contentMediaType: 'image/png', type: 'string' }],
+    ['a binary string', { format: 'binary', type: 'string' }],
+    ['a byte string', { format: 'byte', type: 'string' }],
+    ['a nullable string with contentMediaType', { contentMediaType: 'text/csv', type: ['string', 'null'] }],
+    ['an array of strings with contentMediaType', { items: { contentMediaType: 'image/png', type: 'string' }, type: 'array' }],
+    ['a string with a binary format found through allOf', { allOf: [{ format: 'binary' }], type: 'string' }],
+    ['string anyOf branches, one of them binary', { anyOf: [{ format: 'byte', type: 'string' }, { type: 'string' }] }],
+    ['a reference to a string with contentMediaType', { $ref: '#/components/schemas/Png' }],
+  ])('sets contentType: text/plain on %s', (_name, part) => {
+    expect(convertForm({ schema: { properties: { part } } })).toEqual({
+      encoding: { part: textPlain },
+      schema: { properties: { part: expect.anything() } },
+    })
+  })
 })
 
 describe('parts whose 3.0 default already matches', () => {
   it.each([
     ['a string', { format: 'uuid', type: 'string' }],
+    ['a string whose format wins over contentMediaType', { contentMediaType: 'text/csv', format: 'uuid', type: 'string' }],
+    ['a binary format on a non-string type', { format: 'binary', type: 'integer' }],
     ['an object', { type: 'object' }],
     ['a type found through allOf', { allOf: [{ $ref: '#/components/schemas/Pet' }] }],
     ['a null type', { type: 'null' }],
@@ -132,6 +164,19 @@ describe('existing Encoding Objects', () => {
         reserved: { allowReserved: true },
         styled: { style: 'form' },
       },
+      schema,
+    })
+  })
+
+  it('treats a text/plain default like an application/octet-stream one', () => {
+    const headers = { 'X-Id': { schema: { type: 'string' } } }
+    const binary = { format: 'binary', type: 'string' }
+    const schema = { properties: { explicit: binary, headed: binary, styled: binary } }
+    expect(convertForm({
+      encoding: { explicit: { contentType: 'image/png' }, headed: { headers }, styled: { style: 'form' } },
+      schema,
+    })).toEqual({
+      encoding: { explicit: { contentType: 'image/png' }, headed: { ...textPlain, headers }, styled: { style: 'form' } },
       schema,
     })
   })
