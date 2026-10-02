@@ -11,6 +11,7 @@ import {
   defineFields,
   downgrade,
   DROP,
+  enterSchema,
   getRef,
   hasDanglingOperationRef,
   HTTP_METHODS,
@@ -19,6 +20,7 @@ import {
   isNotExtension,
   isPath,
   isRecord,
+  keepSchemaRef,
   list,
   map,
   mergeRef,
@@ -59,7 +61,7 @@ const DISCRIMINATOR_FIELDS = defineFields({
 
 const SCHEMA_FIELDS = defineFields({
   $defs: map(convertSchema),
-  $ref: (item, ctx) => (typeof item === 'string' && ctx.dangles(item) ? DROP : clone(item)),
+  $ref: (item, ctx) => (typeof item === 'string' ? (keepSchemaRef(item, ctx) ?? DROP) : clone(item)),
   additionalProperties: convertSchema,
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
@@ -207,9 +209,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
 
 function convertSchema(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  const out = ref !== undefined && Object.keys(value as object).length === 1 && ctx.dangles(ref)
+  const out = ref !== undefined && Object.keys(value as object).length === 1 && keepSchemaRef(ref, ctx) === undefined
     ? inlineSchema(ref, ctx, convertSchema)
-    : convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+    : convertObject(value, enterSchema(value, ctx, !ctx.identified.has(value)), SCHEMA_FIELDS, finishSchema)
   return out === DROP ? {} : out
 }
 
