@@ -825,10 +825,10 @@ function isPathItemPointer(tokens: readonly string[]): boolean {
 }
 
 // Whether `tokens` points at or into one of `fields`, which converting a Path
-// Item drops, so the target is known to be gone before a pass ends. A Path
-// Item that is copied rather than converted keeps every field, so the walk
-// rejects those: extensions of `paths`, and anything under a Callback Object
-// that is a Reference Object or under a value that is not an object.
+// Item drops. A Path Item that is copied rather than converted keeps every
+// field, so the walk rejects those: extensions of `paths`, and anything under
+// a Callback Object that is a Reference Object or under a value that is not
+// an object.
 function isInDroppedPathItemField(root: unknown, tokens: readonly string[] | undefined, fields: readonly string[]): boolean {
   if (tokens === undefined || (tokens[0] === 'paths' && !isPath(tokens[1] ?? ''))) {
     return false
@@ -969,7 +969,7 @@ export function mergeRef(convert: Convert): Finish {
   }
 }
 
-export interface Removed {
+interface Removed {
   readonly pathItemFields: readonly string[]
   readonly prefixes: readonly string[]
 }
@@ -1050,10 +1050,12 @@ export function downgrade(root: unknown, convert: Convert, removed: Removed = { 
   const isRemovedPart = (ref: string): boolean => removed.prefixes.some(prefix => ref.startsWith(prefix))
   // Without this, a reference into a dropped Path Item field would only be
   // found dangling once a pass ends, costing a second pass over everything.
+  // Most references spell out none of those fields, so they are not parsed.
   // Links and mappings still go by `isRemovedPart` alone, so one into such a
-  // field is removed only when its target dangles, as before.
+  // field is removed only when its target dangles.
   const isKnownGone = (ref: string): boolean =>
-    isRemovedPart(ref) || isInDroppedPathItemField(root, parsePointer(ref), removed.pathItemFields)
+    isRemovedPart(ref)
+    || (removed.pathItemFields.some(field => ref.includes(field)) && isInDroppedPathItemField(root, parsePointer(ref), removed.pathItemFields))
   let previous = root
   for (;;) {
     const kept = new Set<string>()
