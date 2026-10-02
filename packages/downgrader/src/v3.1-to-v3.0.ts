@@ -245,7 +245,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
 function takeArrayFields(out: Record<string, unknown>): Record<string, unknown> {
   const fields: Record<string, unknown> = { items: out.items ?? {} }
   delete out.items
-  if (isRecord(out.xml) && Object.hasOwn(out.xml, 'wrapped')) {
+  if (isRecord(out.xml) && has(out.xml, 'wrapped')) {
     const { wrapped: _, ...xml } = out.xml
     fields.xml = out.xml
     out.xml = xml
