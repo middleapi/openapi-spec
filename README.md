@@ -38,8 +38,6 @@ pnpm type:check
 pnpm bench
 ```
 
-`pnpm bench` runs the benchmarks in [`packages/downgrader/benches`](https://github.com/middleapi/openapi-spec/tree/main/packages/downgrader/benches). [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every push to `main` and every pull request, and reports any change in performance on the pull request.
-
 ## Sponsors
 
 Like what we build over at [middleapi](https://github.com/middleapi)? You can help keep it going through [GitHub Sponsors](https://github.com/sponsors/dinwwwh) or [Open Collective](https://opencollective.com/middleapi). Every bit helps! 🚀
