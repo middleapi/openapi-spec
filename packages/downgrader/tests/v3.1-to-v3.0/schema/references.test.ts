@@ -1,3 +1,4 @@
+import { countReads, dig } from '../../helpers'
 import { convertSchema } from './helpers'
 
 describe('$ref with sibling keywords', () => {
@@ -50,6 +51,39 @@ describe('references into removed keywords', () => {
       $defs: { node: { properties: { next: { $ref: '#/$defs/node' } }, type: 'object' } },
       $ref: '#/$defs/node',
     })).toEqual({ allOf: [{ properties: { next: {} }, type: 'object' }] })
+  })
+
+  // A copy of `b` made inside `a` is cut where it refers back to `a`, so it is
+  // not reused for `y`, where `a` does not enclose it. Each `$ref` is cut at
+  // its own first repeat, whichever property comes first.
+  it.each([['x', 'y'], ['y', 'x']])('cuts mutually recursive definitions at the first repeat of each reference (%s first)', (...order) => {
+    const refs: Record<string, unknown> = { x: { $ref: '#/$defs/a' }, y: { $ref: '#/$defs/b' } }
+    expect(convertSchema({
+      $defs: {
+        a: { properties: { b: { $ref: '#/$defs/b' } }, type: 'object' },
+        b: { properties: { a: { $ref: '#/$defs/a' } }, type: 'object' },
+      },
+      properties: Object.fromEntries(order.map(key => [key, refs[key]])),
+    })).toEqual({
+      properties: {
+        x: { properties: { b: { properties: { a: {} }, type: 'object' } }, type: 'object' },
+        y: { properties: { a: { properties: { b: {} }, type: 'object' } }, type: 'object' },
+      },
+    })
+  })
+
+  // Definitions that all refer to each other call for a copy of each one per
+  // set of definitions around it, exponentially many. Past a budget, a
+  // reference reuses a copy cut earlier, so the work stays bounded.
+  it('converts each definition of a dense cycle a bounded number of times', () => {
+    const reads = { count: 0 }
+    const size = 12
+    const refs = Object.fromEntries(Array.from({ length: size }, (_, index) => [`p${index}`, { $ref: `#/$defs/d${index}` }]))
+    const $defs = Object.fromEntries(Array.from({ length: size }, (_, index) => [`d${index}`, countReads({ properties: refs, type: 'object' }, 'properties', reads)]))
+    const result = convertSchema({ $defs, properties: refs })
+    expect(reads.count).toBeLessThanOrEqual(16 * size)
+    expect(dig(result, 'properties', 'p0', 'properties', 'p0')).toEqual({})
+    expect(dig(result, 'properties', 'p0', 'properties', 'p1', 'properties', 'p0')).toEqual({})
   })
 
   it('inlines a definition that is itself an external reference', () => {

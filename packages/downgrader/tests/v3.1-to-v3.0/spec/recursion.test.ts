@@ -105,6 +105,25 @@ it('cuts own fields that lead back into a path item still being converted', () =
   expectAcyclic(result)
 })
 
+// A copy of `Q` made inside `P` is cut where it refers back to `P`, so it is
+// not reused for `/q`, where `P` does not enclose it. Each path keeps the
+// operations of both Path Items, whichever path comes first.
+it.each([['/p', '/q'], ['/q', '/p']])('keeps the operations of mutually recursive path items (%s first)', (...order) => {
+  const pathItem = (operationId: string, other: string) => ({
+    post: { callbacks: { cb: { '{$url}': { $ref: `#/components/pathItems/${other}` } } }, operationId, responses },
+  })
+  const refs: Record<string, unknown> = { '/p': { $ref: '#/components/pathItems/P' }, '/q': { $ref: '#/components/pathItems/Q' } }
+  const result = convertSpec({
+    components: { pathItems: { P: pathItem('p', 'Q'), Q: pathItem('q', 'P') } },
+    paths: Object.fromEntries(order.map(path => [path, refs[path]])),
+  })
+  const converted = (operationId: string, other: unknown) => ({ post: { callbacks: { cb: { '{$url}': other } }, operationId, responses } })
+  expect(result.paths).toEqual({
+    '/p': converted('p', converted('q', {})),
+    '/q': converted('q', converted('p', {})),
+  })
+})
+
 describe('object cycles of the input', () => {
   // A cycle the input graph already has is kept as a cycle. Only the copy
   // that inlining makes of it is cut, since a copy cannot point back into

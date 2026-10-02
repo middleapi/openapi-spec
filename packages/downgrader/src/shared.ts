@@ -11,11 +11,12 @@ export interface Context {
   readonly converting: unknown[]
   readonly copies: Map<object, unknown>
   readonly identified: Set<unknown>
-  readonly inlined: Map<Convert, Map<unknown, unknown>>
+  readonly inlined: Map<Convert, Map<unknown, Inlined>>
   readonly inlining: Set<unknown>
   readonly merged: Map<Convert, Map<unknown, Merged>>
   readonly removals: Map<string, boolean | undefined>
   readonly seen: Map<Fields, Map<object, unknown>>
+  readonly trace: Trace | undefined
 }
 
 export type Convert = (value: unknown, ctx: Context) => unknown
@@ -91,8 +92,10 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
     return known
   }
   if (ctx.converting.includes(value)) {
+    ctx.trace?.cuts.add(value)
     return DROP
   }
+  ctx.trace?.entered.add(value)
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(value)
@@ -219,27 +222,133 @@ function isInProgress(target: unknown, ctx: Context): boolean {
   return ctx.inlining.has(target) || ctx.converting.includes(target)
 }
 
+// A conversion is cut where it reaches an item already in progress, and it
+// enters every other item it reaches. The innermost inlined conversion records
+// both in its trace. A copy of an inlined target equals a fresh conversion
+// wherever every item it was cut at outside itself is still in progress and no
+// item it entered is, so that is where it is reused. Anywhere else it would be
+// cut where the recursion does not repeat, or unroll the recursion further,
+// which compounds as copies nest.
+interface Trace {
+  readonly cuts: Set<unknown>
+  readonly entered: Set<unknown>
+  readonly target: unknown
+}
+
+interface Cuts {
+  readonly rest: Cuts | undefined
+  readonly target: unknown
+}
+
+interface Copy {
+  readonly cuts: Cuts | undefined
+  readonly entered: ReadonlySet<unknown>
+  readonly value: unknown
+}
+
+interface Inlined {
+  readonly copies: Copy[]
+  readonly referrers: Set<unknown>
+}
+
+// A dense cycle can call for exponentially many copies of a target. Past one
+// copy per target referring to it, and at least this many, a reference reuses
+// a copy that enters nothing in progress, cut where that copy was, or is cut
+// itself. The copies then grow with the number of references, not with the
+// number of paths through them.
+const COPY_BUDGET = 16
+
+function isStillCut(cuts: Cuts | undefined, ctx: Context): boolean {
+  for (let node = cuts; node !== undefined; node = node.rest) {
+    if (!isInProgress(node.target, ctx)) {
+      return false
+    }
+  }
+  return true
+}
+
+function entersInProgress(copy: Copy, ctx: Context): boolean {
+  for (const item of ctx.inlining) {
+    if (copy.entered.has(item)) {
+      return true
+    }
+  }
+  return ctx.converting.some(item => copy.entered.has(item))
+}
+
+function findCopy({ copies, referrers }: Inlined, ctx: Context): Copy | typeof DROP | undefined {
+  const fitting = copies.filter(copy => !entersInProgress(copy, ctx))
+  const exact = fitting.find(copy => isStillCut(copy.cuts, ctx))
+  if (exact !== undefined || copies.length < Math.max(COPY_BUDGET, referrers.size)) {
+    return exact
+  }
+  return fitting[0] ?? DROP
+}
+
+function reportCuts(cuts: Cuts | undefined, ctx: Context): void {
+  for (let node = cuts; node !== undefined && ctx.trace !== undefined; node = node.rest) {
+    ctx.trace.cuts.add(node.target)
+  }
+}
+
+function report(copy: Copy, ctx: Context): void {
+  if (ctx.trace !== undefined) {
+    reportCuts(copy.cuts, ctx)
+    for (const item of copy.entered) {
+      ctx.trace.entered.add(item)
+    }
+  }
+}
+
+function outerCuts(cuts: ReadonlySet<unknown>, ctx: Context): Cuts | undefined {
+  let outer: Cuts | undefined
+  for (const target of cuts) {
+    if (isInProgress(target, ctx)) {
+      outer = { rest: outer, target }
+    }
+  }
+  return outer
+}
+
 export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   const target = ctx.resolve(ref)
-  if (target === undefined || isInProgress(target, ctx)) {
+  if (target === undefined) {
+    return DROP
+  }
+  if (isInProgress(target, ctx)) {
+    ctx.trace?.cuts.add(target)
     return DROP
   }
   const cache = cacheOf(ctx.inlined, convert)
-  if (cache.has(target)) {
-    return cache.get(target)
+  let inlined = cache.get(target)
+  if (inlined === undefined) {
+    inlined = { copies: [], referrers: new Set() }
+    cache.set(target, inlined)
+  }
+  inlined.referrers.add(ctx.trace?.target)
+  const known = findCopy(inlined, ctx)
+  if (known === DROP) {
+    return DROP
+  }
+  if (known !== undefined) {
+    report(known, ctx)
+    return known.value
   }
   const identified = ctx.identified.size
+  const trace: Trace = { cuts: new Set(), entered: new Set([target]), target }
   ctx.inlining.add(target)
-  const out = convert(target, { ...ctx, seen: new Map() })
+  const value = convert(target, { ...ctx, seen: new Map(), trace })
   ctx.inlining.delete(target)
+  const copy: Copy = { cuts: outerCuts(trace.cuts, ctx), entered: trace.entered, value }
+  report(copy, ctx)
   if (ctx.identified.size === identified) {
-    cache.set(target, out)
+    inlined.copies.push(copy)
   }
-  return out
+  return value
 }
 
-function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen'> {
-  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map() }
+function freshState(): Pick<Context, 'converting' | 'identified' | 'inlined' | 'inlining' | 'merged' | 'seen' | 'trace'> {
+  return { converting: [], identified: new Set(), inlined: new Map(), inlining: new Set(), merged: new Map(), seen: new Map(), trace: undefined }
 }
 
 function convertsToDrop(ref: string, ctx: Context, convert: Convert): boolean {
@@ -345,32 +454,19 @@ function followsPathItem(ref: string | undefined, ctx: Context): ref is string {
   return tokens !== undefined && isPathItemPointer(tokens) && ctx.dangles(ref as string)
 }
 
-interface Skipped {
-  readonly hop: unknown
-  readonly rest: Skipped | undefined
-}
-
 interface Merged {
+  readonly cuts: Cuts | undefined
   readonly fields: unknown
-  readonly skipped: Skipped | undefined
 }
 
 type Hop = { readonly target: unknown } | { readonly identified: number, readonly own: unknown, readonly target: unknown }
 
-function isStillSkipped(skipped: Skipped | undefined, ctx: Context): boolean {
-  for (let node = skipped; node !== undefined; node = node.rest) {
-    if (!isInProgress(node.hop, ctx)) {
-      return false
-    }
-  }
-  return true
-}
-
 // Each hop's merged fields are cached, so a chain is walked and its hops
 // converted once however many references enter it. A merge that skipped a hop
-// in progress lacks that hop's fields, so it is reused only while every hop it
-// skipped is still in progress. Own fields are not cached apart from the merge:
-// converted while some hop was in progress, they can lack its fields too.
+// in progress is cut there, so it is reused only while every hop it skipped is
+// still in progress. Unlike an inlined copy, it keeps no trace of its own
+// fields: converted while some hop was in progress, they can lack its fields
+// too, and an inlined copy that reuses the merge does not learn of that.
 function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   const cache = cacheOf(ctx.merged, convert)
   const hops: Hop[] = []
@@ -380,15 +476,18 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
     const next = getRef(target)
     if (!followsPathItem(next, ctx)) {
       const fields = inline(ref, ctx, convert)
-      tail = { fields, skipped: fields === DROP ? { hop: target, rest: undefined } : undefined }
+      tail = { cuts: fields === DROP ? { rest: undefined, target } : undefined, fields }
       break
     }
     if (isInProgress(target, ctx)) {
+      ctx.trace?.cuts.add(target)
       hops.push({ target })
     }
     else {
+      ctx.trace?.entered.add(target)
       const known = cache.get(target)
-      if (known !== undefined && isStillSkipped(known.skipped, ctx)) {
+      if (known !== undefined && isStillCut(known.cuts, ctx)) {
+        reportCuts(known.cuts, ctx)
         tail = known
         break
       }
@@ -401,7 +500,7 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   }
   for (const hop of hops.reverse()) {
     if (!('own' in hop)) {
-      tail = { ...tail, skipped: { hop: hop.target, rest: tail.skipped } }
+      tail = { ...tail, cuts: { rest: tail.cuts, target: hop.target } }
       continue
     }
     ctx.inlining.delete(hop.target)

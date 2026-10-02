@@ -472,6 +472,22 @@ describe('recursion', () => {
     expect(result).toEqual({ items: { properties: { children: {} }, type: 'object' }, type: 'array' })
   })
 
+  // A copy of `M2` made inside `M1` is cut where it refers back to `M1`, so it
+  // is not reused under `B`, where `M1` does not enclose it. Reused there, it
+  // would cut one level early, and `not` would reject `{ next: 5 }`, which
+  // the original accepts.
+  it.each([['A', 'B'], ['B', 'A']])('cuts mutually recursive schemas at the first repeat of each reference (%s first)', (...order) => {
+    const node = (other: string) => ({ schema: { properties: { next: { $ref: `#/components/mediaTypes/${other}/schema` } }, type: 'object' } })
+    const schemas: Record<string, unknown> = {
+      A: { $ref: '#/components/mediaTypes/M1/schema' },
+      B: { not: { $ref: '#/components/mediaTypes/M2/schema' } },
+    }
+    const twoLevels = { properties: { next: { properties: { next: {} }, type: 'object' } }, type: 'object' }
+    expect(convertSpec({
+      components: { mediaTypes: { M1: node('M2'), M2: node('M1') }, schemas: Object.fromEntries(order.map(name => [name, schemas[name]])) },
+    }).components?.schemas).toEqual({ A: twoLevels, B: { not: twoLevels } })
+  })
+
   // Outside schemas there is no "accept anything" value to cut with, so a
   // Reference Object that leads back into the object being inlined is
   // removed instead.
