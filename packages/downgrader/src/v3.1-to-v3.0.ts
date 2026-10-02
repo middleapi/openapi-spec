@@ -60,9 +60,13 @@ const ANNOTATION_KEYWORDS = [
   'examples',
 ]
 
-const FORM_MEDIA_TYPE = /^(?:multipart\/|application\/x-www-form-urlencoded\s*(?:;|$))/i
+const MULTIPART_MEDIA_TYPE = /^multipart\//i
 
-const CONTENT_TYPE_OVERRIDES = ['allowReserved', 'contentType', 'explode', 'style']
+const URL_ENCODED_MEDIA_TYPE = /^application\/x-www-form-urlencoded\s*(?:;|$)/i
+
+const RFC6570_ENCODING_FIELDS = ['allowReserved', 'explode', 'style']
+
+const CONTENT_TYPE_OVERRIDES = ['contentType', ...RFC6570_ENCODING_FIELDS]
 
 const LOOSE = new WeakSet<object>()
 
@@ -126,10 +130,20 @@ const MEDIA_TYPE_FIELDS = defineFields({
   schema: convertSchema,
 })
 
-const FORM_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+const URL_ENCODED_MEDIA_TYPE_FIELDS = new Map(MEDIA_TYPE_FIELDS)
+
+const MULTIPART_MEDIA_TYPE_FIELDS = defineFields({
+  ...Object.fromEntries(MEDIA_TYPE_FIELDS),
+  encoding: map(convertMultipartEncoding),
+})
 
 const ENCODING_FIELDS = defineFields({
   headers: map(convertParameterRef),
+})
+
+const MULTIPART_ENCODING_FIELDS = defineFields({
+  ...Object.fromEntries(ENCODING_FIELDS),
+  ...Object.fromEntries(RFC6570_ENCODING_FIELDS.map(key => [key, DROP])),
 })
 
 const REQUEST_BODY_FIELDS = defineFields({
@@ -422,13 +436,20 @@ function finishFormMediaType(out: Record<string, unknown>, mediaType: Record<str
 }
 
 function convertRequestMediaType(value: unknown, ctx: Context, type: string): unknown {
-  return FORM_MEDIA_TYPE.test(type)
-    ? convertObject(value, ctx, FORM_MEDIA_TYPE_FIELDS, finishFormMediaType)
+  if (MULTIPART_MEDIA_TYPE.test(type)) {
+    return convertObject(value, ctx, MULTIPART_MEDIA_TYPE_FIELDS, finishFormMediaType)
+  }
+  return URL_ENCODED_MEDIA_TYPE.test(type)
+    ? convertObject(value, ctx, URL_ENCODED_MEDIA_TYPE_FIELDS, finishFormMediaType)
     : convertMediaType(value, ctx)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
+}
+
+function convertMultipartEncoding(value: unknown, ctx: Context): unknown {
+  return convertObject(value, ctx, MULTIPART_ENCODING_FIELDS)
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {
