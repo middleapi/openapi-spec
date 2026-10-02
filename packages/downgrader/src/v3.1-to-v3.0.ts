@@ -26,7 +26,7 @@ import {
   map,
   mergeRef,
   placeholder,
-  rebase,
+  rebasedRef,
   refOr,
   removedPrefixes,
   setOwn,
@@ -371,10 +371,10 @@ function subschemas(schemas: readonly Placed[], ctx: Context): Map<unknown, stri
   }
   for (const [node, base] of nodes) {
     if (isRecord(node)) {
-      const ref = getRef(node)
+      const ref = rebasedRef(node, base)
       if (ref !== undefined) {
-        const target = rebase(ref, base)
-        add(ctx.resolve(target), ctx.baseOf(target))
+        const location = ctx.locate(ref)
+        add(location.target, location.base)
       }
       for (const key of ['allOf', 'anyOf', 'oneOf']) {
         for (const item of Array.isArray(node[key]) ? node[key] : []) {
@@ -399,11 +399,12 @@ function formParts(schema: unknown, ctx: Context): Map<string, Placed[]> {
 }
 
 function defaultsToOctetStream(schemas: readonly Placed[], ctx: Context, isItem = false): boolean {
-  const nodes = subschemas(schemas, ctx)
-  if (![...nodes.keys()].every(node => isRecord(node) || node === true)) {
+  const bases = subschemas(schemas, ctx)
+  const nodes = [...bases.keys()]
+  if (!nodes.every(node => isRecord(node) || node === true)) {
     return false
   }
-  const records = [...nodes.keys()].filter(isRecord)
+  const records = nodes.filter(isRecord)
   const types = records.flatMap(node => [node.type ?? []].flat())
   const kinds = new Set(types.filter(type => type !== 'null'))
   if (types.length === 0) {
@@ -415,7 +416,8 @@ function defaultsToOctetStream(schemas: readonly Placed[], ctx: Context, isItem 
   if (kinds.has('string')) {
     return records.some(node => node.contentEncoding !== undefined)
   }
-  const items = records.flatMap(node => [node.prefixItems ?? [], node.items ?? []].flat().map((item): Placed => [item, nodes.get(node) as string]))
+  const items = [...bases].flatMap(([node, base]) =>
+    [child(node, 'prefixItems') ?? [], child(node, 'items') ?? []].flat().map((item): Placed => [item, base]))
   return !isItem && kinds.has('array') && (items.length === 0 || defaultsToOctetStream(items, ctx, true))
 }
 

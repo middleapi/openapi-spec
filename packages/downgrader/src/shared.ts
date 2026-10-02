@@ -7,8 +7,7 @@ const PLACEHOLDERS = new WeakSet<object>()
 
 export interface Context {
   readonly resolve: (ref: string) => unknown
-  /** The base the `$ref`s in the target of `ref` resolve against: its own `$id`, or the nearest one around it. */
-  readonly baseOf: (ref: string) => string
+  readonly locate: (ref: string) => Location
   /** Where `value` sits, when it is a schema with an `$id` that starts a new resource. */
   readonly resourceOf: (value: unknown) => string | undefined
   /** The resource the value being converted is in: `$ref`s written there resolve against it. */
@@ -226,13 +225,16 @@ function parsePointer(ref: string): string[] | undefined {
   return pointer.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
 
-interface Location {
+export interface Location {
+  /** The base the `$ref`s in `target` resolve against: its own `$id`, or the nearest one around it. */
   readonly base: string
   readonly target: unknown
 }
 
-// Resolves `ref` against `root`, noting the last schema resource on the way:
-// the target itself, or the nearest one around it.
+function toPointer(tokens: readonly string[]): string {
+  return ROOT + tokens.map(token => `/${encodeToken(token)}`).join('')
+}
+
 function locate(root: unknown, ref: string): Location {
   const tokens = parsePointer(ref)
   if (tokens === undefined) {
@@ -246,44 +248,68 @@ function locate(root: unknown, ref: string): Location {
       depth = index + 1
     }
   }
-  return { base: ROOT + tokens.slice(0, depth).map(token => `/${encodeToken(token)}`).join(''), target }
+  return { base: toPointer(tokens.slice(0, depth)), target }
 }
 
-// Finds each schema resource at its shortest pointer from the root, visiting
-// every object once even where the document shares or cycles.
-function findResources(root: unknown): Map<object, string> {
+interface Step {
+  readonly key: string
+  readonly parent: Step | undefined
+  readonly value: unknown
+}
+
+function keysTo(step: Step): string[] {
+  const keys: string[] = []
+  for (let at = step; at.parent !== undefined; at = at.parent) {
+    keys.push(at.key)
+  }
+  return keys.reverse()
+}
+
+// Finds where each schema resource sits, at its shortest pointer from the
+// root. The walk is breadth-first and visits every object once, even where
+// the document shares or cycles, so a pointer is final once found. It goes
+// only as far as the resource asked for, and builds only the pointers of
+// resources.
+function resourceFinder(root: unknown): (resource: object) => string | undefined {
   const resources = new Map<object, string>()
   const seen = new Set([root])
-  const queue: [unknown, string][] = [[root, ROOT]]
-  for (const [value, pointer] of queue) {
-    if (isResource(value)) {
-      resources.set(value, pointer)
-    }
-    if (Array.isArray(value) || isRecord(value)) {
-      for (const [key, item] of Object.entries(value)) {
-        if (typeof item === 'object' && item !== null && !seen.has(item)) {
-          seen.add(item)
-          queue.push([item, `${pointer}/${encodeToken(key)}`])
+  const queue: Step[] = [{ key: '', parent: undefined, value: root }]
+  let walked = 0
+  return (resource) => {
+    while (!resources.has(resource) && walked < queue.length) {
+      const step = queue[walked++] as Step
+      if (isResource(step.value)) {
+        resources.set(step.value, toPointer(keysTo(step)))
+      }
+      if (Array.isArray(step.value) || isRecord(step.value)) {
+        for (const [key, value] of Object.entries(step.value)) {
+          if (typeof value === 'object' && value !== null && !seen.has(value)) {
+            seen.add(value)
+            queue.push({ key, parent: step, value })
+          }
         }
       }
     }
+    return resources.get(resource)
   }
-  return resources
 }
 
-/**
- * Rebases `ref`, written inside the resource at `base`, onto the root. Only
- * a JSON Pointer can be rebased, so any other `$ref`, such as an external
- * one or one to an `$anchor`, is returned as written.
- */
-export function rebase(ref: string, base: string): string {
-  return base === ROOT || parsePointer(ref) === undefined ? ref : base + ref.slice(1)
+// Only a percent-escape can stop a `#/` ref from parsing, so most skip it.
+function isPointer(ref: string): boolean {
+  return ref === ROOT || (ref.startsWith('#/') && !ref.includes('%')) || parsePointer(ref) !== undefined
 }
 
-// The `$ref` of the value `ref` points at, rebased onto the root.
-function nextHop(ref: string, ctx: Pick<Context, 'baseOf' | 'resolve'>): string | undefined {
-  const next = getRef(ctx.resolve(ref))
-  return next === undefined ? undefined : rebase(next, ctx.baseOf(ref))
+// Rebases `ref`, written inside the resource at `base`, onto the root. Only a
+// JSON Pointer can be rebased, so any other `$ref`, such as an external one or
+// one to an `$anchor`, is returned as written.
+function rebase(ref: string, base: string): string {
+  return base === ROOT || !isPointer(ref) ? ref : base + ref.slice(1)
+}
+
+/** The `$ref` of `value`, rebased onto the root from `base`. */
+export function rebasedRef(value: unknown, base: string): string | undefined {
+  const ref = getRef(value)
+  return ref === undefined ? undefined : rebase(ref, base)
 }
 
 /**
@@ -311,7 +337,7 @@ function isInProgress(target: unknown, ctx: Context): boolean {
 }
 
 export function inline(ref: string, ctx: Context, convert: Convert): unknown {
-  const target = ctx.resolve(ref)
+  const { base, target } = ctx.locate(ref)
   if (target === undefined || isInProgress(target, ctx)) {
     return DROP
   }
@@ -321,7 +347,7 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   }
   const identified = ctx.identified.size
   ctx.inlining.add(target)
-  const out = convert(target, { ...ctx, base: ctx.baseOf(ref), seen: new Map() })
+  const out = convert(target, { ...ctx, base, seen: new Map() })
   ctx.inlining.delete(target)
   if (ctx.identified.size === identified) {
     cache.set(target, out)
@@ -355,8 +381,8 @@ export function skipAliases(ref: string, ctx: Context, follow: (next: string, ta
   const hops = new Set([ref])
   let hop = ref
   for (;;) {
-    const target = ctx.resolve(hop)
-    const next = nextHop(hop, ctx)
+    const { base, target } = ctx.locate(hop)
+    const next = rebasedRef(target, base)
     if (next === undefined || hops.has(next) || !follow(next, target as Record<string, unknown>)) {
       return hop
     }
@@ -486,8 +512,8 @@ function mergeChain(ref: string, ctx: Context, convert: Convert): unknown {
   const hops: Hop[] = []
   let tail: Merged
   for (;;) {
-    const target = ctx.resolve(ref)
-    const next = getRef(target)
+    const { base, target } = ctx.locate(ref)
+    const next = rebasedRef(target, base)
     if (!followsPathItem(next, ctx)) {
       const fields = inline(ref, ctx, convert)
       tail = { fields, skipped: fields === DROP ? { hop: target, rest: undefined } : undefined }
@@ -574,15 +600,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
     return location
   }
   const resolveRef = (ref: string): unknown => locateRef(ref).target
-  const baseOf = (ref: string): string => locateRef(ref).base
-  let resources: Map<object, string> | undefined
-  const resourceOf = (value: unknown): string | undefined => {
-    if (!isResource(value)) {
-      return undefined
-    }
-    resources ??= findResources(root)
-    return resources.get(value)
-  }
+  const findResource = resourceFinder(root)
+  const resourceOf = (value: unknown): string | undefined => (isResource(value) ? findResource(value) : undefined)
   const ends = new Map<string, string | undefined>()
   const aliasEnd = (ref: string): string | undefined => {
     const path = new Set<string>()
@@ -597,7 +616,8 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         break
       }
       path.add(hop)
-      const next = nextHop(hop, { baseOf, resolve: resolveRef })
+      const { base, target } = locateRef(hop)
+      const next = rebasedRef(target, base)
       if (next === undefined) {
         end = hop
         break
@@ -622,7 +642,6 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
       ...freshState(),
       aliasEnd,
       base: ROOT,
-      baseOf,
       copies: new Map(),
       dangles: (ref) => {
         if (!dangling.has(ref) && !kept.has(ref)) {
@@ -636,6 +655,7 @@ export function downgrade(root: unknown, convert: Convert, removed: readonly str
         return dangling.has(ref)
       },
       isRemovedPart,
+      locate: locateRef,
       removals: new Map(),
       markDangling: ref => dangling.add(ref),
       outputBase: ROOT,

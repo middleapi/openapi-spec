@@ -79,7 +79,6 @@ describe('parts that need the 3.1 default written out', () => {
     })
   })
 
-  // A `$ref` inside a schema with an `$id` resolves against that schema.
   it('finds a part through a $ref inside a body schema with an $id', () => {
     const schema = {
       $defs: { File: { contentEncoding: 'base64url', type: 'string' } },

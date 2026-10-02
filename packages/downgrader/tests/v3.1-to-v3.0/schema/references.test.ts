@@ -118,17 +118,17 @@ describe('references inside a schema with an $id', () => {
     })
   })
 
-  it('rebases a pointer whose target survives onto the root', () => {
+  it.each([
+    ['x', '#/properties/x/properties/a'],
+    ['a b/c~%', '#/properties/a%20b~1c~0%25/properties/a'],
+  ])('rebases a pointer whose target survives onto the root, under the key %j', (key, pointer) => {
     expect(convertSchema({
-      properties: {
-        x: { $id: 'https://example.com/x', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } },
-      },
+      properties: { [key]: { $id: 'https://example.com/x', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } } },
     })).toEqual({
-      properties: { x: { properties: { a: { type: 'string' }, b: { $ref: '#/properties/x/properties/a' } } } },
+      properties: { [key]: { properties: { a: { type: 'string' }, b: { $ref: pointer } } } },
     })
   })
 
-  // A `$ref` beside an `$id` resolves against that `$id` too.
   it('resolves a $ref beside an $id against that $id', () => {
     expect(convertSchema({
       $defs: { A: { type: 'string' } },
@@ -158,18 +158,6 @@ describe('references inside a schema with an $id', () => {
       $defs: { A: { type: 'string' } },
       properties: { x: { $id: 'https://example.com/x', properties: { y: { $ref: '#/$defs/A' } } } },
     })).toEqual({ properties: { x: { properties: { y: { $ref: '#/properties/x/$defs/A' } } } } })
-  })
-
-  it('percent-encodes the rebased pointer where a key needs it', () => {
-    expect(convertSchema({
-      properties: {
-        'a b/c~%': { $id: 'https://example.com/x', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } },
-      },
-    })).toEqual({
-      properties: {
-        'a b/c~%': { properties: { a: { type: 'string' }, b: { $ref: '#/properties/a%20b~1c~0%25/properties/a' } } },
-      },
-    })
   })
 
   // Only JSON pointers can be rebased. `$anchor` and `$id` are removed, so

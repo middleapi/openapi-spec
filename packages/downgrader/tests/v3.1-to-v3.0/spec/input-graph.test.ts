@@ -70,9 +70,10 @@ describe('the input document', () => {
 
   it('finds schemas with an $id past values that are not plain objects', () => {
     const result = convertSpec({
-      components: {
-        schemas: { S: { $id: 'https://example.com/s', default: new Date(0), properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } } },
+      'components': {
+        schemas: { S: { $id: 'https://example.com/s', properties: { a: { type: 'string' }, b: { $ref: '#/properties/a' } } } },
       },
+      'x-date': new Date(0),
     })
     expect(dig(result, 'components', 'schemas', 'S', 'properties', 'b')).toEqual({ $ref: '#/components/schemas/S/properties/a' })
   })

@@ -1,9 +1,5 @@
-// `$id` starts a new schema resource, and a `$ref` inside it resolves
-// against that resource rather than the document:
-// https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.1
-// 3.0 has no `$id`, so the output resolves every `$ref` against the
-// document. A JSON pointer inside such a schema is rebased onto the
-// document, and its target inlined where the rebased pointer dangles.
+// `$ref`s inside a schema with an `$id`, as in schema/references.test.ts,
+// within a whole document.
 
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 

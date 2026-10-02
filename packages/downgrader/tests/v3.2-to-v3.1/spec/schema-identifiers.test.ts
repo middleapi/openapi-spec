@@ -18,7 +18,7 @@ import { downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
 import { dig } from '../../helpers'
 import { expectValidAs } from '../../validate'
-import { convertPathItem, convertSpec } from './helpers'
+import { convertComponent, convertPathItem, convertSpec } from './helpers'
 
 it('keeps $id and $anchor on the first copy of a schema inlined in several places', () => {
   const pet = { $id: 'https://example.com/pet', properties: { name: { $anchor: 'name', type: 'string' } }, type: 'object' }
@@ -134,8 +134,7 @@ it('leaves a $ref inside a schema with an $id as written, rather than inlining a
     components: { mediaTypes: { M: { schema: { type: 'number' } } } },
     properties: { y: { $ref: '#/components/mediaTypes/M/schema' } },
   }
-  const result = convertSpec({ components: { mediaTypes: { M: { schema: { type: 'string' } } }, schemas: { Own: own } } })
-  expect(dig(result, 'components', 'schemas', 'Own')).toEqual(own)
+  expect(convertComponent('schemas', own, { mediaTypes: { M: { schema: { type: 'string' } } } })).toEqual(own)
 })
 
 it('inlines the targets of relative $refs in the copies that lose the $id, cutting recursion into {}', () => {
