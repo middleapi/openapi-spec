@@ -397,6 +397,12 @@ export function inlineSchema(ref: string, ctx: Context, convert: Convert): unkno
   return inline(skipAliases(start, ctx, (next, target) => Object.keys(target).length === 1 && ctx.dangles(next)), ctx, convert)
 }
 
+// Whether the output keeps the `$id` of the resource the value being
+// converted is in, so that references written there resolve as written.
+function resolvesAsWritten(ctx: Context): boolean {
+  return ctx.base !== ROOT && ctx.base === ctx.outputBase
+}
+
 /**
  * The `$ref` to write in place of a schema `$ref` written in the current
  * resource, or `undefined` when its target dangles and must be inlined with
@@ -407,7 +413,7 @@ export function inlineSchema(ref: string, ctx: Context, convert: Convert): unkno
  * rebased onto the root, even when that leaves it dangling as in the source.
  */
 export function keepSchemaRef(ref: string, ctx: Context): string | undefined {
-  if (ctx.base !== ROOT && ctx.base === ctx.outputBase) {
+  if (resolvesAsWritten(ctx)) {
     return ref
   }
   const rebased = rebase(ref, ctx.base)
@@ -436,8 +442,17 @@ function isGone(ref: string, ctx: Context): boolean {
   return ctx.isRemovedPart(ref) || ctx.dangles(ref)
 }
 
+/**
+ * Converts a discriminator `mapping` value. A schema name stays as it is. A
+ * reference resolves like a schema `$ref`, but is dropped rather than inlined
+ * where its target is removed.
+ */
 export function convertMappingRef(value: unknown, ctx: Context): unknown {
-  return typeof value === 'string' && isGone(value, ctx) ? DROP : clone(value)
+  if (typeof value !== 'string' || resolvesAsWritten(ctx)) {
+    return clone(value)
+  }
+  const rebased = rebase(value, ctx.base)
+  return isGone(rebased, ctx) ? DROP : rebased
 }
 
 export function hasDanglingOperationRef(link: unknown, ctx: Context): boolean {

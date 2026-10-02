@@ -128,19 +128,22 @@ it('shares one identifier-free copy among the places after the first', () => {
   expect(dig(schemas, 'C')).toBe(dig(schemas, 'B'))
 })
 
-it('leaves a $ref inside a schema with an $id as written, rather than inlining a removed document target of the same name', () => {
+it('leaves a $ref or mapping value inside a schema with an $id as written, rather than resolving it to a removed document target of the same name', () => {
   const own = {
     $id: 'https://example.com/own',
     components: { mediaTypes: { M: { schema: { type: 'number' } } } },
+    discriminator: { mapping: { m: '#/components/mediaTypes/M/schema' }, propertyName: 'kind' },
     properties: { y: { $ref: '#/components/mediaTypes/M/schema' } },
   }
   expect(convertComponent('schemas', own, { mediaTypes: { M: { schema: { type: 'string' } } } })).toEqual(own)
 })
 
+// A `mapping` value cannot be inlined, so the copies drop it instead.
 it('inlines the targets of relative $refs in the copies that lose the $id, cutting recursion into {}', () => {
   const tree = {
     $defs: { Name: { type: 'string' } },
     $id: 'https://example.com/tree',
+    discriminator: { mapping: { tree: '#' }, propertyName: 'kind' },
     properties: { kids: { items: { $ref: '#' }, type: 'array' }, name: { $ref: '#/$defs/Name' } },
     type: 'object',
   }
@@ -154,6 +157,7 @@ it('inlines the targets of relative $refs in the copies that lose the $id, cutti
     A: tree,
     B: {
       $defs: { Name: { type: 'string' } },
+      discriminator: { mapping: {}, propertyName: 'kind' },
       properties: { kids: { items: {}, type: 'array' }, name: { type: 'string' } },
       type: 'object',
     },

@@ -160,6 +160,29 @@ describe('references inside a schema with an $id', () => {
     })).toEqual({ properties: { x: { properties: { y: { $ref: '#/properties/x/$defs/A' } } } } })
   })
 
+  // A `mapping` value that is a URI reference resolves against the nearest
+  // `$id` too: https://spec.openapis.org/oas/v3.1.2.html#relative-references-in-api-description-uris
+  // It cannot be inlined, so one whose target is removed is dropped.
+  it('rebases discriminator mapping pointers onto the root, dropping those whose target is removed', () => {
+    expect(convertSchema({
+      properties: {
+        x: {
+          $defs: { Dog: { type: 'object' } },
+          $id: 'https://example.com/x',
+          discriminator: { mapping: { cat: '#/properties/cat', dog: '#/$defs/Dog', fish: 'Fish' }, propertyName: 'kind' },
+          properties: { cat: { type: 'object' } },
+        },
+      },
+    })).toEqual({
+      properties: {
+        x: {
+          discriminator: { mapping: { cat: '#/properties/x/properties/cat', fish: 'Fish' }, propertyName: 'kind' },
+          properties: { cat: { type: 'object' } },
+        },
+      },
+    })
+  })
+
   // Only JSON pointers can be rebased. `$anchor` and `$id` are removed, so
   // references through them are left as written and dangle.
   it('leaves references to an $anchor or a URI as written', () => {
