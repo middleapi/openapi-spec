@@ -239,8 +239,8 @@ function takeArrayFields(out: Record<string, unknown>): Record<string, unknown> 
   const fields: Record<string, unknown> = { items: out.items ?? {} }
   delete out.items
   if (isRecord(out.xml) && Object.hasOwn(out.xml, 'wrapped')) {
-    const { wrapped, ...xml } = out.xml
-    fields.xml = { ...xml, wrapped }
+    const { wrapped: _, ...xml } = out.xml
+    fields.xml = out.xml
     out.xml = xml
   }
   return fields
@@ -267,7 +267,7 @@ function convertType(out: Record<string, unknown>, type: unknown): boolean {
     }
   }
   else if (rest.length > 1) {
-    const arrayFields = rest.includes('array') ? takeArrayFields(out) : {}
+    const arrayFields = rest.includes('array') && takeArrayFields(out)
     addAnyOf(out, rest.map(item => ({
       type: item,
       ...(item === 'array' && arrayFields),

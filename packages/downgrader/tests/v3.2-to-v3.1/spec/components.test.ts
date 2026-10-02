@@ -1,3 +1,4 @@
+import { dig } from '../../helpers'
 import { convertComponent, convertSpec } from './helpers'
 
 describe('component maps', () => {
@@ -35,6 +36,17 @@ describe('component maps', () => {
       discriminator: { propertyName: 'kind' },
       xml: { attribute: true },
     })
+  })
+
+  it('wraps a components.schemas entry that references an array', () => {
+    expect(dig(convertSpec({
+      components: {
+        schemas: {
+          List: { type: 'array' },
+          Wrapped: { $ref: '#/components/schemas/List', xml: { name: 'w', nodeType: 'element' } },
+        },
+      },
+    }), 'components', 'schemas', 'Wrapped')).toEqual({ $ref: '#/components/schemas/List', xml: { name: 'w', wrapped: true } })
   })
 
   it('clones unknown component keys and passes a non-object components value through', () => {
