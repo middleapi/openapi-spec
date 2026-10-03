@@ -356,4 +356,13 @@ describe('downgradeSchemaV32ToV31', () => {
     expect(downgradeSchemaV32ToV31(schema)).toEqual(schema)
     expect(downgradeSchemaV32ToV31(true)).toBe(true)
   })
+
+  it('keeps a cycle as a cycle, in converted and copied values alike', () => {
+    const schema: Record<string, any> = { type: 'object', properties: {} }
+    schema.properties.self = schema
+    schema.default = schema
+    const out = downgradeSchemaV32ToV31(schema) as Record<string, any>
+    expect(out.properties.self).toBe(out)
+    expect(out.default.default).toBe(out.default)
+  })
 })

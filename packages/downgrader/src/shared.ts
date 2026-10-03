@@ -45,17 +45,38 @@ export function defineFields(table: Readonly<Record<string, Field | typeof DROP>
 }
 
 /**
- * Deep copies plain objects and arrays. Keys holding `undefined` are left
- * out, as JSON would, and other values, such as a `Date`, are kept as they are.
+ * Deep copies plain objects and arrays, keeping any cycle among them. Keys
+ * holding `undefined` are left out, as JSON would, and other values, such as
+ * a `Date`, are kept as they are.
  */
 export function clone(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(clone)
-  }
-  if (!isRecord(value)) {
+  return Array.isArray(value) || isRecord(value) ? copy(value, new Map()) : value
+}
+
+function copy(value: unknown, copies: Map<object, unknown>): unknown {
+  if (!(Array.isArray(value) || isRecord(value))) {
     return value
   }
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined).map(([key, item]) => [key, clone(item)]))
+  const known = copies.get(value)
+  if (known !== undefined) {
+    return known
+  }
+  if (Array.isArray(value)) {
+    const out: unknown[] = []
+    copies.set(value, out)
+    for (const item of value) {
+      out.push(copy(item, copies))
+    }
+    return out
+  }
+  const out: Record<string, unknown> = {}
+  copies.set(value, out)
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== undefined) {
+      setOwn(out, key, copy(item, copies))
+    }
+  }
+  return out
 }
 
 /**

@@ -361,4 +361,12 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(out.properties.a).toBe(out.properties.b)
     expect(out.properties.self).toBe(out)
   })
+
+  it('keeps a cycle in a copied value as a cycle', () => {
+    const example: Record<string, any> = { name: 'loop' }
+    example.self = example
+    const out = downgradeSchemaV31ToV30({ type: 'object', example }) as Record<string, any>
+    expect(out.example).not.toBe(example)
+    expect(out.example.self).toBe(out.example)
+  })
 })
