@@ -39,14 +39,29 @@ export const ORDER_SCHEMA: OpenAPIV3_2.SchemaObject = {
       type: 'array',
       items: {
         oneOf: [
-          { type: 'object', required: ['kind', 'percent'], properties: { kind: { const: 'percent' }, percent: { type: 'number', exclusiveMinimum: 0, maximum: 100 } } },
-          { type: 'object', required: ['kind', 'amount'], properties: { kind: { const: 'fixed' }, amount: { $ref: '#/$defs/Money' } } },
+          {
+            type: 'object',
+            required: ['kind', 'percent'],
+            properties: {
+              kind: { const: 'percent' },
+              percent: { type: 'number', exclusiveMinimum: 0, maximum: 100 },
+            },
+          },
+          {
+            type: 'object',
+            required: ['kind', 'amount'],
+            properties: { kind: { const: 'fixed' }, amount: { $ref: '#/$defs/Money' } },
+          },
         ],
         discriminator: { propertyName: 'kind' },
       },
     },
     total: { $ref: '#/$defs/Money' },
-    location: { type: 'array', prefixItems: [{ type: 'number' }, { type: 'number' }], items: false },
+    location: {
+      type: 'array',
+      prefixItems: [{ type: 'number' }, { type: 'number' }],
+      items: false,
+    },
     giftWrap: { type: 'boolean' },
     giftMessage: { type: ['string', 'null'], maxLength: 500 },
     invoice: { type: 'string', contentEncoding: 'base64', contentMediaType: 'application/pdf' },
@@ -55,7 +70,10 @@ export const ORDER_SCHEMA: OpenAPIV3_2.SchemaObject = {
   },
   dependentRequired: { giftMessage: ['giftWrap'] },
   if: { properties: { status: { const: 'shipped' } } },
-  then: { required: ['shippedAt'], properties: { shippedAt: { type: 'string', format: 'date-time' } } },
+  then: {
+    required: ['shippedAt'],
+    properties: { shippedAt: { type: 'string', format: 'date-time' } },
+  },
   else: { properties: { shippedAt: { type: 'null' } } },
   $defs: {
     Money: {

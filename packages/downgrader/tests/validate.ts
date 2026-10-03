@@ -19,8 +19,7 @@ function resolvePointer(root: unknown, ref: string): unknown {
   let pointer: string
   try {
     pointer = decodeURIComponent(ref.slice(1))
-  }
-  catch {
+  } catch {
     return undefined
   }
   if (pointer === '') {
@@ -40,10 +39,13 @@ function resolvePointer(root: unknown, ref: string): unknown {
 function collectLocalRefs(value: unknown, refs: Set<string>): Set<string> {
   if (typeof value === 'object' && value !== null) {
     for (const [key, item] of Object.entries(value)) {
-      if ((key === '$ref' || key === 'operationRef') && typeof item === 'string' && item.startsWith('#')) {
+      if (
+        (key === '$ref' || key === 'operationRef') &&
+        typeof item === 'string' &&
+        item.startsWith('#')
+      ) {
         refs.add(item)
-      }
-      else {
+      } else {
         collectLocalRefs(item, refs)
       }
     }

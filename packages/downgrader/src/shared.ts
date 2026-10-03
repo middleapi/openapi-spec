@@ -18,9 +18,22 @@ export type Field = (value: unknown, ctx: Context, parent: Record<string, unknow
 
 export type Fields = ReadonlyMap<string, Field | typeof DROP>
 
-export type Finish = (out: Record<string, unknown>, source: Record<string, unknown>, ctx: Context) => void
+export type Finish = (
+  out: Record<string, unknown>,
+  source: Record<string, unknown>,
+  ctx: Context,
+) => void
 
-export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
+export const HTTP_METHODS = [
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+] as const
 
 /**
  * Whether `value` is an object JSON would see as one: its prototype is null,
@@ -34,15 +47,22 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
     return false
   }
   const proto: unknown = Object.getPrototypeOf(value)
-  return proto === null || (Object.getPrototypeOf(proto) === null && Object.keys(proto as object).length === 0)
+  return (
+    proto === null ||
+    (Object.getPrototypeOf(proto) === null && Object.keys(proto as object).length === 0)
+  )
 }
 
 // Assigning `__proto__` would set the prototype instead of adding a key.
 function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
   if (key === '__proto__') {
-    Object.defineProperty(target, key, { configurable: true, enumerable: true, value, writable: true })
-  }
-  else {
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    })
+  } else {
     target[key] = value
   }
 }
@@ -91,7 +111,12 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
  * through its converter or is dropped, and any other key is copied. `finish`
  * then edits the output in place.
  */
-export function convertObject(value: unknown, ctx: Context, fields: Fields, finish?: Finish): unknown {
+export function convertObject(
+  value: unknown,
+  ctx: Context,
+  fields: Fields,
+  finish?: Finish,
+): unknown {
   if (!isRecord(value)) {
     return clone(value)
   }
@@ -111,7 +136,8 @@ export function convertObject(value: unknown, ctx: Context, fields: Fields, fini
       continue
     }
     const field = fields.get(key)
-    const converted = field === undefined ? clone(item) : field === DROP ? DROP : field(item, ctx, value)
+    const converted =
+      field === undefined ? clone(item) : field === DROP ? DROP : field(item, ctx, value)
     if (converted !== DROP) {
       setOwn(out, key, converted)
     }
@@ -138,7 +164,10 @@ export function map(convert: Convert, isEntry: (key: string) => boolean = () => 
 }
 
 export function list(convert: Convert): Convert {
-  return (value, ctx) => Array.isArray(value) ? value.map(item => convert(item, ctx)).filter(item => item !== DROP) : clone(value)
+  return (value, ctx) =>
+    Array.isArray(value)
+      ? value.map((item) => convert(item, ctx)).filter((item) => item !== DROP)
+      : clone(value)
 }
 
 export function isPath(key: string): boolean {
@@ -164,8 +193,7 @@ function find(root: unknown, ref: string): unknown {
   let pointer: string
   try {
     pointer = decodeURIComponent(ref.slice(1))
-  }
-  catch {
+  } catch {
     return undefined
   }
   if (pointer !== '' && !pointer.startsWith('/')) {

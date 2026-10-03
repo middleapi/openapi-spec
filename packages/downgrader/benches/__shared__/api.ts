@@ -83,14 +83,20 @@ function sharedSchemas(): Record<string, OpenAPIV3_2.SchemaObject> {
   }
 }
 
-function resourceSchemas(name: string, parent: string | undefined): Record<string, OpenAPIV3_2.SchemaObject> {
+function resourceSchemas(
+  name: string,
+  parent: string | undefined,
+): Record<string, OpenAPIV3_2.SchemaObject> {
   const fields = (): Record<string, OpenAPIV3_2.SchemaObject> => ({
     name: { type: 'string', minLength: 1, maxLength: 120 },
     description: { type: ['string', 'null'], maxLength: 2000 },
     price: { type: 'number', exclusiveMinimum: 0, examples: [9.99] },
     quantity: { type: 'integer', minimum: 0, default: 0 },
     tags: { type: 'array', items: { type: 'string' }, uniqueItems: true, maxItems: 20 },
-    metadata: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean', 'null'] } },
+    metadata: {
+      type: 'object',
+      additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
+    },
     dimensions: schemaRef(`${name}/$defs/Dimensions`),
   })
   return {
@@ -104,7 +110,10 @@ function resourceSchemas(name: string, parent: string | undefined): Record<strin
         status: schemaRef('Status'),
         ...fields(),
         owner: schemaRef('User'),
-        parent: parent === undefined ? { type: 'null' } : { anyOf: [schemaRef(parent), { type: 'null' }] },
+        parent:
+          parent === undefined
+            ? { type: 'null' }
+            : { anyOf: [schemaRef(parent), { type: 'null' }] },
         createdAt: { type: 'string', format: 'date-time', readOnly: true },
         updatedAt: { type: ['string', 'null'], format: 'date-time', readOnly: true },
       },
@@ -138,7 +147,9 @@ function resourceSchemas(name: string, parent: string | undefined): Record<strin
 }
 
 function build(resources: number, v32: boolean): Document {
-  const tags: OpenAPIV3_2.TagObject[] = v32 ? [{ name: 'resources', summary: 'Resources', kind: 'nav' }] : []
+  const tags: OpenAPIV3_2.TagObject[] = v32
+    ? [{ name: 'resources', summary: 'Resources', kind: 'nav' }]
+    : []
   const paths: OpenAPIV3_2.PathsObject = {}
   const webhooks: Record<string, OpenAPIV3_2.PathItemObject> = {}
   const schemas = sharedSchemas()
@@ -149,23 +160,44 @@ function build(resources: number, v32: boolean): Document {
     const name = `Resource${index}`
     const path = `/resources-${index}` as const
     const tag = `resource-${index}`
-    const success = (status: string, schema: OpenAPIV3_2.SchemaObject): OpenAPIV3_2.ResponsesObject => ({
-      [status]: { description: `The ${name}.`, ...(v32 && { summary: name }), content: json(schema) },
+    const success = (
+      status: string,
+      schema: OpenAPIV3_2.SchemaObject,
+    ): OpenAPIV3_2.ResponsesObject => ({
+      [status]: {
+        description: `The ${name}.`,
+        ...(v32 && { summary: name }),
+        content: json(schema),
+      },
       default: errorResponse(v32),
     })
 
-    tags.push({ name: tag, description: `Operations on ${name}.`, ...(v32 && { summary: name, parent: 'resources', kind: 'nav' }) })
+    tags.push({
+      name: tag,
+      description: `Operations on ${name}.`,
+      ...(v32 && { summary: name, parent: 'resources', kind: 'nav' }),
+    })
     Object.assign(schemas, resourceSchemas(name, index === 0 ? undefined : `Resource${index - 1}`))
     examples[name] = {
       summary: `A sample ${name}.`,
-      [v32 ? 'dataValue' : 'value']: { id: '3fa85f64-5717-4562-b3fc-2c963f66afa6', kind: name, name: 'Sample', status: 'active', createdAt: '2026-01-01T00:00:00Z' },
+      [v32 ? 'dataValue' : 'value']: {
+        id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        kind: name,
+        name: 'Sample',
+        status: 'active',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
     }
 
     paths[path] = {
       get: {
         operationId: `list${name}`,
         tags: [tag],
-        parameters: [ref('#/components/parameters/Cursor'), ref('#/components/parameters/Limit'), { name: 'status', in: 'query', schema: schemaRef('Status') }],
+        parameters: [
+          ref('#/components/parameters/Cursor'),
+          ref('#/components/parameters/Limit'),
+          { name: 'status', in: 'query', schema: schemaRef('Status') },
+        ],
         responses: success('200', schemaRef(`${name}Page`)),
       },
       post: {
@@ -176,7 +208,10 @@ function build(resources: number, v32: boolean): Document {
         callbacks: {
           created: {
             '{$request.header.X-Callback-Url}': {
-              post: { requestBody: { content: json(schemaRef(name)) }, responses: { 204: { description: 'Received.' } } },
+              post: {
+                requestBody: { content: json(schemaRef(name)) },
+                responses: { 204: { description: 'Received.' } },
+              },
             },
           },
         },
@@ -185,7 +220,12 @@ function build(resources: number, v32: boolean): Document {
         query: {
           operationId: `search${name}`,
           tags: [tag],
-          requestBody: { content: json({ type: 'object', properties: { text: { type: 'string' }, status: schemaRef('Status') } }) },
+          requestBody: {
+            content: json({
+              type: 'object',
+              properties: { text: { type: 'string' }, status: schemaRef('Status') },
+            }),
+          },
           responses: success('200', schemaRef(`${name}Page`)),
         },
       }),
@@ -219,7 +259,10 @@ function build(resources: number, v32: boolean): Document {
           operationId: `stream${name}`,
           tags: [tag],
           responses: {
-            200: { description: `A stream of ${name} changes.`, content: { 'application/jsonl': { itemSchema: schemaRef(name) } } },
+            200: {
+              description: `A stream of ${name} changes.`,
+              content: { 'application/jsonl': { itemSchema: schemaRef(name) } },
+            },
             default: errorResponse(v32),
           },
         },
@@ -232,7 +275,15 @@ function build(resources: number, v32: boolean): Document {
         operationId: `get${name}`,
         tags: [tag],
         responses: {
-          200: { description: `The ${name}.`, content: { 'application/json': { schema: schemaRef(name), examples: { sample: ref(`#/components/examples/${name}`) } } } },
+          200: {
+            description: `The ${name}.`,
+            content: {
+              'application/json': {
+                schema: schemaRef(name),
+                examples: { sample: ref(`#/components/examples/${name}`) },
+              },
+            },
+          },
           404: ref('#/components/responses/NotFound'),
           default: errorResponse(v32),
         },
@@ -240,7 +291,9 @@ function build(resources: number, v32: boolean): Document {
       patch: {
         operationId: `update${name}`,
         tags: [tag],
-        requestBody: { content: { 'application/merge-patch+json': { schema: schemaRef(`${name}Input`) } } },
+        requestBody: {
+          content: { 'application/merge-patch+json': { schema: schemaRef(`${name}Input`) } },
+        },
         responses: success('200', schemaRef(name)),
       },
       delete: {
@@ -266,9 +319,15 @@ function build(resources: number, v32: boolean): Document {
       version: '1.0.0',
       license: { name: 'MIT', identifier: 'MIT' },
     },
-    jsonSchemaDialect: v32 ? 'https://spec.openapis.org/oas/3.2/dialect/2025-09-17' : 'https://spec.openapis.org/oas/3.1/dialect/base',
+    jsonSchemaDialect: v32
+      ? 'https://spec.openapis.org/oas/3.2/dialect/2025-09-17'
+      : 'https://spec.openapis.org/oas/3.1/dialect/base',
     servers: [
-      { url: 'https://api.example.com/v1', description: 'Production', ...(v32 && { name: 'production' }) },
+      {
+        url: 'https://api.example.com/v1',
+        description: 'Production',
+        ...(v32 && { name: 'production' }),
+      },
       {
         url: 'https://{region}.api.example.com/v1',
         description: 'Regional',
@@ -285,13 +344,31 @@ function build(resources: number, v32: boolean): Document {
       parameters: {
         Id: { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         Cursor: { name: 'cursor', in: 'query', schema: { type: ['string', 'null'] } },
-        Limit: { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        Limit: {
+          name: 'limit',
+          in: 'query',
+          schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+        },
       },
       responses: {
-        NotFound: { description: 'Not found.', content: { 'application/problem+json': { schema: schemaRef('Error') } } },
+        NotFound: {
+          description: 'Not found.',
+          content: { 'application/problem+json': { schema: schemaRef('Error') } },
+        },
         ...(v32
-          ? { Problem: { summary: 'Problem', description: 'A problem.', content: { 'application/problem+json': ref('#/components/mediaTypes/Problem') } } }
-          : { Error: { description: 'A problem.', content: { 'application/problem+json': { schema: schemaRef('Error') } } } }),
+          ? {
+              Problem: {
+                summary: 'Problem',
+                description: 'A problem.',
+                content: { 'application/problem+json': ref('#/components/mediaTypes/Problem') },
+              },
+            }
+          : {
+              Error: {
+                description: 'A problem.',
+                content: { 'application/problem+json': { schema: schemaRef('Error') } },
+              },
+            }),
       },
       examples,
       pathItems,
@@ -317,7 +394,9 @@ function build(resources: number, v32: boolean): Document {
           },
         },
       },
-      ...(v32 && { mediaTypes: { Problem: { description: 'A problem.', schema: schemaRef('Error') } } }),
+      ...(v32 && {
+        mediaTypes: { Problem: { description: 'A problem.', schema: schemaRef('Error') } },
+      }),
     },
   }
 }

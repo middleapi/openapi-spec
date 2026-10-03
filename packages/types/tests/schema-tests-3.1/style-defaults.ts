@@ -22,18 +22,15 @@ export const doc: OpenAPIObject = {
                   'style, explode and allowReserved are not present, so contentType is used; no defaults expected as default contentType cannot be determined by the schema',
               },
               style_form: {
-                'x-comment':
-                  'expecting defaults: explode=true, allowReserved=false',
+                'x-comment': 'expecting defaults: explode=true, allowReserved=false',
                 'style': 'form',
               },
               style_spaceDelimited: {
-                'x-comment':
-                  'expecting defaults: explode=false, allowReserved=false',
+                'x-comment': 'expecting defaults: explode=false, allowReserved=false',
                 'style': 'spaceDelimited',
               },
               explode: {
-                'x-comment':
-                  'expecting defaults: style=form, allowReserved=false',
+                'x-comment': 'expecting defaults: style=form, allowReserved=false',
                 'explode': false,
               },
               allowReserved: {
@@ -64,8 +61,7 @@ export const doc: OpenAPIObject = {
         'schema': {},
       },
       path_matrix: {
-        'x-comment':
-          'expecting defaults: deprecated=false, explode=false, allowReserved=false',
+        'x-comment': 'expecting defaults: deprecated=false, explode=false, allowReserved=false',
         'name': 'path_matrix',
         'in': 'path',
         'required': true,
@@ -73,8 +69,7 @@ export const doc: OpenAPIObject = {
         'schema': {},
       },
       path_label: {
-        'x-comment':
-          'expecting defaults: deprecated=false, explode=false, allowReserved=false',
+        'x-comment': 'expecting defaults: deprecated=false, explode=false, allowReserved=false',
         'name': 'path_label',
         'in': 'path',
         'required': true,
@@ -82,8 +77,7 @@ export const doc: OpenAPIObject = {
         'schema': {},
       },
       query_media_type: {
-        'x-comment':
-          'expecting defaults: required=false, deprecated=false, allowEmptyValue=false',
+        'x-comment': 'expecting defaults: required=false, deprecated=false, allowEmptyValue=false',
         'name': 'query_media_type',
         'in': 'query',
         'content': {

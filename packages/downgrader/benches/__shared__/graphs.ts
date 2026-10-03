@@ -21,10 +21,17 @@ export function schemaDiamond(depth: number): OpenAPIV3_2.SchemaObject {
   return node
 }
 
-function diamondLevel(level: number, depth: number, pointer: (level: number) => string): OpenAPIV3_2.SchemaObject {
+function diamondLevel(
+  level: number,
+  depth: number,
+  pointer: (level: number) => string,
+): OpenAPIV3_2.SchemaObject {
   return level === depth
     ? { type: ['string', 'null'] }
-    : { type: 'object', properties: { left: { $ref: pointer(level + 1) }, right: { $ref: pointer(level + 1) } } }
+    : {
+        type: 'object',
+        properties: { left: { $ref: pointer(level + 1) }, right: { $ref: pointer(level + 1) } },
+      }
 }
 
 /**
@@ -33,12 +40,24 @@ function diamondLevel(level: number, depth: number, pointer: (level: number) => 
  * `$ref`s. Every level has to be inlined.
  */
 export function referenceDiamondV31(depth: number): OpenAPIV3_1.OpenAPIObject {
-  const pointer = (level: number): string => `#/webhooks/w${level}/post/requestBody/content/application~1json/schema`
+  const pointer = (level: number): string =>
+    `#/webhooks/w${level}/post/requestBody/content/application~1json/schema`
   const webhooks: Record<string, OpenAPIV3_1.PathItemObject> = {}
   for (let level = 0; level <= depth; level++) {
-    webhooks[`w${level}`] = { post: { requestBody: { content: { 'application/json': { schema: diamondLevel(level, depth, pointer) } } } } }
+    webhooks[`w${level}`] = {
+      post: {
+        requestBody: {
+          content: { 'application/json': { schema: diamondLevel(level, depth, pointer) } },
+        },
+      },
+    }
   }
-  return { openapi: '3.1.2', info: info(), components: { schemas: { Root: { $ref: pointer(0) } } }, webhooks }
+  return {
+    openapi: '3.1.2',
+    info: info(),
+    components: { schemas: { Root: { $ref: pointer(0) } } },
+    webhooks,
+  }
 }
 
 /**
@@ -51,7 +70,11 @@ export function referenceDiamondV32(depth: number): OpenAPIV3_2.OpenAPIObject {
   for (let level = 0; level <= depth; level++) {
     mediaTypes[`M${level}`] = { schema: diamondLevel(level, depth, pointer) }
   }
-  return { openapi: '3.2.0', info: info(), components: { mediaTypes, schemas: { Root: { $ref: pointer(0) } } } }
+  return {
+    openapi: '3.2.0',
+    info: info(),
+    components: { mediaTypes, schemas: { Root: { $ref: pointer(0) } } },
+  }
 }
 
 /**
@@ -59,24 +82,40 @@ export function referenceDiamondV32(depth: number): OpenAPIV3_2.OpenAPIObject {
  * `base` and callbacks to every `h<j>`, itself included, so about k! paths
  * run through them. `pointer` says where they live.
  */
-function cyclicCallbackGraph(k: number, pointer: (name: string) => string): Record<string, OpenAPIV3_2.PathItemObject> {
-  const items: Record<string, OpenAPIV3_2.PathItemObject> = { base: { get: { responses: { 200: { description: 'ok' } } } } }
+function cyclicCallbackGraph(
+  k: number,
+  pointer: (name: string) => string,
+): Record<string, OpenAPIV3_2.PathItemObject> {
+  const items: Record<string, OpenAPIV3_2.PathItemObject> = {
+    base: { get: { responses: { 200: { description: 'ok' } } } },
+  }
   for (let i = 0; i < k; i++) {
-    const callbacks = Object.fromEntries(Array.from({ length: k }, (_, j) => [`c${j}`, { '{$request.body#/url}': { $ref: pointer(`h${j}`) } }]))
-    items[`h${i}`] = { $ref: pointer('base'), post: { callbacks, responses: { 200: { description: 'ok' } } } }
+    const callbacks = Object.fromEntries(
+      Array.from({ length: k }, (_, j) => [
+        `c${j}`,
+        { '{$request.body#/url}': { $ref: pointer(`h${j}`) } },
+      ]),
+    )
+    items[`h${i}`] = {
+      $ref: pointer('base'),
+      post: { callbacks, responses: { 200: { description: 'ok' } } },
+    }
   }
   return items
 }
 
 /** A cyclic callback graph in the webhooks, which 3.0 lacks, entered from a path. */
 export function callbackGraphV31(k: number): OpenAPIV3_1.OpenAPIObject {
-  const webhooks = cyclicCallbackGraph(k, name => `#/webhooks/${name}`) as Record<string, OpenAPIV3_1.PathItemObject>
+  const webhooks = cyclicCallbackGraph(k, (name) => `#/webhooks/${name}`) as Record<
+    string,
+    OpenAPIV3_1.PathItemObject
+  >
   return { openapi: '3.1.2', info: info(), paths: { '/a': { $ref: '#/webhooks/h0' } }, webhooks }
 }
 
 /** A cyclic callback graph in a `query` operation, which 3.1 lacks, entered from a path. */
 export function callbackGraphV32(k: number): OpenAPIV3_2.OpenAPIObject {
-  const graph = cyclicCallbackGraph(k, name => `#/paths/~1q/query/callbacks/cb/${name}`)
+  const graph = cyclicCallbackGraph(k, (name) => `#/paths/~1q/query/callbacks/cb/${name}`)
   return {
     openapi: '3.2.0',
     info: info(),
@@ -93,7 +132,9 @@ export function callbackGraphV32(k: number): OpenAPIV3_2.OpenAPIObject {
  */
 export function pathItemChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
   const pointer = (index: number): string => `#/components/pathItems/P${index}`
-  const pathItems: Record<string, OpenAPIV3_1.PathItemObject> = { [`P${length}`]: { get: { responses: { 200: { description: 'ok' } } } } }
+  const pathItems: Record<string, OpenAPIV3_1.PathItemObject> = {
+    [`P${length}`]: { get: { responses: { 200: { description: 'ok' } } } },
+  }
   const paths: OpenAPIV3_1.PathsObject = {}
   for (let index = 0; index < length; index++) {
     pathItems[`P${index}`] = { $ref: pointer(index + 1) }

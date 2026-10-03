@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+
 import ts from 'typescript'
 
 const testFile = fileURLToPath(new URL('./namespace.test-d.ts', import.meta.url))
@@ -13,7 +14,7 @@ const program = ts.createProgram([testFile], {
 const checker = program.getTypeChecker()
 const source = program.getSourceFile(testFile)!
 
-const namespaces = new Map<string, { exported: string[], referenced: Set<string> }>()
+const namespaces = new Map<string, { exported: string[]; referenced: Set<string> }>()
 const specifiers: string[] = []
 
 for (const statement of source.statements) {
@@ -23,7 +24,10 @@ for (const statement of source.statements) {
     const module = checker.getSymbolAtLocation(specifier)!
     specifiers.push(specifier.text)
     namespaces.set(bindings.name.text, {
-      exported: checker.getExportsOfModule(module).map(symbol => symbol.name).sort(),
+      exported: checker
+        .getExportsOfModule(module)
+        .map((symbol) => symbol.name)
+        .sort(),
       referenced: new Set(),
     })
   }
@@ -37,8 +41,8 @@ source.forEachChild(function visit(node) {
 
 it('imports every version entry as a namespace', () => {
   const entries = Object.keys(pkg.exports)
-    .filter(entry => entry !== './package.json')
-    .map(entry => `${pkg.name}/${entry.slice(2)}`)
+    .filter((entry) => entry !== './package.json')
+    .map((entry) => `${pkg.name}/${entry.slice(2)}`)
 
   expect(specifiers.sort()).toEqual(entries.sort())
 })

@@ -43,8 +43,7 @@ export const doc: OpenAPIObject = {
             examples: {
               xmlExample: {
                 summary: 'This is an example in XML',
-                externalValue:
-                  'https://example.org/examples/address-example.xml',
+                externalValue: 'https://example.org/examples/address-example.xml',
               },
             },
           },

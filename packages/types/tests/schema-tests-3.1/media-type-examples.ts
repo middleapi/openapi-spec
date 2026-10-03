@@ -38,7 +38,7 @@ export const doc: OpenAPIObject = {
                   },
                 },
                 dog: {
-                  summary: 'An example of a dog with a cat\'s name',
+                  summary: "An example of a dog with a cat's name",
                   value: {
                     name: 'Puma',
                     petType: 'Dog',
@@ -141,8 +141,7 @@ export const doc: OpenAPIObject = {
                   contentType: 'image/png, image/jpeg',
                   headers: {
                     'X-Rate-Limit-Limit': {
-                      description:
-                        'The number of allowed requests in the current period',
+                      description: 'The number of allowed requests in the current period',
                       schema: {
                         type: 'integer',
                       },

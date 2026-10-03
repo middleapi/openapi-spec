@@ -13,8 +13,7 @@ export const doc: OpenAPIObject = {
       identifier: 'Apache-2.0',
     },
   },
-  jsonSchemaDialect:
-    'https://spec.openapis.org/oas/3.2/dialect/WORK-IN-PROGRESS',
+  jsonSchemaDialect: 'https://spec.openapis.org/oas/3.2/dialect/WORK-IN-PROGRESS',
   components: {
     schemas: {
       WithDollarSchema: {

@@ -44,7 +44,8 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
           id: {
             type: 'string',
             format: 'uuid',
-            pattern: '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$',
+            pattern:
+              '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$',
           },
           name: {
             type: 'string',
@@ -52,17 +53,12 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
             description: 'The planet name',
           },
           description: {
-            type: [
-              'string',
-              'null',
-            ],
+            type: ['string', 'null'],
           },
           mass: {
             type: 'number',
             exclusiveMinimum: 0,
-            examples: [
-              5.97e+24,
-            ],
+            examples: [5.97e24],
           },
           moons: {
             type: 'integer',
@@ -71,11 +67,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
           },
           kind: {
             type: 'string',
-            enum: [
-              'rocky',
-              'gas',
-              'ice',
-            ],
+            enum: ['rocky', 'gas', 'ice'],
           },
           discoveredAt: {
             'type': 'string',
@@ -130,11 +122,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
               type: 'string',
             },
             additionalProperties: {
-              type: [
-                'string',
-                'number',
-                'boolean',
-              ],
+              type: ['string', 'number', 'boolean'],
             },
           },
           population: {
@@ -172,11 +160,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
           },
           data: {},
         },
-        required: [
-          'defined',
-          'code',
-          'message',
-        ],
+        required: ['defined', 'code', 'message'],
       },
       NotFound: {
         title: 'NOT_FOUND',
@@ -198,18 +182,11 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                 type: 'string',
               },
             },
-            required: [
-              'id',
-            ],
+            required: ['id'],
             additionalProperties: false,
           },
         },
-        required: [
-          'defined',
-          'code',
-          'message',
-          'data',
-        ],
+        required: ['defined', 'code', 'message', 'data'],
       },
       Conflict: {
         title: 'CONFLICT',
@@ -226,11 +203,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
           },
           data: {},
         },
-        required: [
-          'defined',
-          'code',
-          'message',
-        ],
+        required: ['defined', 'code', 'message'],
       },
       BadRequest: {
         title: 'BAD_REQUEST',
@@ -256,36 +229,23 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                     path: {
                       type: 'array',
                       items: {
-                        type: [
-                          'string',
-                          'number',
-                        ],
+                        type: ['string', 'number'],
                       },
                     },
                     message: {
                       type: 'string',
                     },
                   },
-                  required: [
-                    'path',
-                    'message',
-                  ],
+                  required: ['path', 'message'],
                   additionalProperties: false,
                 },
               },
             },
-            required: [
-              'issues',
-            ],
+            required: ['issues'],
             additionalProperties: false,
           },
         },
-        required: [
-          'defined',
-          'code',
-          'message',
-          'data',
-        ],
+        required: ['defined', 'code', 'message', 'data'],
       },
       Category: {
         type: 'object',
@@ -310,11 +270,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
             },
           },
         },
-        required: [
-          'name',
-          'parent',
-          'children',
-        ],
+        required: ['name', 'parent', 'children'],
         additionalProperties: false,
       },
     },
@@ -330,9 +286,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
       get: {
         operationId: 'planets.list',
         summary: 'List planets',
-        tags: [
-          'planets',
-        ],
+        tags: ['planets'],
         parameters: [
           {
             in: 'query',
@@ -363,11 +317,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
               properties: {
                 kind: {
                   type: 'string',
-                  enum: [
-                    'rocky',
-                    'gas',
-                    'ice',
-                  ],
+                  enum: ['rocky', 'gas', 'ice'],
                 },
                 name: {
                   type: 'string',
@@ -409,16 +359,10 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                       },
                     },
                     next: {
-                      type: [
-                        'string',
-                        'null',
-                      ],
+                      type: ['string', 'null'],
                     },
                   },
-                  required: [
-                    'items',
-                    'next',
-                  ],
+                  required: ['items', 'next'],
                   additionalProperties: false,
                 },
               },
@@ -429,9 +373,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
       post: {
         operationId: 'planets.create',
         deprecated: true,
-        tags: [
-          'planets',
-        ],
+        tags: ['planets'],
         requestBody: {
           required: true,
           content: {
@@ -445,17 +387,12 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                     description: 'The planet name',
                   },
                   description: {
-                    type: [
-                      'string',
-                      'null',
-                    ],
+                    type: ['string', 'null'],
                   },
                   mass: {
                     type: 'number',
                     exclusiveMinimum: 0,
-                    examples: [
-                      5.97e+24,
-                    ],
+                    examples: [5.97e24],
                   },
                   moons: {
                     type: 'integer',
@@ -464,11 +401,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                   },
                   kind: {
                     type: 'string',
-                    enum: [
-                      'rocky',
-                      'gas',
-                      'ice',
-                    ],
+                    enum: ['rocky', 'gas', 'ice'],
                   },
                   discoveredAt: {
                     'type': 'string',
@@ -523,11 +456,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                       type: 'string',
                     },
                     additionalProperties: {
-                      type: [
-                        'string',
-                        'number',
-                        'boolean',
-                      ],
+                      type: ['string', 'number', 'boolean'],
                     },
                   },
                   population: {
@@ -602,9 +531,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
     '/planets/{id}': {
       get: {
         operationId: 'planets.find',
-        tags: [
-          'planets',
-        ],
+        tags: ['planets'],
         parameters: [
           {
             in: 'path',
@@ -704,7 +631,8 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                   id: {
                     type: 'string',
                     format: 'uuid',
-                    pattern: '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$',
+                    pattern:
+                      '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$',
                   },
                   name: {
                     type: 'string',
@@ -712,17 +640,12 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                     description: 'The planet name',
                   },
                   description: {
-                    type: [
-                      'string',
-                      'null',
-                    ],
+                    type: ['string', 'null'],
                   },
                   mass: {
                     type: 'number',
                     exclusiveMinimum: 0,
-                    examples: [
-                      5.97e+24,
-                    ],
+                    examples: [5.97e24],
                   },
                   moons: {
                     type: 'integer',
@@ -731,11 +654,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                   },
                   kind: {
                     type: 'string',
-                    enum: [
-                      'rocky',
-                      'gas',
-                      'ice',
-                    ],
+                    enum: ['rocky', 'gas', 'ice'],
                   },
                   discoveredAt: {
                     'type': 'string',
@@ -790,11 +709,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                       type: 'string',
                     },
                     additionalProperties: {
-                      type: [
-                        'string',
-                        'number',
-                        'boolean',
-                      ],
+                      type: ['string', 'number', 'boolean'],
                     },
                   },
                   population: {
@@ -837,9 +752,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                       type: 'string',
                     },
                   },
-                  required: [
-                    'jobId',
-                  ],
+                  required: ['jobId'],
                   additionalProperties: false,
                 },
               },
@@ -878,9 +791,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                     type: 'string',
                   },
                 },
-                required: [
-                  'image',
-                ],
+                required: ['image'],
               },
             },
           },
@@ -898,9 +809,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                       format: 'uri',
                     },
                   },
-                  required: [
-                    'url',
-                  ],
+                  required: ['url'],
                   additionalProperties: false,
                 },
               },
@@ -972,10 +881,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                               $ref: '#/components/schemas/Planet',
                             },
                           },
-                          required: [
-                            'type',
-                            'planet',
-                          ],
+                          required: ['type', 'planet'],
                           additionalProperties: false,
                         },
                         id: {
@@ -985,10 +891,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                           type: 'number',
                         },
                       },
-                      required: [
-                        'event',
-                        'data',
-                      ],
+                      required: ['event', 'data'],
                     },
                     {
                       type: 'object',
@@ -1003,9 +906,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                               type: 'number',
                             },
                           },
-                          required: [
-                            'total',
-                          ],
+                          required: ['total'],
                           additionalProperties: false,
                         },
                         id: {
@@ -1015,10 +916,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                           type: 'number',
                         },
                       },
-                      required: [
-                        'event',
-                        'data',
-                      ],
+                      required: ['event', 'data'],
                     },
                     {
                       type: 'object',
@@ -1034,9 +932,7 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                           type: 'number',
                         },
                       },
-                      required: [
-                        'event',
-                      ],
+                      required: ['event'],
                     },
                   ],
                 },

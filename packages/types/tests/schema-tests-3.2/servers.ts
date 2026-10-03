@@ -25,8 +25,7 @@ export const doc: OpenAPIObject = {
       variables: {
         username: {
           default: 'demo',
-          description:
-            'A user-specific subdomain. Use `demo` for a free sandbox environment.',
+          description: 'A user-specific subdomain. Use `demo` for a free sandbox environment.',
         },
         port: {
           enum: ['8443', '443'],

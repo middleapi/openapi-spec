@@ -475,14 +475,14 @@ export type ParameterLocation = 'cookie' | 'header' | 'path' | 'query'
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#style-values}
  */
-export type ParameterStyle
-  = | 'deepObject'
-    | 'form'
-    | 'label'
-    | 'matrix'
-    | 'pipeDelimited'
-    | 'simple'
-    | 'spaceDelimited'
+export type ParameterStyle =
+  | 'deepObject'
+  | 'form'
+  | 'label'
+  | 'matrix'
+  | 'pipeDelimited'
+  | 'simple'
+  | 'spaceDelimited'
 
 /**
  * The subset of `style` values that is defined for `query` parameters. The
@@ -491,11 +491,7 @@ export type ParameterStyle
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#style-values}
  */
-export type QueryParameterStyle
-  = | 'deepObject'
-    | 'form'
-    | 'pipeDelimited'
-    | 'spaceDelimited'
+export type QueryParameterStyle = 'deepObject' | 'form' | 'pipeDelimited' | 'spaceDelimited'
 
 /**
  * Describes a single operation parameter.
@@ -766,9 +762,7 @@ export interface ResponsesObject extends SpecificationExtensions {
    * explicit code definition takes precedence over the range definition for
    * that code.
    */
-  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]:
-    | ResponseObject
-    | ReferenceObject
+  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject
 }
 
 /**
@@ -1035,13 +1029,7 @@ export interface ReferenceObject {
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#data-types}
  */
-export type SchemaObjectType
-  = | 'array'
-    | 'boolean'
-    | 'integer'
-    | 'number'
-    | 'object'
-    | 'string'
+export type SchemaObjectType = 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'string'
 
 /**
  * The Schema Object allows the definition of input and output data types.
@@ -1491,11 +1479,11 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
  */
-export type SecuritySchemeObject
-  = | ApiKeySecuritySchemeObject
-    | HttpSecuritySchemeObject
-    | OAuth2SecuritySchemeObject
-    | OpenIdConnectSecuritySchemeObject
+export type SecuritySchemeObject =
+  | ApiKeySecuritySchemeObject
+  | HttpSecuritySchemeObject
+  | OAuth2SecuritySchemeObject
+  | OpenIdConnectSecuritySchemeObject
 
 /**
  * Allows configuration of the supported OAuth Flows.
@@ -1604,11 +1592,11 @@ export interface AuthorizationCodeOAuthFlowObject extends OAuthFlowObjectBase {
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#oauth-flow-object}
  */
-export type OAuthFlowObject
-  = | AuthorizationCodeOAuthFlowObject
-    | ClientCredentialsOAuthFlowObject
-    | ImplicitOAuthFlowObject
-    | PasswordOAuthFlowObject
+export type OAuthFlowObject =
+  | AuthorizationCodeOAuthFlowObject
+  | ClientCredentialsOAuthFlowObject
+  | ImplicitOAuthFlowObject
+  | PasswordOAuthFlowObject
 
 /**
  * Lists the required security schemes to execute this operation or the API as

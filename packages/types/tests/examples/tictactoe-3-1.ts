@@ -186,8 +186,7 @@ export const doc: OpenAPIObject = {
       mark: {
         type: 'string',
         enum: ['.', 'X', 'O'],
-        description:
-          'Possible values for a board square. `.` means empty square.',
+        description: 'Possible values for a board square. `.` means empty square.',
         example: '.',
       },
       board: {

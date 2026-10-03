@@ -16,8 +16,7 @@ export const doc: OpenAPIObject = {
   paths: {
     '/pets': {
       get: {
-        description:
-          'Returns all pets from the system that the user has access to',
+        description: 'Returns all pets from the system that the user has access to',
         responses: {
           200: {
             description: 'A list of pets.',

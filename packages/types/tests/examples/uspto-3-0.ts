@@ -57,16 +57,14 @@ export const doc: OpenAPIObject = {
                     {
                       apiKey: 'oa_citations',
                       apiVersionNumber: 'v1',
-                      apiUrl:
-                        'https://developer.uspto.gov/ds-api/oa_citations/v1/fields',
+                      apiUrl: 'https://developer.uspto.gov/ds-api/oa_citations/v1/fields',
                       apiDocumentationUrl:
                         'https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/oa_citations.json',
                     },
                     {
                       apiKey: 'cancer_moonshot',
                       apiVersionNumber: 'v1',
-                      apiUrl:
-                        'https://developer.uspto.gov/ds-api/cancer_moonshot/v1/fields',
+                      apiUrl: 'https://developer.uspto.gov/ds-api/cancer_moonshot/v1/fields',
                       apiDocumentationUrl:
                         'https://developer.uspto.gov/ds-api-docs/index.html?url=https://developer.uspto.gov/ds-api/swagger/docs/cancer_moonshot.json',
                     },
@@ -84,7 +82,7 @@ export const doc: OpenAPIObject = {
         summary:
           'Provides the general information about the API and the list of fields that can be used to query the dataset.',
         description:
-          'This GET API returns the list of all the searchable field names that are in the oa_citations. Please see the \'fields\' attribute which returns an array of field names. Each field or a combination of fields can be searched using the syntax options shown below.',
+          "This GET API returns the list of all the searchable field names that are in the oa_citations. Please see the 'fields' attribute which returns an array of field names. Each field or a combination of fields can be searched using the syntax options shown below.",
         operationId: 'list-searchable-fields',
         parameters: [
           {
@@ -137,10 +135,9 @@ export const doc: OpenAPIObject = {
     '/{dataset}/{version}/records': {
       post: {
         tags: ['search'],
-        summary:
-          'Provides search capability for the data set with the given search criteria.',
+        summary: 'Provides search capability for the data set with the given search criteria.',
         description:
-          'This API is based on Solr/Lucene Search. The data is indexed using SOLR. This GET API returns the list of all the searchable field names that are in the Solr Index. Please see the \'fields\' attribute which returns an array of field names. Each field or a combination of fields can be searched using the Solr/Lucene Syntax. Please refer https://lucene.apache.org/core/3_6_2/queryparsersyntax.html#Overview for the query syntax. List of field names that are searchable can be determined using above GET api.',
+          "This API is based on Solr/Lucene Search. The data is indexed using SOLR. This GET API returns the list of all the searchable field names that are in the Solr Index. Please see the 'fields' attribute which returns an array of field names. Each field or a combination of fields can be searched using the Solr/Lucene Syntax. Please refer https://lucene.apache.org/core/3_6_2/queryparsersyntax.html#Overview for the query syntax. List of field names that are searchable can be determined using above GET api.",
         operationId: 'perform-search',
         parameters: [
           {
@@ -156,8 +153,7 @@ export const doc: OpenAPIObject = {
           {
             name: 'dataset',
             in: 'path',
-            description:
-              'Name of the dataset. In this case, the default value is oa_citations',
+            description: 'Name of the dataset. In this case, the default value is oa_citations',
             required: true,
             schema: {
               type: 'string',
@@ -194,7 +190,7 @@ export const doc: OpenAPIObject = {
                 properties: {
                   criteria: {
                     description:
-                      'Uses Lucene Query Syntax in the format of propertyName:value, propertyName:[num1 TO num2] and date range format: propertyName:[yyyyMMdd TO yyyyMMdd]. In the response please see the \'docs\' element which has the list of record objects. Each record structure would consist of all the fields and their corresponding values.',
+                      "Uses Lucene Query Syntax in the format of propertyName:value, propertyName:[num1 TO num2] and date range format: propertyName:[yyyyMMdd TO yyyyMMdd]. In the response please see the 'docs' element which has the list of record objects. Each record structure would consist of all the fields and their corresponding values.",
                     type: 'string',
                     default: '*:*',
                   },
@@ -205,7 +201,7 @@ export const doc: OpenAPIObject = {
                   },
                   rows: {
                     description:
-                      'Specify number of rows to be returned. If you run the search with default values, in the response you will see \'numFound\' attribute which will tell the number of records available in the dataset.',
+                      "Specify number of rows to be returned. If you run the search with default values, in the response you will see 'numFound' attribute which will tell the number of records available in the dataset.",
                     type: 'integer',
                     default: 100,
                   },
@@ -242,7 +238,7 @@ export const doc: OpenAPIObject = {
                 apiUrl: {
                   type: 'string',
                   format: 'uri-reference',
-                  description: 'The URL describing the dataset\'s fields',
+                  description: "The URL describing the dataset's fields",
                 },
                 apiDocumentationUrl: {
                   type: 'string',
