@@ -23,7 +23,7 @@
 
 `@openapi-spec/downgrader` downgrades [OpenAPI Specification](https://spec.openapis.org/) documents and Schema Objects one minor version at a time, 3.2 to 3.1 and 3.1 to 3.0, for tools that only support an older version, such as code generators, gateways, and validators. It is how [oRPC](https://orpc.dev) generates 3.1 and 3.0 documents.
 
-It covers what API frameworks and schema libraries such as Zod, Valibot, and ArkType emit, and turns the official example documents into valid documents of the older version. To stay small and fast, it leaves rare constructs alone: each step below lists what it converts and its limitations.
+It handles the constructs real-world documents and schemas use, not every corner of the specification, which keeps it small and fast. Each step below lists what it converts and its limitations.
 
 Anything the older version lacks becomes an equivalent or, failing that, is removed. Removing a restriction only makes a schema accept more values, so outside the limitations listed, a downgraded schema accepts every value the original accepts.
 
