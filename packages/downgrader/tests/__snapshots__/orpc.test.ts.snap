@@ -1,0 +1,1051 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`matches the 3.0 snapshot 1`] = `
+{
+  "components": {
+    "schemas": {
+      "BadRequest": {
+        "properties": {
+          "code": {
+            "enum": [
+              "BAD_REQUEST",
+            ],
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "issues": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                    "path": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                          },
+                          {
+                            "type": "number",
+                          },
+                        ],
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "path",
+                    "message",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "issues",
+            ],
+            "type": "object",
+          },
+          "defined": {
+            "enum": [
+              true,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data",
+        ],
+        "title": "BAD_REQUEST",
+        "type": "object",
+      },
+      "Category": {
+        "additionalProperties": false,
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/Category",
+            },
+            "type": "array",
+          },
+          "name": {
+            "type": "string",
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Category",
+              },
+              {
+                "enum": [
+                  null,
+                ],
+              },
+            ],
+          },
+        },
+        "required": [
+          "name",
+          "parent",
+          "children",
+        ],
+        "type": "object",
+      },
+      "Conflict": {
+        "properties": {
+          "code": {
+            "enum": [
+              "CONFLICT",
+            ],
+          },
+          "data": {},
+          "defined": {
+            "enum": [
+              true,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+        ],
+        "title": "CONFLICT",
+        "type": "object",
+      },
+      "NotFound": {
+        "properties": {
+          "code": {
+            "enum": [
+              "NOT_FOUND",
+            ],
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+            ],
+            "type": "object",
+          },
+          "defined": {
+            "enum": [
+              true,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data",
+        ],
+        "title": "NOT_FOUND",
+        "type": "object",
+      },
+      "Planet": {
+        "additionalProperties": false,
+        "properties": {
+          "aliases": {
+            "items": {
+              "items": {
+                "type": "string",
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+            },
+            "type": "array",
+            "x-native-type": "map",
+          },
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                },
+                {
+                  "type": "number",
+                },
+                {
+                  "type": "boolean",
+                },
+              ],
+            },
+            "type": "object",
+          },
+          "description": {
+            "nullable": true,
+            "type": "string",
+          },
+          "discoveredAt": {
+            "format": "date-time",
+            "type": "string",
+            "x-native-type": "date",
+          },
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string",
+          },
+          "kind": {
+            "enum": [
+              "rocky",
+              "gas",
+              "ice",
+            ],
+            "type": "string",
+          },
+          "mass": {
+            "example": 5.97e+24,
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "type": "number",
+          },
+          "moons": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "name": {
+            "description": "The planet name",
+            "minLength": 1,
+            "type": "string",
+          },
+          "population": {
+            "pattern": "^-?[0-9]+$",
+            "type": "string",
+            "x-native-type": "bigint",
+          },
+          "position": {
+            "items": {
+              "type": "number",
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+            "uniqueItems": true,
+            "x-native-type": "set",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "mass",
+          "kind",
+          "discoveredAt",
+          "position",
+          "tags",
+          "aliases",
+          "attributes",
+        ],
+        "type": "object",
+      },
+      "UndefinedError": {
+        "properties": {
+          "code": {
+            "type": "string",
+          },
+          "data": {},
+          "defined": {
+            "enum": [
+              false,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+        ],
+        "title": "UndefinedError",
+        "type": "object",
+      },
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http",
+      },
+    },
+  },
+  "info": {
+    "description": "Planets and their categories",
+    "title": "Planets",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.4",
+  "paths": {
+    "/categories": {
+      "get": {
+        "operationId": "categories",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Category",
+                  },
+                  "type": "array",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
+    "/ping": {
+      "head": {
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK",
+          },
+        },
+      },
+    },
+    "/planets": {
+      "get": {
+        "operationId": "planets.list",
+        "parameters": [
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "explode": true,
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "rocky",
+                    "gas",
+                    "ice",
+                  ],
+                  "type": "string",
+                },
+                "name": {
+                  "type": "string",
+                },
+              },
+              "type": "object",
+            },
+            "style": "deepObject",
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "explode": true,
+            "in": "query",
+            "name": "ids",
+            "schema": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "style": "deepObject",
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/Planet",
+                      },
+                      "type": "array",
+                    },
+                    "next": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "items",
+                    "next",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+        "summary": "List planets",
+        "tags": [
+          "planets",
+        ],
+      },
+      "post": {
+        "deprecated": true,
+        "operationId": "planets.create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aliases": {
+                    "items": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array",
+                    },
+                    "type": "array",
+                    "x-native-type": "map",
+                  },
+                  "attributes": {
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                        },
+                        {
+                          "type": "number",
+                        },
+                        {
+                          "type": "boolean",
+                        },
+                      ],
+                    },
+                    "type": "object",
+                  },
+                  "description": {
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "discoveredAt": {
+                    "format": "date-time",
+                    "type": "string",
+                    "x-native-type": "date",
+                  },
+                  "kind": {
+                    "enum": [
+                      "rocky",
+                      "gas",
+                      "ice",
+                    ],
+                    "type": "string",
+                  },
+                  "mass": {
+                    "example": 5.97e+24,
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "type": "number",
+                  },
+                  "moons": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "name": {
+                    "description": "The planet name",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "population": {
+                    "pattern": "^-?[0-9]+$",
+                    "type": "string",
+                    "x-native-type": "bigint",
+                  },
+                  "position": {
+                    "items": {
+                      "type": "number",
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array",
+                  },
+                  "tags": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                    "uniqueItems": true,
+                    "x-native-type": "set",
+                  },
+                },
+                "required": [
+                  "name",
+                  "description",
+                  "mass",
+                  "kind",
+                  "discoveredAt",
+                  "position",
+                  "tags",
+                  "aliases",
+                  "attributes",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planet",
+                },
+              },
+            },
+            "description": "OK",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BadRequest",
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "400",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Conflict",
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "409",
+          },
+        },
+        "tags": [
+          "planets",
+        ],
+      },
+    },
+    "/planets/events": {
+      "get": {
+        "operationId": "planets.events",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "data": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "planet": {
+                              "$ref": "#/components/schemas/Planet",
+                            },
+                            "type": {
+                              "enum": [
+                                "created",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "type",
+                            "planet",
+                          ],
+                          "type": "object",
+                        },
+                        "event": {
+                          "enum": [
+                            "message",
+                          ],
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "retry": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "event",
+                        "data",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "total": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "total",
+                          ],
+                          "type": "object",
+                        },
+                        "event": {
+                          "enum": [
+                            "close",
+                          ],
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "retry": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "event",
+                        "data",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "properties": {
+                        "data": {},
+                        "event": {
+                          "enum": [
+                            "error",
+                          ],
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "retry": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "event",
+                      ],
+                      "type": "object",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
+    "/planets/{id}": {
+      "get": {
+        "operationId": "planets.find",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "explode": false,
+            "in": "query",
+            "name": "fields",
+            "schema": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Planet",
+                    },
+                    {
+                      "enum": [
+                        null,
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "OK",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound",
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "Planet not found",
+          },
+        },
+        "tags": [
+          "planets",
+        ],
+      },
+      "patch": {
+        "operationId": "planets.update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "dryRun",
+            "schema": {
+              "type": "boolean",
+            },
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aliases": {
+                    "items": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array",
+                    },
+                    "type": "array",
+                    "x-native-type": "map",
+                  },
+                  "attributes": {
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                        },
+                        {
+                          "type": "number",
+                        },
+                        {
+                          "type": "boolean",
+                        },
+                      ],
+                    },
+                    "type": "object",
+                  },
+                  "description": {
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "discoveredAt": {
+                    "format": "date-time",
+                    "type": "string",
+                    "x-native-type": "date",
+                  },
+                  "id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string",
+                  },
+                  "kind": {
+                    "enum": [
+                      "rocky",
+                      "gas",
+                      "ice",
+                    ],
+                    "type": "string",
+                  },
+                  "mass": {
+                    "example": 5.97e+24,
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "type": "number",
+                  },
+                  "moons": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "name": {
+                    "description": "The planet name",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "population": {
+                    "pattern": "^-?[0-9]+$",
+                    "type": "string",
+                    "x-native-type": "bigint",
+                  },
+                  "position": {
+                    "items": {
+                      "type": "number",
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array",
+                  },
+                  "tags": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                    "uniqueItems": true,
+                    "x-native-type": "set",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Planet",
+                },
+              },
+            },
+            "description": "OK",
+            "headers": {
+              "etag": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                },
+              },
+            },
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "jobId": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "jobId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Accepted",
+          },
+        },
+      },
+    },
+    "/planets/{id}/image": {
+      "get": {
+        "operationId": "planets.image",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+      "put": {
+        "operationId": "planets.upload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "caption": {
+                    "type": "string",
+                  },
+                  "image": {
+                    "format": "binary",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "image",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "url": {
+                      "format": "uri",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "url",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
+  },
+  "security": [
+    {
+      "bearer": [],
+    },
+  ],
+  "servers": [
+    {
+      "url": "https://api.example.com",
+    },
+  ],
+  "tags": [
+    {
+      "description": "Planets",
+      "name": "planets",
+    },
+  ],
+}
+`;

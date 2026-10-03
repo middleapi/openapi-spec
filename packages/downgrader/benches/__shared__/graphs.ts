@@ -3,8 +3,7 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 // Small inputs that reach the same objects along exponentially many paths,
 // or around cycles. Converting each object once keeps the work linear, so a
-// regression here costs orders of magnitude, not percent. The tests that
-// count this work are the ones named "... once".
+// regression here costs orders of magnitude, not percent.
 
 function info(): OpenAPIV3_2.InfoObject {
   return { title: 'Graph', version: '1.0.0' }
