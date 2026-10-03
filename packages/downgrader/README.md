@@ -23,9 +23,7 @@
 
 `@openapi-spec/downgrader` downgrades [OpenAPI Specification](https://spec.openapis.org/) documents and Schema Objects one minor version at a time, 3.2 to 3.1 and 3.1 to 3.0, for tools that only support an older version, such as code generators, gateways, and validators. It is how [oRPC](https://orpc.dev) generates 3.1 and 3.0 documents.
 
-It handles the constructs real-world documents and schemas use, not every corner of the specification, which keeps it small and fast. Each step below lists what it converts and its limitations.
-
-Anything the older version lacks becomes an equivalent or, failing that, is removed. Removing a restriction only makes a schema accept more values, so outside the limitations listed, a downgraded schema accepts every value the original accepts.
+Downgrading loses detail, never meaning. Each step below lists what it converts and its limitations.
 
 ## Usage
 
@@ -226,7 +224,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 #### Limitations
 
-- A `not` or `oneOf` over a schema that lost a keyword can reject values the original accepts, for example when two `oneOf` branches differed only in `propertyNames` and now overlap.
+- A removed keyword is a removed restriction, so the schema accepts more values than the original. A `not` or `oneOf` over it can then reject values the original accepts, for example when two `oneOf` branches differed only in `propertyNames` and now overlap.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
 - Older drafts are not supported. Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, array-form `items`, and `additionalItems`, pass through unconverted. Convert such schemas to 2020-12 first.
