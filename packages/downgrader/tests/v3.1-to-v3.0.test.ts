@@ -269,6 +269,9 @@ describe('downgradeSchemaV31ToV30', () => {
 
     it('turns type null into enum: [null]', () => {
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({ anyOf: [{ type: 'string' }, { enum: [null] }] })
+      expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual({ enum: [null] })
+      // Only null may match the type, and the enum rules it out.
+      expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({ enum: ['a'], allOf: [{ not: {} }] })
     })
 
     it('adds the items 3.0 requires on arrays', () => {
@@ -335,6 +338,11 @@ describe('downgradeSchemaV31ToV30', () => {
           root: { description: 'kept', allOf: [{ $ref: '#' }] },
         },
       })
+    })
+
+    it('reads definitions, the draft-07 name of $defs, as $defs', () => {
+      expect(downgradeSchemaV31ToV30({ type: 'object', properties: { b: { $ref: '#/definitions/B' } }, definitions: { B: { type: ['string', 'null'] } } } as OpenAPIV3_1.SchemaObject))
+        .toEqual({ type: 'object', properties: { b: { type: 'string', nullable: true } } })
     })
 
     it('leaves a $ref into $defs that does not resolve as written', () => {
@@ -412,6 +420,19 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('includes a tuple with an item that lost a restriction, even beside an equal item', () => {
+      const tuple: OpenAPIV3_1.SchemaObject = { type: 'array', prefixItems: [{ type: 'object', propertyNames: { pattern: '^a' } }, { type: 'object' }], items: false }
+      expect(downgradeSchemaV31ToV30({ not: tuple })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ oneOf: [tuple, { type: 'array', items: { type: 'object' } }] }))
+        .toEqual({ anyOf: [{ type: 'array', items: { anyOf: [{ type: 'object' }, { type: 'object' }] }, maxItems: 2 }, { type: 'array', items: { type: 'object' } }] })
+      expect(downgradeSchemaV31ToV30({ $defs: { P: { type: 'array', prefixItems: [{ $ref: '#/$defs/P' }, {}], items: false } }, not: { $ref: '#/$defs/P' } })).toEqual({})
+    })
+
+    it('includes a const outside the enum beside it, which matched nothing', () => {
+      expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['b'] } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['a', 'b'] } })).toEqual({ not: { enum: ['a'] } })
+    })
+
     it('includes a $defs target cut at recursion', () => {
       expect(downgradeSchemaV31ToV30({
         not: { $ref: '#/$defs/Tree' },
@@ -435,6 +456,7 @@ describe('downgradeSchemaV31ToV30', () => {
     // As zod `.meta()` keys and generators' custom keywords arrive.
     expect(downgradeSchemaV31ToV30({ 'type': 'string', 'label': 'Name', 'placeholder': 'Jane', 'x-label': 'kept' } as OpenAPIV3_1.SchemaObject))
       .toEqual({ 'type': 'string', 'x-label': 'kept', 'x-placeholder': 'Jane' })
+    expect(downgradeSchemaV31ToV30({ 'type': 'string', 'label': 'Name', 'x-label': null } as OpenAPIV3_1.SchemaObject)).toEqual({ 'type': 'string', 'x-label': null })
   })
 
   it('converts a shared object once, and keeps a cycle as a cycle', () => {

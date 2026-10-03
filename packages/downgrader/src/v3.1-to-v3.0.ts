@@ -55,6 +55,8 @@ const REMOVED_KEYWORDS = [
   'contentEncoding',
   'contentMediaType',
   'contentSchema',
+  // The draft-07 name of `$defs`, which 2020-12 still reads.
+  'definitions',
   // Rewritten by `finishSchema`.
   '$ref',
   'const',
@@ -216,9 +218,10 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: DROP,
 })
 
-// A `$ref` into a removed part is replaced by its target, unless it already dangles.
+// A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
+// target, unless it already dangles.
 function isInlined(ref: string, ctx: Context): boolean {
-  return (ref.includes('/$defs/') || REMOVED_PARTS.some(prefix => ref.startsWith(prefix))) && resolvePointer(ref, ctx) !== undefined
+  return (ref.includes('/$defs/') || ref.includes('/definitions/') || REMOVED_PARTS.some(prefix => ref.startsWith(prefix))) && resolvePointer(ref, ctx) !== undefined
 }
 
 /** A 3.0 Reference Object holds only `$ref`. */
@@ -245,7 +248,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
 // whose items match any of its item schemas, and those of the items after
 // them, unless `items: false` or `maxItems` allows none. `items: false`
 // becomes `maxItems`. Returns whether the result means exactly the same,
-// as when every item schema is the same.
+// as when every item schema is the same and none lost a restriction.
 function convertTuple(out: Record<string, unknown>, prefixItems: unknown[], schema: Record<string, unknown>, ctx: Context): boolean {
   const { items, maxItems } = schema
   if (items === false && !(typeof maxItems === 'number' && maxItems <= prefixItems.length)) {
@@ -256,13 +259,18 @@ function convertTuple(out: Record<string, unknown>, prefixItems: unknown[], sche
     out.items = {}
     return false
   }
+  // Equal item schemas convert alike, which their outputs, compared while a
+  // cycle is still being converted, need not show.
   const variants = new Map<unknown, unknown>()
   for (const item of closed ? prefixItems : [...prefixItems, items]) {
-    const variant = convertSchema(item, ctx)
-    variants.set(jsonKey(variant), variant)
+    const key = jsonKey(item)
+    if (!variants.has(key)) {
+      variants.set(key, convertSchema(item, ctx))
+    }
   }
-  out.items = variants.size === 1 ? [...variants.values()][0] : { anyOf: [...variants.values()] }
-  return closed && variants.size === 1
+  const [first, ...rest] = variants.values()
+  out.items = rest.length === 0 ? first : { anyOf: [first, ...rest] }
+  return closed && rest.length === 0 && !isLoose(first)
 }
 
 // Equal JSON values get the same key. A cyclic value is only equal to itself.
@@ -368,7 +376,13 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     delete out.items
   }
   else if (nullable) {
-    out.enum ??= [null]
+    // 3.0 has no null type, so only null may match, and an `enum` without it matches nothing.
+    if (out.enum === undefined || (Array.isArray(out.enum) && out.enum.includes(null))) {
+      out.enum = [null]
+    }
+    else {
+      out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+    }
   }
 }
 
@@ -401,7 +415,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     out.additionalProperties = typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
   }
   // Before `convertType` moves `items` into an `anyOf` branch.
-  let loose = loosen(out, schema, exactTuple)
+  // A `const` outside the `enum` beside it matched nothing, and now matches itself.
+  const constOutsideEnum = schema.const !== undefined && Array.isArray(schema.enum) && !schema.enum.some(item => jsonKey(item) === jsonKey(schema.const))
+  let loose = loosen(out, schema, exactTuple) || constOutsideEnum
   convertType(out, schema.type)
   // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.
   if (schema.nullable === true && typeof out.type === 'string' && out.nullable !== true) {
@@ -433,7 +449,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   // 3.0 allows no other keywords, so unknown ones become extensions.
   for (const key of Object.keys(out)) {
     if (!V30_SCHEMA_KEYWORDS.has(key) && !key.startsWith('x-')) {
-      out[`x-${key}`] ??= out[key]
+      if (!Object.hasOwn(out, `x-${key}`)) {
+        out[`x-${key}`] = out[key]
+      }
       delete out[key]
     }
   }

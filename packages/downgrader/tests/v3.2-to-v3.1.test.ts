@@ -321,6 +321,9 @@ describe('downgradeSpecV32ToV31', () => {
     expect(downgradeSpecV32ToV31(doc)).toEqual({ openapi: '3.1.2', info, tags: [{ name: 'a' }], paths: {} })
     const other = runInNewContext(`(${JSON.stringify({ openapi: '3.2.0', info, servers: [{ url: '/', name: 'main' }] })})`)
     expect(downgradeSpecV32ToV31(other)).toEqual({ openapi: '3.1.2', info, servers: [{ url: '/' }] })
+    // Keys an object inherits are not part of it as JSON sees it, so such an object is kept as it is.
+    const inherits = Object.create(Object.assign(Object.create(null), { type: 'string' }))
+    expect(downgradeSchemaV32ToV31(inherits)).toBe(inherits)
   })
 
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {

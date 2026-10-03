@@ -57,7 +57,7 @@ Each step can also be imported on its own from `@openapi-spec/downgrader/v3.2-to
 
 The input is never changed, and the output shares no plain objects or arrays with it. Input is read as JSON would see it: an object counts whatever realm it comes from or null prototype it has, as in a document oRPC returns, and a key holding `undefined`, as spreading options often leaves, counts as missing. Other values, such as a `Date`, are kept as they are.
 
-External `$ref`s are left as written, and the files they point at are not converted. Bundle a multi-file document into one first.
+External `$ref`s are left as written, except in a 3.2 `content` map, where 3.1 allows none and the entry is removed. The files they point at are not converted, so bundle a multi-file document into one first.
 
 ## 3.2 → 3.1
 
@@ -185,7 +185,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 | [`prefixItems`][js-prefix-items]                                                                                                                                                                                  | `items` matching any of the tuple's item schemas, and those of the items after them unless `items: false` or `maxItems` allows none. `items: false` becomes `maxItems`.                                        |
 | [`contentEncoding`][js-content-encoding] and [`contentMediaType`][js-content-media-type]                                                                                                                          | `format: "byte"` for `base64`, and `format: "binary"` for `binary` or a media type without an encoding or a `contentSchema`, which marks structured text. Without a `type`, the schema gains `type: "string"`. |
 | A [`$ref`][js-ref] with siblings                                                                                                                                                                                  | `allOf: [{ $ref }]` beside the siblings, which 3.0 would ignore.                                                                                                                                               |
-| [`$defs`][js-defs]                                                                                                                                                                                                | Removed. Each `$ref` into it is replaced by its converted target, where a reference back into a target being inlined becomes `{}`.                                                                             |
+| [`$defs`][js-defs], and `definitions`, its draft-07 name                                                                                                                                                          | Removed. Each `$ref` into it is replaced by its converted target, where a reference back into a target being inlined becomes `{}`.                                                                             |
 | Boolean subschemas                                                                                                                                                                                                | `{}` for `true` and `{ not: {} }` for `false`, except in `additionalProperties`, which allows booleans.                                                                                                        |
 | [`patternProperties`][js-pattern-properties]                                                                                                                                                                      | Removed, with the `additionalProperties` beside it, which would reject the properties it allowed.                                                                                                              |
 | [`$schema`][js-schema], [`$vocabulary`][js-vocabulary], [`$id`][js-id], [`$anchor`][js-anchor], [`$dynamicRef`, `$dynamicAnchor`][js-dynamic], [`$comment`][js-comment], and [`contentSchema`][js-content-schema] | Removed.                                                                                                                                                                                                       |
@@ -236,10 +236,10 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 #### Limitations
 
-- A `not` or `oneOf` that reaches a schema that lost a restriction through a `$ref` kept in the output, such as one to `components.schemas`, can still reject values the original accepts.
+- A `not` or `oneOf` that reaches a schema that lost a restriction through a `$ref` kept in the output, such as one to `components.schemas`, or around a cycle of objects, can still reject values the original accepts.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
-- Older drafts are not supported. Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, and `additionalItems`, become extensions unconverted, and array-form `items` passes through. Convert such schemas to 2020-12 first.
+- Older drafts are not supported. `definitions` is read as `$defs`, but other keywords that only draft-07 or 2019-09 define, such as `dependencies` and `additionalItems`, become extensions unconverted, so `$ref`s into them dangle, and array-form `items` passes through. Convert such schemas to 2020-12 first.
 - `patternProperties` that matches every name, as TypeBox emits for a record, is removed with its value schema rather than turned into `additionalProperties`.
 
 ## Performance
