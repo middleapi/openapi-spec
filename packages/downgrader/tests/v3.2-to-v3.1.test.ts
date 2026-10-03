@@ -382,3 +382,13 @@ describe('downgradeSchemaV32ToV31', () => {
     expect(out.default.default).toBe(out.default)
   })
 })
+
+describe('unusual input', () => {
+  it('reads a type list when deciding whether an XML element wraps an array', () => {
+    expect(downgradeSchemaV32ToV31({ type: ['array', 'null'], xml: { nodeType: 'element' } })).toEqual({ type: ['array', 'null'], xml: { wrapped: true } })
+  })
+
+  it('tolerates malformed input without throwing', () => {
+    expect(downgradeSchemaV32ToV31({ xml: true, allOf: {}, properties: 'none' } as any)).toEqual({ xml: true, allOf: {}, properties: 'none' })
+  })
+})

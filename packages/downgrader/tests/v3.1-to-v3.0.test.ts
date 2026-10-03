@@ -476,3 +476,63 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(out.example.self).toBe(out.example)
   })
 })
+
+describe('unusual input', () => {
+  it('converts valid schemas that combine keywords unusually', () => {
+    expect(downgradeSchemaV31ToV30({ $ref: '#/components/schemas/A', allOf: [{ minLength: 1 }], type: ['string', 'number'], anyOf: [{ maxLength: 3 }, { maximum: 3 }] })).toEqual({
+      allOf: [{ $ref: '#/components/schemas/A' }, { minLength: 1 }, { anyOf: [{ type: 'string' }, { type: 'number' }] }],
+      anyOf: [{ maxLength: 3 }, { maximum: 3 }],
+    })
+    expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'], allOf: [{ minLength: 1 }] })).toEqual({ enum: ['a'], allOf: [{ minLength: 1 }, { not: {} }] })
+    expect(downgradeSchemaV31ToV30({ enum: [], allOf: [{ minimum: 0 }] })).toEqual({ allOf: [{ minimum: 0 }, { not: {} }] })
+    expect(downgradeSchemaV31ToV30({ type: ['array', 'string'] })).toEqual({ anyOf: [{ type: 'array', items: {} }, { type: 'string' }] })
+    expect(downgradeSchemaV31ToV30({ type: ['string'] })).toEqual({ type: 'string' })
+    expect(downgradeSchemaV31ToV30({ maximum: 5, exclusiveMaximum: 10 })).toEqual({ maximum: 5 })
+  })
+
+  it('keeps own __proto__ keys as keys', () => {
+    const out = downgradeSchemaV31ToV30(JSON.parse('{"type":"object","properties":{"__proto__":{"type":["string","null"]}},"example":{"__proto__":1}}')) as Record<string, any>
+    expect(Object.getOwnPropertyDescriptor(out.properties, '__proto__')?.value).toEqual({ type: 'string', nullable: true })
+    expect(Object.getOwnPropertyDescriptor(out.example, '__proto__')?.value).toBe(1)
+    expect(Object.getPrototypeOf(out.example)).toBe(Object.prototype)
+  })
+
+  it('merges a cyclic tuple item schema with itself', () => {
+    const item: Record<string, any> = { type: 'object', properties: {} }
+    item.properties.self = item
+    const out = downgradeSchemaV31ToV30({ type: 'array', prefixItems: [item, item], items: false }) as Record<string, any>
+    expect(out.items.properties.self).toBe(out.items)
+  })
+
+  it('resolves only local JSON Pointers, leaving other $refs as written', () => {
+    for (const ref of ['./other.json#/$defs/A', '#/$defs/%E0%A4%A']) {
+      expect(downgradeSchemaV31ToV30({ $ref: ref })).toEqual({ $ref: ref })
+    }
+    const out = convert({
+      security: [{ anchor: ['a'], loop: ['b'], missing: ['c'] }],
+      components: {
+        securitySchemes: {
+          anchor: { $ref: '#mtls' },
+          loop: { $ref: '#/components/securitySchemes/loop' },
+          missing: { $ref: '#/components/securitySchemes/none' },
+        },
+      },
+    })
+    expect(out.security).toEqual([{ anchor: ['a'], loop: ['b'], missing: ['c'] }])
+    expect(Object.keys(out.components?.securitySchemes ?? {})).toEqual(['anchor', 'loop', 'missing'])
+  })
+
+  it('tolerates malformed input without throwing', () => {
+    const doc = {
+      openapi: '3.1.2',
+      info,
+      security: 'all',
+      paths: { '/a': { get: { security: [null, 'x'], parameters: 'none', responses: [] } } },
+      components: { schemas: { S: { properties: 'none', allOf: {}, example: { a: 1, b: undefined } } } },
+    }
+    const out = downgradeSpecV31ToV30(doc as any)
+    expect(out.security).toBe('all')
+    expect(out.paths['/a']?.get).toEqual({ security: [null, 'x'], parameters: 'none', responses: [] })
+    expect(out.components?.schemas?.S).toEqual({ properties: 'none', allOf: {}, example: { a: 1 } })
+  })
+})
