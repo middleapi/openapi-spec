@@ -10,3 +10,5 @@ preferWorkspacePackages: true
 
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - uncheck@0.1.0
