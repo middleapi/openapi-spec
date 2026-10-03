@@ -53,8 +53,7 @@ export const doc: OpenAPIObject = {
               examples: {
                 user: {
                   summary: 'User example in other format',
-                  externalValue:
-                    'https://foo.bar/examples/user-example.whatever',
+                  externalValue: 'https://foo.bar/examples/user-example.whatever',
                 },
               },
             },

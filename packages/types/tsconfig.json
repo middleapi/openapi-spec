@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.lib.json",
+  "extends": "uncheck/tsconfig/middleapi/lib",
   "include": ["package.json", "src"],
   "exclude": [
     "**/*.test.*",

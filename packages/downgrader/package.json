@@ -1,19 +1,7 @@
 {
   "name": "@openapi-spec/downgrader",
-  "type": "module",
   "version": "0.3.0",
   "description": "Downgrade OpenAPI specifications one minor version at a time: 3.2 to 3.1 and 3.1 to 3.0, for whole documents or individual schemas",
-  "license": "MIT",
-  "funding": [
-    "https://github.com/sponsors/dinwwwh",
-    "https://opencollective.com/middleapi"
-  ],
-  "homepage": "https://github.com/middleapi/openapi-spec",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/middleapi/openapi-spec.git",
-    "directory": "packages/downgrader"
-  },
   "keywords": [
     "converter",
     "downgrade",
@@ -27,6 +15,21 @@
     "swagger",
     "typescript"
   ],
+  "homepage": "https://github.com/middleapi/openapi-spec",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/middleapi/openapi-spec.git",
+    "directory": "packages/downgrader"
+  },
+  "funding": [
+    "https://github.com/sponsors/dinwwwh",
+    "https://opencollective.com/middleapi"
+  ],
+  "files": [
+    "dist"
+  ],
+  "type": "module",
   "sideEffects": false,
   "exports": {
     "./package.json": "./package.json",
@@ -34,9 +37,6 @@
     "./v3.2-to-v3.1": "./src/v3.2-to-v3.1.ts",
     "./v3.1-to-v3.0": "./src/v3.1-to-v3.0.ts"
   },
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "exports": {
       "./package.json": "./package.json",
@@ -58,8 +58,7 @@
     }
   },
   "scripts": {
-    "prepack": "unbuild",
-    "type:check": "tsc -b"
+    "prepack": "unbuild"
   },
   "dependencies": {
     "@openapi-spec/types": "workspace:^"

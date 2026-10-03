@@ -5,7 +5,7 @@ import type { OpenAPIObject } from '../../src/v3.2'
 export const doc: OpenAPIObject = {
   openapi: '3.2.0',
   info: {
-    summary: 'My API\'s summary',
+    summary: "My API's summary",
     title: 'My API',
     version: '1.0.0',
     license: {

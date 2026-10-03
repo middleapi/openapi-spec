@@ -19,11 +19,11 @@ export const doc: OpenAPIObject = {
             type: ['integer', 'string'],
           },
           two: {
-            description: 'type \'null\'',
+            description: "type 'null'",
             type: 'null',
           },
           three: {
-            description: 'type array including \'null\'',
+            description: "type array including 'null'",
             type: ['string', 'null'],
           },
           four: {

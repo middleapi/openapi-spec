@@ -1,41 +1,32 @@
 {
   "name": "@openapi-spec/repo",
-  "type": "module",
   "version": "0.3.0",
+  "private": true,
   "license": "MIT",
+  "type": "module",
   "scripts": {
-    "prepare": "simple-git-hooks",
-    "type:check": "pnpm run -r type:check && tsc",
+    "prepare": "uncheck prepare --pre-commit",
+    "check": "uncheck",
+    "fix": "uncheck --fix",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "vitest bench --run",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
-    "repo:fix": "sherif --fix",
-    "sync:sponsors": "node scripts/sync-sponsors.ts && eslint --fix '**/README.md'"
+    "sync:sponsors": "node scripts/sync-sponsors.ts && pnpm run fix '**/README.md'"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^9.5.1",
     "@codspeed/vitest-plugin": "^5.7.1",
     "@seriousme/openapi-schema-validator": "^2.9.1",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",
     "bumpp": "^12.3.0",
     "changelogithub": "^15.0.5",
-    "eslint": "^10.10.0",
-    "eslint-plugin-format": "^2.0.1",
-    "lint-staged": "^17.4.1",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
     "sherif": "^1.13.0",
-    "simple-git-hooks": "^2.13.1",
     "typescript": "^6.0.3",
     "unbuild": "^3.6.1",
+    "uncheck": "^0.1.0",
     "vitest": "^4.1.11"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
-  },
-  "lint-staged": {
-    "*": "eslint --no-warn-ignored --fix"
   },
   "devEngines": {
     "packageManager": {

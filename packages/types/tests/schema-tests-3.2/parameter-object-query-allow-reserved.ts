@@ -5,8 +5,7 @@ import type { OpenAPIObject } from '../../src/v3.2'
 export const doc: OpenAPIObject = {
   openapi: '3.2.0',
   info: {
-    title:
-      'allowReserved only permitted with in and style values that percent-encode',
+    title: 'allowReserved only permitted with in and style values that percent-encode',
     version: '1.0.0',
   },
   components: {

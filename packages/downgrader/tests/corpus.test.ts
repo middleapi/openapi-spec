@@ -1,9 +1,8 @@
 // Every official document (see corpus.ts) must come out of each step, and of
 // both steps chained, as a valid document of the older version.
 
-import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
-
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
+import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 import { doc as mega } from '../../types/tests/schema-tests-3.2/mega'
 import { corpusV31, corpusV32 } from './corpus'

@@ -107,7 +107,19 @@ const V30_SCHEMA_KEYWORDS = new Set([
 ])
 
 // Keywords that let `unevaluatedProperties` see more than `properties`.
-const IN_PLACE_APPLICATORS = ['$dynamicRef', '$ref', 'additionalProperties', 'allOf', 'anyOf', 'dependentSchemas', 'else', 'if', 'oneOf', 'patternProperties', 'then']
+const IN_PLACE_APPLICATORS = [
+  '$dynamicRef',
+  '$ref',
+  'additionalProperties',
+  'allOf',
+  'anyOf',
+  'dependentSchemas',
+  'else',
+  'if',
+  'oneOf',
+  'patternProperties',
+  'then',
+]
 
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
@@ -117,7 +129,7 @@ const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
 
 const SCHEMA_FIELDS = defineFields({
-  ...Object.fromEntries(REMOVED_KEYWORDS.map(key => [key, DROP])),
+  ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
   // It would reject the properties that `patternProperties` allowed.
   additionalProperties: (item, ctx, schema) => {
     if (schema.patternProperties !== undefined) {
@@ -128,14 +140,15 @@ const SCHEMA_FIELDS = defineFields({
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
   // An empty one rejects every value, which `finishSchema` keeps another way.
-  enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
+  enum: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.
-  items: (item, ctx, schema) => (schema.prefixItems === undefined ? convertSchema(item, ctx) : DROP),
+  items: (item, ctx, schema) =>
+    schema.prefixItems === undefined ? convertSchema(item, ctx) : DROP,
   not: convertSchema,
   oneOf: list(convertSchema),
   properties: map(convertSchema),
   // 3.0 requires at least one entry.
-  required: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
+  required: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
 })
 
 const PARAMETER_FIELDS = defineFields({
@@ -173,7 +186,7 @@ const OPERATION_FIELDS = defineFields({
 })
 
 const PATH_ITEM_FIELDS = defineFields({
-  ...Object.fromEntries(HTTP_METHODS.map(method => [method, convertOperation])),
+  ...Object.fromEntries(HTTP_METHODS.map((method) => [method, convertOperation])),
   parameters: list(refOr(convertParameter)),
 })
 
@@ -190,7 +203,9 @@ const COMPONENTS_FIELDS = defineFields({
   requestBodies: map(refOr(convertRequestBody)),
   responses: map(refOr(convertResponse)),
   schemas: map(convertSchema),
-  securitySchemes: map((item, ctx) => (schemeType(item, ctx) === 'mutualTLS' ? DROP : convertReference(item, ctx))),
+  securitySchemes: map((item, ctx) =>
+    schemeType(item, ctx) === 'mutualTLS' ? DROP : convertReference(item, ctx),
+  ),
 })
 
 const LICENSE_FIELDS = defineFields({
@@ -221,7 +236,12 @@ const DOCUMENT_FIELDS = defineFields({
 // A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
 // target, unless it already dangles.
 function isInlined(ref: string, ctx: Context): boolean {
-  return (ref.includes('/$defs/') || ref.includes('/definitions/') || REMOVED_PARTS.some(prefix => ref.startsWith(prefix))) && resolvePointer(ref, ctx) !== undefined
+  return (
+    (ref.includes('/$defs/') ||
+      ref.includes('/definitions/') ||
+      REMOVED_PARTS.some((prefix) => ref.startsWith(prefix))) &&
+    resolvePointer(ref, ctx) !== undefined
+  )
 }
 
 /** A 3.0 Reference Object holds only `$ref`. */
@@ -249,7 +269,12 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
 // them, unless `items: false` or `maxItems` allows none. `items: false`
 // becomes `maxItems`. Returns whether the result means exactly the same,
 // as when every item schema is the same and none lost a restriction.
-function convertTuple(out: Record<string, unknown>, prefixItems: unknown[], schema: Record<string, unknown>, ctx: Context): boolean {
+function convertTuple(
+  out: Record<string, unknown>,
+  prefixItems: unknown[],
+  schema: Record<string, unknown>,
+  ctx: Context,
+): boolean {
   const { items, maxItems } = schema
   if (items === false && !(typeof maxItems === 'number' && maxItems <= prefixItems.length)) {
     out.maxItems = prefixItems.length
@@ -277,8 +302,7 @@ function convertTuple(out: Record<string, unknown>, prefixItems: unknown[], sche
 function jsonKey(value: unknown): unknown {
   try {
     return JSON.stringify(value)
-  }
-  catch {
+  } catch {
     return value
   }
 }
@@ -286,8 +310,7 @@ function jsonKey(value: unknown): unknown {
 function addAnyOf(out: Record<string, unknown>, variants: unknown[]): void {
   if (out.anyOf === undefined) {
     out.anyOf = variants
-  }
-  else {
+  } else {
     out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
   }
 }
@@ -303,19 +326,30 @@ function isLoose(value: unknown): boolean {
 
 // With no in-place applicator beside it, it means exactly `additionalProperties`.
 function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
-  return schema.unevaluatedProperties !== undefined && IN_PLACE_APPLICATORS.every(key => schema[key] === undefined)
+  return (
+    schema.unevaluatedProperties !== undefined &&
+    IN_PLACE_APPLICATORS.every((key) => schema[key] === undefined)
+  )
 }
 
 // Whether removing `key` from `schema` lets it accept more values. Property
 // names are strings anyway, and `unevaluatedProperties` does nothing beside
 // `additionalProperties`.
-function losesRestriction(key: string, schema: Record<string, unknown>, exactTuple: boolean): boolean {
+function losesRestriction(
+  key: string,
+  schema: Record<string, unknown>,
+  exactTuple: boolean,
+): boolean {
   switch (key) {
     case 'prefixItems':
       return !exactTuple
     case 'propertyNames': {
       const names = schema.propertyNames
-      return !(names === true || (isRecord(names) && Object.entries(names).every(([name, item]) => name === 'type' && item === 'string')))
+      return !(
+        names === true ||
+        (isRecord(names) &&
+          Object.entries(names).every(([name, item]) => name === 'type' && item === 'string'))
+      )
     }
     case 'unevaluatedProperties':
       return !(schema.additionalProperties !== undefined || isUnevaluatedAdditional(schema))
@@ -328,10 +362,18 @@ function losesRestriction(key: string, schema: Record<string, unknown>, exactTup
 // then reject values the original accepts, and so would a `oneOf` whose
 // branches may now overlap, so the `not` is removed and the `oneOf` becomes
 // an `anyOf`. Returns whether the schema is loosened itself.
-function loosen(out: Record<string, unknown>, schema: Record<string, unknown>, exactTuple: boolean): boolean {
+function loosen(
+  out: Record<string, unknown>,
+  schema: Record<string, unknown>,
+  exactTuple: boolean,
+): boolean {
   let loose = false
   for (const key in schema) {
-    if (RESTRICTING_KEYWORDS.has(key) && schema[key] !== undefined && losesRestriction(key, schema, exactTuple)) {
+    if (
+      RESTRICTING_KEYWORDS.has(key) &&
+      schema[key] !== undefined &&
+      losesRestriction(key, schema, exactTuple)
+    ) {
       loose = true
     }
   }
@@ -344,12 +386,14 @@ function loosen(out: Record<string, unknown>, schema: Record<string, unknown>, e
     delete out.oneOf
     loose = true
   }
-  return loose
-    || isLoose(out.items)
-    || isLoose(out.additionalProperties)
-    || (isRecord(out.properties) && Object.values(out.properties).some(isLoose))
-    || (Array.isArray(out.allOf) && out.allOf.some(isLoose))
-    || (Array.isArray(out.anyOf) && out.anyOf.some(isLoose))
+  return (
+    loose ||
+    isLoose(out.items) ||
+    isLoose(out.additionalProperties) ||
+    (isRecord(out.properties) && Object.values(out.properties).some(isLoose)) ||
+    (Array.isArray(out.allOf) && out.allOf.some(isLoose)) ||
+    (Array.isArray(out.anyOf) && out.anyOf.some(isLoose))
+  )
 }
 
 // 3.0 takes one type, and marks null with `nullable` instead.
@@ -358,29 +402,29 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     out.type = type
     return
   }
-  const types = (Array.isArray(type) ? type : [type]).filter(item => typeof item === 'string')
+  const types = (Array.isArray(type) ? type : [type]).filter((item) => typeof item === 'string')
   const nullable = types.includes('null')
-  const rest = types.filter(item => item !== 'null')
+  const rest = types.filter((item) => item !== 'null')
   if (rest.length === 1) {
     out.type = rest[0]
     if (nullable) {
       out.nullable = true
     }
-  }
-  else if (rest.length > 1) {
-    addAnyOf(out, rest.map(item => ({
-      type: item,
-      ...(item === 'array' && { items: out.items ?? {} }),
-      ...(nullable && { nullable: true }),
-    })))
+  } else if (rest.length > 1) {
+    addAnyOf(
+      out,
+      rest.map((item) => ({
+        type: item,
+        ...(item === 'array' && { items: out.items ?? {} }),
+        ...(nullable && { nullable: true }),
+      })),
+    )
     delete out.items
-  }
-  else if (nullable) {
+  } else if (nullable) {
     // 3.0 has no null type, so only null may match, and an `enum` without it matches nothing.
     if (out.enum === undefined || (Array.isArray(out.enum) && out.enum.includes(null))) {
       out.enum = [null]
-    }
-    else {
+    } else {
       out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
     }
   }
@@ -395,10 +439,18 @@ function binaryFormat(schema: Record<string, unknown>): string | undefined {
   if (schema.contentEncoding === 'binary') {
     return 'binary'
   }
-  return schema.contentEncoding === undefined && schema.contentMediaType !== undefined && schema.contentSchema === undefined ? 'binary' : undefined
+  return schema.contentEncoding === undefined &&
+    schema.contentMediaType !== undefined &&
+    schema.contentSchema === undefined
+    ? 'binary'
+    : undefined
 }
 
-function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): void {
+function finishSchema(
+  out: Record<string, unknown>,
+  schema: Record<string, unknown>,
+  ctx: Context,
+): void {
   // 3.0 ignores the siblings of a `$ref`, but not the members of an `allOf`.
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...(Array.isArray(out.allOf) ? out.allOf : [])]
@@ -409,14 +461,19 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (Array.isArray(schema.enum) && schema.enum.length === 0) {
     out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
   }
-  const exactTuple = Array.isArray(schema.prefixItems) && convertTuple(out, schema.prefixItems, schema, ctx)
+  const exactTuple =
+    Array.isArray(schema.prefixItems) && convertTuple(out, schema.prefixItems, schema, ctx)
   if (isUnevaluatedAdditional(schema)) {
     const additional = schema.unevaluatedProperties
-    out.additionalProperties = typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
+    out.additionalProperties =
+      typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
   }
   // Before `convertType` moves `items` into an `anyOf` branch.
   // A `const` outside the `enum` beside it matched nothing, and now matches itself.
-  const constOutsideEnum = schema.const !== undefined && Array.isArray(schema.enum) && !schema.enum.some(item => jsonKey(item) === jsonKey(schema.const))
+  const constOutsideEnum =
+    schema.const !== undefined &&
+    Array.isArray(schema.enum) &&
+    !schema.enum.some((item) => jsonKey(item) === jsonKey(schema.const))
   let loose = loosen(out, schema, exactTuple) || constOutsideEnum
   convertType(out, schema.type)
   // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.
@@ -428,11 +485,17 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     out.items = {}
   }
   const { exclusiveMaximum, exclusiveMinimum, maximum, minimum } = schema
-  if (typeof exclusiveMinimum === 'number' && !(typeof minimum === 'number' && minimum > exclusiveMinimum)) {
+  if (
+    typeof exclusiveMinimum === 'number' &&
+    !(typeof minimum === 'number' && minimum > exclusiveMinimum)
+  ) {
     out.minimum = exclusiveMinimum
     out.exclusiveMinimum = true
   }
-  if (typeof exclusiveMaximum === 'number' && !(typeof maximum === 'number' && maximum < exclusiveMaximum)) {
+  if (
+    typeof exclusiveMaximum === 'number' &&
+    !(typeof maximum === 'number' && maximum < exclusiveMaximum)
+  ) {
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
@@ -506,7 +569,11 @@ function convertOperation(value: unknown, ctx: Context): unknown {
 }
 
 // The target's fields fill in for those the referencing Path Item lacks.
-function finishMergedPathItem(out: Record<string, unknown>, pathItem: Record<string, unknown>, ctx: Context): void {
+function finishMergedPathItem(
+  out: Record<string, unknown>,
+  pathItem: Record<string, unknown>,
+  ctx: Context,
+): void {
   const target = inline(pathItem.$ref as string, ctx, convertPathItem)
   if (isRecord(target)) {
     for (const [key, item] of Object.entries(target)) {
@@ -537,17 +604,27 @@ function convertSecurity(value: unknown, ctx: Context): unknown {
     return clone(value)
   }
   const schemes = resolvePointer('#/components/securitySchemes', ctx)
-  const typeOf = (name: string): unknown => (isRecord(schemes) && Object.hasOwn(schemes, name) ? schemeType(schemes[name], ctx) : undefined)
+  const typeOf = (name: string): unknown =>
+    isRecord(schemes) && Object.hasOwn(schemes, name) ? schemeType(schemes[name], ctx) : undefined
   const out: unknown[] = []
   for (const requirement of value) {
     if (!isRecord(requirement)) {
       out.push(clone(requirement))
       continue
     }
-    const entries = Object.keys(requirement).filter(name => requirement[name] !== undefined).map(name => [name, typeOf(name)] as const)
+    const entries = Object.keys(requirement)
+      .filter((name) => requirement[name] !== undefined)
+      .map((name) => [name, typeOf(name)] as const)
     const kept = entries.filter(([, type]) => type !== 'mutualTLS')
     if (kept.length > 0 || entries.length === 0) {
-      out.push(Object.fromEntries(kept.map(([name, type]) => [name, type === 'apiKey' || type === 'http' ? [] : clone(requirement[name])])))
+      out.push(
+        Object.fromEntries(
+          kept.map(([name, type]) => [
+            name,
+            type === 'apiKey' || type === 'http' ? [] : clone(requirement[name]),
+          ]),
+        ),
+      )
     }
   }
   return out.length === 0 && value.length > 0 ? DROP : out
@@ -566,6 +643,10 @@ export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV
   return downgrade(spec, convertDocument) as OpenAPIV3_0.OpenAPIObject
 }
 
-export function downgradeSchemaV31ToV30<T = unknown>(schema: OpenAPIV3_1.SchemaObject<T>): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T>
+export function downgradeSchemaV31ToV30<T = unknown>(
+  schema: OpenAPIV3_1.SchemaObject<T>,
+): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
+  return downgrade(schema, convertSchema) as
+    | OpenAPIV3_0.ReferenceObject
+    | OpenAPIV3_0.SchemaObject<T>
 }

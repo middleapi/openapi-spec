@@ -91,7 +91,7 @@ export const doc: OpenAPIObject = {
         operationId: 'getUserAddress',
         responses: {
           200: {
-            description: 'the user\'s address',
+            description: "the user's address",
           },
         },
       },

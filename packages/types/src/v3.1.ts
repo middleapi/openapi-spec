@@ -757,9 +757,7 @@ export interface ResponsesObject extends SpecificationExtensions {
    * explicit code definition takes precedence over the range definition for
    * that code.
    */
-  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]:
-    | ResponseObject
-    | ReferenceObject
+  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject
 }
 
 /**
@@ -987,14 +985,14 @@ export interface ReferenceObject {
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#data-types}
  */
-export type SchemaObjectType
-  = | 'array'
-    | 'boolean'
-    | 'integer'
-    | 'null'
-    | 'number'
-    | 'object'
-    | 'string'
+export type SchemaObjectType =
+  | 'array'
+  | 'boolean'
+  | 'integer'
+  | 'null'
+  | 'number'
+  | 'object'
+  | 'string'
 
 /**
  * The object form of the Schema Object: every JSON Schema Draft 2020-12
@@ -1438,12 +1436,7 @@ export interface DiscriminatorObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#security-scheme-object}
  */
-export type SecuritySchemeType
-  = | 'apiKey'
-    | 'http'
-    | 'mutualTLS'
-    | 'oauth2'
-    | 'openIdConnect'
+export type SecuritySchemeType = 'apiKey' | 'http' | 'mutualTLS' | 'oauth2' | 'openIdConnect'
 
 /**
  * Defines a mutual TLS security scheme (use of a client certificate) that can
@@ -1477,12 +1470,12 @@ export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#security-scheme-object}
  */
-export type SecuritySchemeObject
-  = | ApiKeySecuritySchemeObject
-    | HttpSecuritySchemeObject
-    | MutualTlsSecuritySchemeObject
-    | OAuth2SecuritySchemeObject
-    | OpenIdConnectSecuritySchemeObject
+export type SecuritySchemeObject =
+  | ApiKeySecuritySchemeObject
+  | HttpSecuritySchemeObject
+  | MutualTlsSecuritySchemeObject
+  | OAuth2SecuritySchemeObject
+  | OpenIdConnectSecuritySchemeObject
 
 /**
  * Lists the required security schemes to execute this operation or the API as

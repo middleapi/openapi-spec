@@ -25,7 +25,19 @@ const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'
 
 // Both versions use JSON Schema 2020-12, so a schema only changes in
 // `discriminator` and `xml`. These keywords hold the subschemas to look into.
-const SUBSCHEMA_KEYWORDS = ['additionalProperties', 'contains', 'contentSchema', 'else', 'if', 'items', 'not', 'propertyNames', 'then', 'unevaluatedItems', 'unevaluatedProperties']
+const SUBSCHEMA_KEYWORDS = [
+  'additionalProperties',
+  'contains',
+  'contentSchema',
+  'else',
+  'if',
+  'items',
+  'not',
+  'propertyNames',
+  'then',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+]
 const SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'dependentSchemas', 'patternProperties', 'properties']
 const SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems']
 
@@ -38,9 +50,9 @@ const DISCRIMINATOR_FIELDS = defineFields({
 })
 
 const SCHEMA_FIELDS = defineFields({
-  ...Object.fromEntries(SUBSCHEMA_KEYWORDS.map(key => [key, convertSchema])),
-  ...Object.fromEntries(SUBSCHEMA_MAP_KEYWORDS.map(key => [key, map(convertSchema)])),
-  ...Object.fromEntries(SUBSCHEMA_LIST_KEYWORDS.map(key => [key, list(convertSchema)])),
+  ...Object.fromEntries(SUBSCHEMA_KEYWORDS.map((key) => [key, convertSchema])),
+  ...Object.fromEntries(SUBSCHEMA_MAP_KEYWORDS.map((key) => [key, map(convertSchema)])),
+  ...Object.fromEntries(SUBSCHEMA_LIST_KEYWORDS.map((key) => [key, list(convertSchema)])),
   discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
   xml: convertXml,
 })
@@ -65,7 +77,7 @@ const PARAMETER_FIELDS = defineFields({
   content: convertContent,
   examples: map(refOr(convertExample)),
   schema: convertSchema,
-  style: item => (item === 'cookie' ? DROP : clone(item)),
+  style: (item) => (item === 'cookie' ? DROP : clone(item)),
 })
 
 const ENCODING_FIELDS = defineFields({
@@ -119,7 +131,7 @@ const OPERATION_FIELDS = defineFields({
 })
 
 const PATH_ITEM_FIELDS = defineFields({
-  ...Object.fromEntries(HTTP_METHODS.map(method => [method, convertOperation])),
+  ...Object.fromEntries(HTTP_METHODS.map((method) => [method, convertOperation])),
   additionalOperations: DROP,
   parameters: list(convertParameterRef),
   query: DROP,
@@ -143,7 +155,8 @@ const COMPONENTS_FIELDS = defineFields({
 const DOCUMENT_FIELDS = defineFields({
   $self: DROP,
   components: (item, ctx) => convertObject(item, ctx, COMPONENTS_FIELDS),
-  jsonSchemaDialect: item => (typeof item === 'string' && item.startsWith(V32_DIALECT_PREFIX) ? V31_DIALECT : clone(item)),
+  jsonSchemaDialect: (item) =>
+    typeof item === 'string' && item.startsWith(V32_DIALECT_PREFIX) ? V31_DIALECT : clone(item),
   paths: map(convertPathItem, isPath),
   servers: convertServers,
   tags: list(convertTag),
@@ -166,8 +179,7 @@ function convertXml(value: unknown, _ctx: Context, schema: Record<string, unknow
   const { nodeType, ...out } = clone(value) as Record<string, unknown>
   if (nodeType === 'attribute') {
     out.attribute = true
-  }
-  else if (nodeType === 'element' && hasType(schema.type, 'array')) {
+  } else if (nodeType === 'element' && hasType(schema.type, 'array')) {
     out.wrapped = true
   }
   return out
@@ -233,7 +245,11 @@ function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
 }
 
-function finishMediaType(out: Record<string, unknown>, mediaType: Record<string, unknown>, ctx: Context): void {
+function finishMediaType(
+  out: Record<string, unknown>,
+  mediaType: Record<string, unknown>,
+  ctx: Context,
+): void {
   if (mediaType.itemSchema !== undefined && mediaType.schema === undefined) {
     out.schema = { items: convertSchema(mediaType.itemSchema, ctx), type: 'array' }
   }
@@ -292,6 +308,8 @@ export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV
   return downgrade(spec, convertDocument) as OpenAPIV3_1.OpenAPIObject
 }
 
-export function downgradeSchemaV32ToV31<T = unknown>(schema: OpenAPIV3_2.SchemaObject<T>): OpenAPIV3_1.SchemaObject<T> {
+export function downgradeSchemaV32ToV31<T = unknown>(
+  schema: OpenAPIV3_2.SchemaObject<T>,
+): OpenAPIV3_1.SchemaObject<T> {
   return downgrade(schema, convertSchema) as OpenAPIV3_1.SchemaObject<T>
 }

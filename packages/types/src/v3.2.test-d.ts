@@ -85,8 +85,7 @@ export const streamingApi = {
             tokenUrl: 'https://auth.example.com/token',
           },
         },
-        oauth2MetadataUrl:
-          'https://auth.example.com/.well-known/oauth-authorization-server',
+        oauth2MetadataUrl: 'https://auth.example.com/.well-known/oauth-authorization-server',
         type: 'oauth2',
       },
       legacy: {
@@ -193,10 +192,7 @@ export const streamingApi = {
                 },
               ],
               schema: {
-                prefixItems: [
-                  { type: 'string' },
-                  { contentEncoding: 'base64', type: 'string' },
-                ],
+                prefixItems: [{ type: 'string' }, { contentEncoding: 'base64', type: 'string' }],
                 type: 'array',
               },
             },

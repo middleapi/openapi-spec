@@ -1,5 +1,6 @@
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import { bench, describe } from 'vitest'
+
 import { corpusV32 } from '../tests/corpus'
 import { createApiV32 } from './__shared__/api'
 import { callbackGraphV32, referenceDiamondV32, schemaDiamond } from './__shared__/graphs'

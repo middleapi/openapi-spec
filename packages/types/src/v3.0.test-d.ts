@@ -68,10 +68,7 @@ export const petstore = {
           },
           propertyName: 'petType',
         },
-        oneOf: [
-          { $ref: '#/components/schemas/Cat' },
-          { $ref: '#/components/schemas/Dog' },
-        ],
+        oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
       },
       AnyOfExample: {
         anyOf: [{ pattern: '^[a-z]+$', type: 'string' }, { type: 'integer' }],
@@ -144,8 +141,7 @@ export const petstore = {
       basicAuth: { scheme: 'basic', type: 'http' },
       bearerAuth: { bearerFormat: 'JWT', scheme: 'bearer', type: 'http' },
       oidc: {
-        openIdConnectUrl:
-          'https://example.com/.well-known/openid-configuration',
+        openIdConnectUrl: 'https://example.com/.well-known/openid-configuration',
         type: 'openIdConnect',
       },
       petstoreAuth: {

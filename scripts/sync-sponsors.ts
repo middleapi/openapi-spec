@@ -20,22 +20,14 @@ interface Sponsor {
   slot?: number
 }
 
-const SPONSORS_SOURCE_URL
-  = 'https://raw.githubusercontent.com/middleapi/static/refs/heads/main/sponsors.json'
-const PAST_SPONSORS_URL
-  = 'https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg'
+const SPONSORS_SOURCE_URL =
+  'https://raw.githubusercontent.com/middleapi/static/refs/heads/main/sponsors.json'
+const PAST_SPONSORS_URL =
+  'https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg'
 const ROOT_DIR = process.cwd()
 const README_FILE_NAME = 'README.md'
 
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  '.output',
-  '.next',
-  '.nuxt',
-  '.turbo',
-])
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.output', '.next', '.nuxt', '.turbo'])
 
 async function findReadmes(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
@@ -51,8 +43,7 @@ async function findReadmes(dir: string): Promise<string[]> {
       }
 
       subdirPromises.push(findReadmes(fullPath))
-    }
-    else if (entry.isFile() && entry.name === README_FILE_NAME) {
+    } else if (entry.isFile() && entry.name === README_FILE_NAME) {
       result.push(fullPath)
     }
   }
@@ -72,10 +63,13 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll('\'', '&#39;')
+    .replaceAll("'", '&#39;')
 }
 
-function getTierImageSizeAndColumns(tierLevel: number, tierLevels: number[]): [columns: number, imageSize: number] {
+function getTierImageSizeAndColumns(
+  tierLevel: number,
+  tierLevels: number[],
+): [columns: number, imageSize: number] {
   const rank = tierLevels.indexOf(tierLevel)
 
   const columnByRank = [3, 4, 5, 6, 7, 8]
@@ -111,21 +105,15 @@ function buildSlotCards(slotSponsors: Sponsor[]): string[] {
 }
 
 function buildSponsorsSection(sponsors: Sponsor[]): string {
-  const activeSponsors = sponsors.filter(
-    sponsor => sponsor.tierLevel > 0 && sponsor.amount > 0,
-  )
-  const pastSponsors = sponsors.filter(
-    sponsor => sponsor.tierLevel <= 0 || sponsor.amount <= 0,
-  )
+  const activeSponsors = sponsors.filter((sponsor) => sponsor.tierLevel > 0 && sponsor.amount > 0)
+  const pastSponsors = sponsors.filter((sponsor) => sponsor.tierLevel <= 0 || sponsor.amount <= 0)
 
   // Slot sponsors are featured as cards up top; the tier tables below carry
   // everyone else so nobody appears twice.
   const slotSponsors = activeSponsors
-    .filter(sponsor => sponsor.slot !== undefined)
+    .filter((sponsor) => sponsor.slot !== undefined)
     .toSorted((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
-  const tieredSponsors = activeSponsors.filter(
-    sponsor => sponsor.slot === undefined,
-  )
+  const tieredSponsors = activeSponsors.filter((sponsor) => sponsor.slot === undefined)
 
   const groupedSponsors = new Map<number, Sponsor[]>()
 
@@ -153,9 +141,9 @@ function buildSponsorsSection(sponsors: Sponsor[]): string {
 
   // Sizes rank against every active tier, slot sponsors' tiers included, so
   // featuring the top tiers as cards does not inflate the tables below them.
-  const sizeTierLevels = [
-    ...new Set(activeSponsors.map(sponsor => sponsor.tierLevel)),
-  ].toSorted((a, b) => b - a)
+  const sizeTierLevels = [...new Set(activeSponsors.map((sponsor) => sponsor.tierLevel))].toSorted(
+    (a, b) => b - a,
+  )
   const tierLevels = [...groupedSponsors.keys()].toSorted((a, b) => b - a)
 
   for (const tierLevel of tierLevels) {
@@ -166,10 +154,7 @@ function buildSponsorsSection(sponsors: Sponsor[]): string {
     }
 
     const tierTitle = tierSponsors[0]?.tierTitlePlural ?? `Tier ${tierLevel}`
-    const [columns, imageSize] = getTierImageSizeAndColumns(
-      tierLevel,
-      sizeTierLevels,
-    )
+    const [columns, imageSize] = getTierImageSizeAndColumns(tierLevel, sizeTierLevels)
 
     lines.push(`### ${tierTitle}`, '', '<table>', '  <tr>')
 
@@ -213,12 +198,8 @@ function replaceSponsorsSection(content: string, replacement: string): string {
     return content
   }
 
-  const nextHeadingIndex = content.indexOf(
-    '\n## ',
-    startIndex + heading.length,
-  )
-  const endIndex
-    = nextHeadingIndex === -1 ? content.length : nextHeadingIndex + 1
+  const nextHeadingIndex = content.indexOf('\n## ', startIndex + heading.length)
+  const endIndex = nextHeadingIndex === -1 ? content.length : nextHeadingIndex + 1
 
   // Trimmed to a single trailing newline, or a section replaced at the end of
   // the file leaves a blank last line that the markdown fixer removes — and
@@ -230,9 +211,7 @@ async function main(): Promise<void> {
   const response = await fetch(SPONSORS_SOURCE_URL)
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch sponsors data: ${response.status} ${response.statusText}`,
-    )
+    throw new Error(`Failed to fetch sponsors data: ${response.status} ${response.statusText}`)
   }
 
   // Links arrive with their tracking params already baked in upstream.
@@ -243,7 +222,7 @@ async function main(): Promise<void> {
   const replacement = buildSponsorsSection(sponsors)
 
   const readmeContents = await Promise.all(
-    readmeFiles.map(readmePath => readFile(readmePath, 'utf-8')),
+    readmeFiles.map((readmePath) => readFile(readmePath, 'utf-8')),
   )
 
   const writePromises: Promise<void>[] = []
@@ -260,13 +239,13 @@ async function main(): Promise<void> {
   }
 
   await Promise.all(writePromises)
+  // oxlint-disable-next-line no-console
   console.log(`Updated sponsors section in ${updatedCount} README files.`)
 }
 
 try {
   await main()
-}
-catch (error) {
+} catch (error) {
   console.error(error)
   process.exitCode = 1
 }

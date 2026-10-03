@@ -414,12 +414,7 @@ export interface OperationObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.0.html#parameter-locations}
  */
-export type ParameterLocation
-  = | 'cookie'
-    | 'header'
-    | 'path'
-    | 'query'
-    | 'querystring'
+export type ParameterLocation = 'cookie' | 'header' | 'path' | 'query' | 'querystring'
 
 /**
  * Describes how a parameter value will be serialized depending on the type of
@@ -442,15 +437,15 @@ export type ParameterLocation
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.0.html#style-values}
  */
-export type ParameterStyle
-  = | 'cookie'
-    | 'deepObject'
-    | 'form'
-    | 'label'
-    | 'matrix'
-    | 'pipeDelimited'
-    | 'simple'
-    | 'spaceDelimited'
+export type ParameterStyle =
+  | 'cookie'
+  | 'deepObject'
+  | 'form'
+  | 'label'
+  | 'matrix'
+  | 'pipeDelimited'
+  | 'simple'
+  | 'spaceDelimited'
 
 /**
  * Describes a single operation parameter.
@@ -802,9 +797,7 @@ export interface ResponsesObject extends SpecificationExtensions {
    * `5XX`. If a response is defined using an explicit code, the explicit code
    * definition takes precedence over the range definition for that code.
    */
-  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]:
-    | ResponseObject
-    | ReferenceObject
+  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject
 }
 
 /**
@@ -1796,12 +1789,12 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
  */
-export type SecuritySchemeObject
-  = | ApiKeySecuritySchemeObject
-    | HttpSecuritySchemeObject
-    | MutualTlsSecuritySchemeObject
-    | OAuth2SecuritySchemeObject
-    | OpenIdConnectSecuritySchemeObject
+export type SecuritySchemeObject =
+  | ApiKeySecuritySchemeObject
+  | HttpSecuritySchemeObject
+  | MutualTlsSecuritySchemeObject
+  | OAuth2SecuritySchemeObject
+  | OpenIdConnectSecuritySchemeObject
 
 /**
  * Allows configuration of the supported OAuth Flows.
@@ -1857,12 +1850,12 @@ export interface DeviceAuthorizationOAuthFlowObject extends OAuthFlowObjectBase 
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.0.html#oauth-flow-object}
  */
-export type OAuthFlowObject
-  = | AuthorizationCodeOAuthFlowObject
-    | ClientCredentialsOAuthFlowObject
-    | DeviceAuthorizationOAuthFlowObject
-    | ImplicitOAuthFlowObject
-    | PasswordOAuthFlowObject
+export type OAuthFlowObject =
+  | AuthorizationCodeOAuthFlowObject
+  | ClientCredentialsOAuthFlowObject
+  | DeviceAuthorizationOAuthFlowObject
+  | ImplicitOAuthFlowObject
+  | PasswordOAuthFlowObject
 
 /**
  * Lists the required security schemes to execute this operation or the API as

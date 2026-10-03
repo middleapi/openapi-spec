@@ -10,4 +10,5 @@ preferWorkspacePackages: true
 
 allowBuilds:
   esbuild: true
-  simple-git-hooks: false
+minimumReleaseAgeExclude:
+  - uncheck@0.1.0

@@ -23,8 +23,7 @@ export const doc: OpenAPIObject = {
         },
         responses: {
           200: {
-            description:
-              'Return a 200 status to indicate that the data was received successfully',
+            description: 'Return a 200 status to indicate that the data was received successfully',
           },
         },
       },

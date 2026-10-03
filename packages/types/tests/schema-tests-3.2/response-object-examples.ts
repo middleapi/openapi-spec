@@ -52,8 +52,7 @@ export const doc: OpenAPIObject = {
             },
           },
           'X-Rate-Limit-Remaining': {
-            description:
-              'The number of remaining requests in the current period',
+            description: 'The number of remaining requests in the current period',
             schema: {
               type: 'integer',
             },

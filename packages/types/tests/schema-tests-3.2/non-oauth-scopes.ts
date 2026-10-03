@@ -25,8 +25,7 @@ export const doc: OpenAPIObject = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'jwt',
-        description:
-          'note: non-oauth scopes are not defined at the securityScheme level',
+        description: 'note: non-oauth scopes are not defined at the securityScheme level',
       },
     },
   },

@@ -37,8 +37,7 @@ export const doc: OpenAPIObject = {
                   required: ['subscriptionId'],
                   properties: {
                     subscriptionId: {
-                      description:
-                        'this unique identifier allows management of the subscription',
+                      description: 'this unique identifier allows management of the subscription',
                       type: 'string',
                       example: '2531329f-fb09-4ef7-887e-84e648214436',
                     },
