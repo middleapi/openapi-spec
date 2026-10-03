@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "./tsconfig.base.json",
+  "extends": "uncheck/tsconfig/middleapi",
   "compilerOptions": {
     "lib": ["ES2024"],
     "types": ["node", "vitest/globals"]

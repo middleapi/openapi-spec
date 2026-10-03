@@ -1,14 +1,12 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "Stop": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; ./node_modules/.bin/eslint --no-warn-ignored --fix \"$f\"; } 2>/dev/null || true",
-            "timeout": 30,
-            "statusMessage": "Running eslint --fix"
+            "command": "pnpm exec uncheck hooks run --fix",
+            "timeout": 600
           }
         ]
       }

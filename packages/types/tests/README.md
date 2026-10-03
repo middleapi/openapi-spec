@@ -1,6 +1,6 @@
 # Real-document fixtures
 
-Official OpenAPI documents embedded as TypeScript object literals. Each file types its document as the `OpenAPIObject` of the version module matching its `openapi` field, so `pnpm type:check` at the repository root compiles the whole corpus and fails whenever the types reject a valid document. The downgrader's corpus tests reuse the same fixtures as conversion input.
+Official OpenAPI documents embedded as TypeScript object literals. Each file types its document as the `OpenAPIObject` of the version module matching its `openapi` field, so `pnpm check` at the repository root compiles the whole corpus and fails whenever the types reject a valid document. The downgrader's corpus tests reuse the same fixtures as conversion input.
 
 Sources (Apache-2.0, © the OpenAPI Initiative):
 
