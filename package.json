@@ -23,7 +23,7 @@
     "oxfmt": "^0.71.0",
     "oxlint": "^1.86.0",
     "sherif": "^1.13.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "unbuild": "^3.6.1",
     "uncheck": "^0.1.0",
     "vitest": "^4.1.11"
