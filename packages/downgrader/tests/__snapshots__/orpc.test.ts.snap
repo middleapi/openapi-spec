@@ -299,6 +299,7 @@ exports[`matches the 3.0 snapshot 1`] = `
     },
   },
   "info": {
+    "description": "Planets and their categories",
     "title": "Planets",
     "version": "1.0.0",
   },
@@ -1042,6 +1043,7 @@ exports[`matches the 3.0 snapshot 1`] = `
   ],
   "tags": [
     {
+      "description": "Planets",
       "name": "planets",
     },
   ],

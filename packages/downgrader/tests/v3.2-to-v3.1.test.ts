@@ -1,5 +1,7 @@
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
+import { runInNewContext } from 'node:vm'
+
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 
 import { expectValidDowngrade } from './validate'
@@ -104,9 +106,9 @@ describe('downgradeSpecV32ToV31', () => {
     expect(out.paths?.['/a']?.get?.responses?.['200']).toMatchObject({ links: { self: { server: expected } } })
   })
 
-  it('drops Tag summary, parent, and kind', () => {
-    expect(convert({ tags: [{ name: 'cats', summary: 'Cats', parent: 'pets', kind: 'nav', description: 'd' }] }).tags)
-      .toEqual([{ name: 'cats', description: 'd' }])
+  it('drops Tag summary, parent, and kind, and lets the summary stand in for a missing description', () => {
+    expect(convert({ tags: [{ name: 'cats', summary: 'Cats', parent: 'pets', kind: 'nav', description: 'd' }, { name: 'dogs', summary: 'Dogs' }] }).tags)
+      .toEqual([{ name: 'cats', description: 'd' }, { name: 'dogs', description: 'Dogs' }])
   })
 
   it('drops the query method and additionalOperations', () => {
@@ -160,10 +162,11 @@ describe('downgradeSpecV32ToV31', () => {
         .toEqual([{ in: 'cookie', name: 'c' }, { in: 'cookie', name: 'f', style: 'form' }])
     })
 
-    it('drops example and examples beside content', () => {
+    it('drops the fields 3.1 allows only beside schema from a parameter with content', () => {
       const content = { 'application/json': { example: 1 } }
-      expect(convertOperation({ parameters: [{ in: 'query', name: 'q', content, example: 1, examples: { a: { value: 1 } } }] })?.parameters)
-        .toEqual([{ in: 'query', name: 'q', content }])
+      // As oRPC emits a query parameter whose queryStyles entry is 'json'.
+      const parameter = { in: 'query', name: 'q', content, allowEmptyValue: true, allowReserved: true, style: 'form', explode: true, example: 1, examples: { a: { value: 1 } } } as const
+      expect(convertOperation({ parameters: [parameter] })?.parameters).toEqual([{ in: 'query', name: 'q', content, allowEmptyValue: true }])
     })
   })
 
@@ -308,6 +311,16 @@ describe('downgradeSpecV32ToV31', () => {
     expect(doc).toEqual(before)
     expect(out.info['x-meta']).toEqual(example)
     expect(out.info['x-meta']).not.toBe(example)
+  })
+
+  it('reads null-prototype and other-realm objects as JSON would, such as oRPC\'s generated documents', () => {
+    function NullProto() {}
+    NullProto.prototype = Object.freeze(Object.create(null))
+    const object = (fields: object) => Object.assign(new (NullProto as any)(), fields)
+    const doc = object({ openapi: '3.2.0', info: object(info), tags: [object({ name: 'a', kind: 'nav' })], paths: object({}) })
+    expect(downgradeSpecV32ToV31(doc)).toEqual({ openapi: '3.1.2', info, tags: [{ name: 'a' }], paths: {} })
+    const other = runInNewContext(`(${JSON.stringify({ openapi: '3.2.0', info, servers: [{ url: '/', name: 'main' }] })})`)
+    expect(downgradeSpecV32ToV31(other)).toEqual({ openapi: '3.1.2', info, servers: [{ url: '/' }] })
   })
 
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {

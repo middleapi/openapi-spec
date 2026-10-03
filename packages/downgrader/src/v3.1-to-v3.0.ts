@@ -55,16 +55,57 @@ const REMOVED_KEYWORDS = [
   'contentEncoding',
   'contentMediaType',
   'contentSchema',
-  // A 3.0 keyword that 3.1 ignores, which would admit null in 3.0.
-  'nullable',
   // Rewritten by `finishSchema`.
   '$ref',
   'const',
   'examples',
   'exclusiveMaximum',
   'exclusiveMinimum',
+  'nullable',
   'type',
 ]
+
+// The only keywords a 3.0 Schema Object allows, besides extensions.
+const V30_SCHEMA_KEYWORDS = new Set([
+  'additionalProperties',
+  'allOf',
+  'anyOf',
+  'default',
+  'deprecated',
+  'description',
+  'discriminator',
+  'enum',
+  'example',
+  'exclusiveMaximum',
+  'exclusiveMinimum',
+  'externalDocs',
+  'format',
+  'items',
+  'maxItems',
+  'maxLength',
+  'maxProperties',
+  'maximum',
+  'minItems',
+  'minLength',
+  'minProperties',
+  'minimum',
+  'multipleOf',
+  'not',
+  'nullable',
+  'oneOf',
+  'pattern',
+  'properties',
+  'readOnly',
+  'required',
+  'title',
+  'type',
+  'uniqueItems',
+  'writeOnly',
+  'xml',
+])
+
+// Keywords that let `unevaluatedProperties` see more than `properties`.
+const IN_PLACE_APPLICATORS = ['$dynamicRef', '$ref', 'additionalProperties', 'allOf', 'anyOf', 'dependentSchemas', 'else', 'if', 'oneOf', 'patternProperties', 'then']
 
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
@@ -84,6 +125,8 @@ const SCHEMA_FIELDS = defineFields({
   },
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
+  // An empty one rejects every value, which `finishSchema` keeps another way.
+  enum: item => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.
   items: (item, ctx, schema) => (schema.prefixItems === undefined ? convertSchema(item, ctx) : DROP),
   not: convertSchema,
@@ -145,7 +188,7 @@ const COMPONENTS_FIELDS = defineFields({
   requestBodies: map(refOr(convertRequestBody)),
   responses: map(refOr(convertResponse)),
   schemas: map(convertSchema),
-  securitySchemes: map((item, ctx) => (isMutualTLS(item, ctx) ? DROP : convertReference(item, ctx))),
+  securitySchemes: map((item, ctx) => (schemeType(item, ctx) === 'mutualTLS' ? DROP : convertReference(item, ctx))),
 })
 
 const LICENSE_FIELDS = defineFields({
@@ -157,9 +200,16 @@ const INFO_FIELDS = defineFields({
   summary: DROP,
 })
 
+// A summary stands in for the description it lacks.
+function finishInfo(out: Record<string, unknown>, info: Record<string, unknown>): void {
+  if (out.description === undefined && typeof info.summary === 'string') {
+    out.description = info.summary
+  }
+}
+
 const DOCUMENT_FIELDS = defineFields({
   components: (item, ctx) => convertObject(item, ctx, COMPONENTS_FIELDS),
-  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS),
+  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS, finishInfo),
   jsonSchemaDialect: DROP,
   paths: map(convertPathItem, isPath),
   security: convertSecurity,
@@ -193,19 +243,26 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
 // whose items match any of its item schemas, and those of the items after
-// them, unless `items` or `maxItems` allows none.
-function convertTuple(prefixItems: unknown[], schema: Record<string, unknown>, ctx: Context): unknown {
+// them, unless `items: false` or `maxItems` allows none. `items: false`
+// becomes `maxItems`. Returns whether the result means exactly the same,
+// as when every item schema is the same.
+function convertTuple(out: Record<string, unknown>, prefixItems: unknown[], schema: Record<string, unknown>, ctx: Context): boolean {
   const { items, maxItems } = schema
-  const closed = items === false || (typeof maxItems === 'number' && maxItems <= prefixItems.length)
+  if (items === false && !(typeof maxItems === 'number' && maxItems <= prefixItems.length)) {
+    out.maxItems = prefixItems.length
+  }
+  const closed = typeof out.maxItems === 'number' && out.maxItems <= prefixItems.length
   if (!closed && (items === undefined || items === true)) {
-    return {}
+    out.items = {}
+    return false
   }
   const variants = new Map<unknown, unknown>()
   for (const item of closed ? prefixItems : [...prefixItems, items]) {
     const variant = convertSchema(item, ctx)
     variants.set(jsonKey(variant), variant)
   }
-  return variants.size === 1 ? [...variants.values()][0] : { anyOf: [...variants.values()] }
+  out.items = variants.size === 1 ? [...variants.values()][0] : { anyOf: [...variants.values()] }
+  return closed && variants.size === 1
 }
 
 // Equal JSON values get the same key. A cyclic value is only equal to itself.
@@ -236,14 +293,37 @@ function isLoose(value: unknown): boolean {
   return typeof value === 'object' && value !== null && LOOSE.has(value)
 }
 
+// With no in-place applicator beside it, it means exactly `additionalProperties`.
+function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
+  return schema.unevaluatedProperties !== undefined && IN_PLACE_APPLICATORS.every(key => schema[key] === undefined)
+}
+
+// Whether removing `key` from `schema` lets it accept more values. Property
+// names are strings anyway, and `unevaluatedProperties` does nothing beside
+// `additionalProperties`.
+function losesRestriction(key: string, schema: Record<string, unknown>, exactTuple: boolean): boolean {
+  switch (key) {
+    case 'prefixItems':
+      return !exactTuple
+    case 'propertyNames': {
+      const names = schema.propertyNames
+      return !(names === true || (isRecord(names) && Object.entries(names).every(([name, item]) => name === 'type' && item === 'string')))
+    }
+    case 'unevaluatedProperties':
+      return !(schema.additionalProperties !== undefined || isUnevaluatedAdditional(schema))
+    default:
+      return true
+  }
+}
+
 // A schema that lost a restriction accepts more values. A `not` over it would
 // then reject values the original accepts, and so would a `oneOf` whose
 // branches may now overlap, so the `not` is removed and the `oneOf` becomes
 // an `anyOf`. Returns whether the schema is loosened itself.
-function loosen(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
+function loosen(out: Record<string, unknown>, schema: Record<string, unknown>, exactTuple: boolean): boolean {
   let loose = false
   for (const key in schema) {
-    if (RESTRICTING_KEYWORDS.has(key) && schema[key] !== undefined) {
+    if (RESTRICTING_KEYWORDS.has(key) && schema[key] !== undefined && losesRestriction(key, schema, exactTuple)) {
       loose = true
     }
   }
@@ -292,6 +372,18 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
   }
 }
 
+// 3.0 marks encoded and raw binary strings with `format` instead. A string
+// with a `contentSchema` holds structured text, not bytes.
+function binaryFormat(schema: Record<string, unknown>): string | undefined {
+  if (schema.contentEncoding === 'base64') {
+    return 'byte'
+  }
+  if (schema.contentEncoding === 'binary') {
+    return 'binary'
+  }
+  return schema.contentEncoding === undefined && schema.contentMediaType !== undefined && schema.contentSchema === undefined ? 'binary' : undefined
+}
+
 function finishSchema(out: Record<string, unknown>, schema: Record<string, unknown>, ctx: Context): void {
   // 3.0 ignores the siblings of a `$ref`, but not the members of an `allOf`.
   if (typeof schema.$ref === 'string') {
@@ -300,12 +392,22 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (schema.const !== undefined) {
     out.enum = [clone(schema.const)]
   }
-  if (Array.isArray(schema.prefixItems)) {
-    out.items = convertTuple(schema.prefixItems, schema, ctx)
+  if (Array.isArray(schema.enum) && schema.enum.length === 0) {
+    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+  }
+  const exactTuple = Array.isArray(schema.prefixItems) && convertTuple(out, schema.prefixItems, schema, ctx)
+  if (isUnevaluatedAdditional(schema)) {
+    const additional = schema.unevaluatedProperties
+    out.additionalProperties = typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
   }
   // Before `convertType` moves `items` into an `anyOf` branch.
-  const loose = loosen(out, schema)
+  let loose = loosen(out, schema, exactTuple)
   convertType(out, schema.type)
+  // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.
+  if (schema.nullable === true && typeof out.type === 'string' && out.nullable !== true) {
+    out.nullable = true
+    loose = true
+  }
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}
   }
@@ -321,14 +423,18 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
   }
-  // 3.0 marks encoded and raw binary strings with `format` instead.
-  const format = schema.contentEncoding === 'base64'
-    ? 'byte'
-    : schema.contentEncoding === 'binary' || (schema.contentEncoding === undefined && schema.contentMediaType !== undefined) ? 'binary' : undefined
+  const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
     out.format ??= format
     if (schema.type === undefined) {
       out.type = 'string'
+    }
+  }
+  // 3.0 allows no other keywords, so unknown ones become extensions.
+  for (const key of Object.keys(out)) {
+    if (!V30_SCHEMA_KEYWORDS.has(key) && !key.startsWith('x-')) {
+      out[`x-${key}`] ??= out[key]
+      delete out[key]
     }
   }
   if (loose) {
@@ -398,30 +504,32 @@ function convertPathItem(value: unknown, ctx: Context): unknown {
     : convertObject(value, ctx, PATH_ITEM_FIELDS)
 }
 
-function isMutualTLS(scheme: unknown, ctx: Context): boolean {
+function schemeType(scheme: unknown, ctx: Context): unknown {
   const ref = getRef(scheme)
   const target = ref === undefined ? scheme : resolve(ref, ctx)
-  return isRecord(target) && target.type === 'mutualTLS'
+  return isRecord(target) ? target.type : undefined
 }
 
 // 3.0 has no mutual TLS, so security requirements lose the schemes that use
 // it. A requirement left empty is removed, and so is a list left empty,
-// because an empty one would mean that no security is needed.
+// because an empty one would mean that no security is needed. 3.0 also
+// allows scopes only for OAuth2 and OpenID Connect.
 function convertSecurity(value: unknown, ctx: Context): unknown {
   if (!Array.isArray(value)) {
     return clone(value)
   }
   const schemes = resolvePointer('#/components/securitySchemes', ctx)
+  const typeOf = (name: string): unknown => (isRecord(schemes) && Object.hasOwn(schemes, name) ? schemeType(schemes[name], ctx) : undefined)
   const out: unknown[] = []
   for (const requirement of value) {
     if (!isRecord(requirement)) {
       out.push(clone(requirement))
       continue
     }
-    const names = Object.keys(requirement).filter(name => requirement[name] !== undefined)
-    const kept = names.filter(name => !(isRecord(schemes) && Object.hasOwn(schemes, name) && isMutualTLS(schemes[name], ctx)))
-    if (kept.length > 0 || names.length === 0) {
-      out.push(Object.fromEntries(kept.map(name => [name, clone(requirement[name])])))
+    const entries = Object.keys(requirement).filter(name => requirement[name] !== undefined).map(name => [name, typeOf(name)] as const)
+    const kept = entries.filter(([, type]) => type !== 'mutualTLS')
+    if (kept.length > 0 || entries.length === 0) {
+      out.push(Object.fromEntries(kept.map(([name, type]) => [name, type === 'apiKey' || type === 'http' ? [] : clone(requirement[name])])))
     }
   }
   return out.length === 0 && value.length > 0 ? DROP : out

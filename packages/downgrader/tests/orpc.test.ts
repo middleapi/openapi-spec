@@ -15,7 +15,7 @@ function downgradeTwice(spec: OpenAPIV3_2.OpenAPIObject) {
 it('converts the oRPC document into a valid 3.1 document', async () => {
   const v31 = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
   expect(v31.servers).toEqual([{ url: 'https://api.example.com' }])
-  expect(v31.tags).toEqual([{ name: 'planets' }])
+  expect(v31.tags).toEqual([{ name: 'planets', description: 'Planets' }])
 })
 
 it('converts the oRPC document into a valid 3.0 document', async () => {

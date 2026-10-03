@@ -177,8 +177,15 @@ function convertServer(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SERVER_FIELDS)
 }
 
+// A summary stands in for the description it lacks.
+function finishTag(out: Record<string, unknown>, tag: Record<string, unknown>): void {
+  if (out.description === undefined && typeof tag.summary === 'string') {
+    out.description = tag.summary
+  }
+}
+
 function convertTag(value: unknown, ctx: Context): unknown {
-  return convertObject(value, ctx, TAG_FIELDS)
+  return convertObject(value, ctx, TAG_FIELDS, finishTag)
 }
 
 function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): void {
@@ -198,11 +205,15 @@ function isQuerystring(parameter: unknown): boolean {
   return isRecord(parameter) && parameter.in === 'querystring'
 }
 
-// 3.1 allows examples only beside `schema`.
+// 3.1 allows these only beside `schema`. The media type in `content`
+// carries its own examples and serialization.
 function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
   if (parameter.content !== undefined) {
+    delete out.allowReserved
     delete out.example
     delete out.examples
+    delete out.explode
+    delete out.style
   }
 }
 

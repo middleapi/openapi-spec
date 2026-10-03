@@ -73,9 +73,10 @@ describe('downgradeSpecV31ToV30', () => {
       .toEqual({ openapi: '3.0.4', info, paths: {} })
   })
 
-  it('drops Info summary and License identifier', () => {
-    expect(downgradeSpecV31ToV30({ openapi: '3.1.2', info: { ...info, summary: 's', license: { name: 'MIT', identifier: 'MIT' } }, paths: {} }).info)
-      .toEqual({ ...info, license: { name: 'MIT' } })
+  it('drops Info summary and License identifier, and lets the summary stand in for a missing description', () => {
+    expect(downgradeSpecV31ToV30({ openapi: '3.1.2', info: { ...info, summary: 's', description: 'd', license: { name: 'MIT', identifier: 'MIT' } }, paths: {} }).info)
+      .toEqual({ ...info, description: 'd', license: { name: 'MIT' } })
+    expect(downgradeSpecV31ToV30({ openapi: '3.1.2', info: { ...info, summary: 's' }, paths: {} }).info).toEqual({ ...info, description: 's' })
   })
 
   it('strips Reference Objects down to $ref', () => {
@@ -188,6 +189,24 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  it('empties the scopes of apiKey and http requirements, which 3.0 allows only for OAuth2 and OpenID Connect', () => {
+    const out = convert({
+      security: [{ key: ['tasks.get'], oidc: ['openid'] }],
+      paths: { '/a': { get: { security: [{ bearer: ['read:users'] }, { alias: ['x'] }, { oauth: ['write'] }], responses } } },
+      components: {
+        securitySchemes: {
+          key: { type: 'apiKey', name: 'k', in: 'header' },
+          bearer: { type: 'http', scheme: 'bearer' },
+          alias: { $ref: '#/components/securitySchemes/key' },
+          oidc: { type: 'openIdConnect', openIdConnectUrl: 'https://example.com/.well-known/openid-configuration' },
+          oauth: { type: 'oauth2', flows: { clientCredentials: { tokenUrl: 'https://example.com/token', scopes: { write: 'w' } } } },
+        },
+      },
+    })
+    expect(out.security).toEqual([{ key: [], oidc: ['openid'] }])
+    expect(out.paths['/a']?.get?.security).toEqual([{ bearer: [] }, { alias: [] }, { oauth: ['write'] }])
+  })
+
   it('converts schemas everywhere in the document', () => {
     const schema: OpenAPIV3_1.SchemaObject = { type: ['string', 'null'] }
     const out = convert({
@@ -223,6 +242,15 @@ describe('downgradeSchemaV31ToV30', () => {
     it('marks null with nullable', () => {
       expect(downgradeSchemaV31ToV30({ type: ['string', 'null'] })).toEqual({ type: 'string', nullable: true })
       expect(downgradeSchemaV31ToV30({ type: 'integer' })).toEqual({ type: 'integer' })
+    })
+
+    it('keeps a 3.0-style nullable written beside a type, which only 3.0 gives meaning', () => {
+      const schema = (fields: Record<string, unknown>) => downgradeSchemaV31ToV30(fields as OpenAPIV3_1.SchemaObject)
+      expect(schema({ type: 'string', nullable: true })).toEqual({ type: 'string', nullable: true })
+      expect(schema({ nullable: true })).toEqual({})
+      expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
+      // It admits null, which the 3.1 schema did not, so the branches can overlap.
+      expect(schema({ oneOf: [{ type: 'string', nullable: true }, { type: 'null' }] })).toEqual({ anyOf: [{ type: 'string', nullable: true }, { enum: [null] }] })
     })
 
     it('turns several types into anyOf, moving items into the array branch', () => {
@@ -270,13 +298,13 @@ describe('downgradeSchemaV31ToV30', () => {
       .toEqual({ type: 'array', items: { anyOf: prefixItems }, minItems: 2, maxItems: 2 })
     expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: { type: 'number' } }))
       .toEqual({ type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'number' }] } })
-    expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: false })).toEqual({ type: 'array', items: { type: 'string' } })
+    expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: false })).toEqual({ type: 'array', items: { type: 'string' }, maxItems: 1 })
     expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }] })).toEqual({ type: 'array', items: {} })
     // As zod emits a Map entry, and a tuple of one type.
     expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }, { type: 'number' }], minItems: 2, maxItems: 2 }))
       .toEqual({ type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'number' }] }, minItems: 2, maxItems: 2 })
     expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'number' }, { type: 'number' }], items: false }))
-      .toEqual({ type: 'array', items: { type: 'number' } })
+      .toEqual({ type: 'array', items: { type: 'number' }, maxItems: 2 })
   })
 
   it('marks binary strings with format', () => {
@@ -284,6 +312,8 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ type: 'string', contentMediaType: 'image/png' })).toEqual({ type: 'string', format: 'binary' })
     expect(downgradeSchemaV31ToV30({ contentMediaType: 'image/png' })).toEqual({ type: 'string', format: 'binary' })
     expect(downgradeSchemaV31ToV30({ type: 'string', format: 'binary', contentEncoding: 'binary', contentMediaType: 'image/png' })).toEqual({ type: 'string', format: 'binary' })
+    // A string with a contentSchema holds structured text, such as JSON in a server-sent event.
+    expect(downgradeSchemaV31ToV30({ type: 'string', contentMediaType: 'application/json', contentSchema: { type: 'object' } })).toEqual({ type: 'string' })
   })
 
   describe('$ref', () => {
@@ -329,10 +359,25 @@ describe('downgradeSchemaV31ToV30', () => {
       unevaluatedProperties: false,
       additionalProperties: { type: 'string' },
       contentSchema: { type: 'object' },
-      nullable: true,
-    } as OpenAPIV3_1.SchemaObject)).toEqual({ type: 'object', additionalProperties: { type: 'string' } })
+    })).toEqual({ type: 'object', additionalProperties: { type: 'string' } })
     expect(downgradeSchemaV31ToV30({ type: 'array', contains: { type: 'string' }, minContains: 1, maxContains: 2, unevaluatedItems: false }))
       .toEqual({ type: 'array', items: {} })
+  })
+
+  it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
+    const properties = { name: { type: 'string' } } as const
+    expect(downgradeSchemaV31ToV30({ type: 'object', properties, unevaluatedProperties: false })).toEqual({ type: 'object', properties, additionalProperties: false })
+    expect(downgradeSchemaV31ToV30({ properties, unevaluatedProperties: { type: ['integer', 'null'] } })).toEqual({ properties, additionalProperties: { type: 'integer', nullable: true } })
+    // The variants of a closed union stay exclusive.
+    expect(downgradeSchemaV31ToV30({ oneOf: [{ properties, unevaluatedProperties: false }, { properties: { id: { type: 'integer' } }, unevaluatedProperties: false }] }))
+      .toEqual({ oneOf: [{ properties, additionalProperties: false }, { properties: { id: { type: 'integer' } }, additionalProperties: false }] })
+    // Beside allOf it also sees the properties allOf evaluates, which 3.0 cannot express.
+    expect(downgradeSchemaV31ToV30({ allOf: [{ $ref: '#/components/schemas/Base' }], properties, unevaluatedProperties: false }))
+      .toEqual({ allOf: [{ $ref: '#/components/schemas/Base' }], properties })
+  })
+
+  it('keeps meaning an empty enum, which 3.0 forbids, as a schema that rejects every value', () => {
+    expect(downgradeSchemaV31ToV30({ type: 'string', enum: [] })).toEqual({ type: 'string', allOf: [{ not: {} }] })
   })
 
   it('drops additionalProperties beside patternProperties, which it would contradict', () => {
@@ -355,6 +400,18 @@ describe('downgradeSchemaV31ToV30', () => {
         .toEqual({ anyOf: [{ minimum: 0 }], allOf: [{ anyOf: [{ items: {} }, {}] }] })
     })
 
+    it('excludes keywords that restrict nothing, and tuples converted exactly', () => {
+      // As zod emits a discriminated union whose member holds a record or a tuple.
+      const record: OpenAPIV3_1.SchemaObject = { type: 'object', propertyNames: { type: 'string' }, additionalProperties: { type: 'string' } }
+      const tuple: OpenAPIV3_1.SchemaObject = { type: 'array', prefixItems: [{ type: 'number' }, { type: 'number' }], items: false, minItems: 2, maxItems: 2 }
+      expect(downgradeSchemaV31ToV30({ oneOf: [{ properties: { meta: record } }, { properties: { point: tuple } }] })).toEqual({
+        oneOf: [
+          { properties: { meta: { type: 'object', additionalProperties: { type: 'string' } } } },
+          { properties: { point: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 } } },
+        ],
+      })
+    })
+
     it('includes a $defs target cut at recursion', () => {
       expect(downgradeSchemaV31ToV30({
         not: { $ref: '#/$defs/Tree' },
@@ -372,9 +429,12 @@ describe('downgradeSchemaV31ToV30', () => {
       .toEqual({ properties: { any: {}, none: { not: {} } }, additionalProperties: false, not: {} })
   })
 
-  it('keeps extensions and unknown keywords', () => {
+  it('keeps extensions, and turns unknown keywords, which 3.0 forbids, into extensions', () => {
     expect(downgradeSchemaV31ToV30({ 'type': 'string', 'x-native-type': 'date', 'format': 'date-time' } as OpenAPIV3_1.SchemaObject))
       .toEqual({ 'type': 'string', 'x-native-type': 'date', 'format': 'date-time' })
+    // As zod `.meta()` keys and generators' custom keywords arrive.
+    expect(downgradeSchemaV31ToV30({ 'type': 'string', 'label': 'Name', 'placeholder': 'Jane', 'x-label': 'kept' } as OpenAPIV3_1.SchemaObject))
+      .toEqual({ 'type': 'string', 'x-label': 'kept', 'x-placeholder': 'Jane' })
   })
 
   it('converts a shared object once, and keeps a cycle as a cycle', () => {

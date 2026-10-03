@@ -18,6 +18,7 @@ exports[`matches the snapshots of the 3.2 mega document > 3.0 1`] = `
     "securitySchemes": {},
   },
   "info": {
+    "description": "My API's summary",
     "license": {
       "name": "Apache 2.0",
     },

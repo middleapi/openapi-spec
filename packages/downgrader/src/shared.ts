@@ -22,12 +22,18 @@ export type Finish = (out: Record<string, unknown>, source: Record<string, unkno
 
 export const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
+/**
+ * Whether `value` is an object JSON would see as one: its prototype is null,
+ * or has a null prototype itself. That covers `Object.prototype` from any
+ * realm and null-prototype classes, such as the objects oRPC serializes to,
+ * but not a `Date`, a `Map`, or another class instance.
+ */
 export function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
   const proto: unknown = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
+  return proto === null || Object.getPrototypeOf(proto) === null
 }
 
 // Assigning `__proto__` would set the prototype instead of adding a key.
