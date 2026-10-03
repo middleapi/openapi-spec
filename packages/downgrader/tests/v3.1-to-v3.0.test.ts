@@ -339,6 +339,30 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ type: 'object', patternProperties: { '^x-': { type: 'string' } }, additionalProperties: false })).toEqual({ type: 'object' })
   })
 
+  describe('a schema that lost a restriction', () => {
+    it('is no longer negated by not', () => {
+      expect(downgradeSchemaV31ToV30({ not: { contains: { type: 'string' } } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ type: 'object', not: { patternProperties: { '^x-': { type: 'string' } } } })).toEqual({ type: 'object' })
+      expect(downgradeSchemaV31ToV30({ not: { properties: { a: { if: { minimum: 1 }, then: { maximum: 2 } } } } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { type: 'string', minLength: 3 } })).toEqual({ not: { type: 'string', minLength: 3 } })
+    })
+
+    it('turns an enclosing oneOf into anyOf, since branches may now overlap', () => {
+      const branches = [{ type: 'object', propertyNames: { pattern: '^a' } }, { type: 'object', propertyNames: { pattern: '^b' } }] as const
+      expect(downgradeSchemaV31ToV30({ oneOf: [...branches] })).toEqual({ anyOf: [{ type: 'object' }, { type: 'object' }] })
+      expect(downgradeSchemaV31ToV30({ oneOf: [{ type: 'string' }, { type: 'number' }] })).toEqual({ oneOf: [{ type: 'string' }, { type: 'number' }] })
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ minimum: 0 }], oneOf: [{ prefixItems: [true] }, {}] }))
+        .toEqual({ anyOf: [{ minimum: 0 }], allOf: [{ anyOf: [{ items: {} }, {}] }] })
+    })
+
+    it('includes a $defs target cut at recursion', () => {
+      expect(downgradeSchemaV31ToV30({
+        not: { $ref: '#/$defs/Tree' },
+        $defs: { Tree: { type: 'object', properties: { child: { $ref: '#/$defs/Tree' } } } },
+      })).toEqual({})
+    })
+  })
+
   it('drops an empty required, which 3.0 forbids', () => {
     expect(downgradeSchemaV31ToV30({ type: 'object', required: [] })).toEqual({ type: 'object' })
   })

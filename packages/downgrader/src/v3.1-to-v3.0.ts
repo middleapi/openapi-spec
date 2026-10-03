@@ -24,19 +24,10 @@ import {
 // 3.0 has no place for these, so `$ref`s into them are replaced by their targets.
 const REMOVED_PARTS = ['#/webhooks/', '#/components/pathItems/']
 
-const REMOVED_KEYWORDS = [
-  '$anchor',
-  '$comment',
-  '$defs',
-  '$dynamicAnchor',
+// Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
+const RESTRICTING_KEYWORDS = new Set([
   '$dynamicRef',
-  '$id',
-  '$schema',
-  '$vocabulary',
   'contains',
-  'contentEncoding',
-  'contentMediaType',
-  'contentSchema',
   'dependentRequired',
   'dependentSchemas',
   'else',
@@ -49,6 +40,21 @@ const REMOVED_KEYWORDS = [
   'then',
   'unevaluatedItems',
   'unevaluatedProperties',
+])
+
+const REMOVED_KEYWORDS = [
+  ...RESTRICTING_KEYWORDS,
+  // Annotations and identifiers 3.0 lacks.
+  '$anchor',
+  '$comment',
+  '$defs',
+  '$dynamicAnchor',
+  '$id',
+  '$schema',
+  '$vocabulary',
+  'contentEncoding',
+  'contentMediaType',
+  'contentSchema',
   // A 3.0 keyword that 3.1 ignores, which would admit null in 3.0.
   'nullable',
   // Rewritten by `finishSchema`.
@@ -59,6 +65,9 @@ const REMOVED_KEYWORDS = [
   'exclusiveMinimum',
   'type',
 ]
+
+// Converted schemas that lost a restriction, directly or in a subschema.
+const LOOSE = new WeakSet<object>()
 
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -179,7 +188,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     return { $ref: ref }
   }
   const out = inline(ref, ctx, convertSchema)
-  return out === DROP ? {} : out
+  return out === DROP ? loosened({}) : out
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -216,6 +225,43 @@ function addAnyOf(out: Record<string, unknown>, variants: unknown[]): void {
   else {
     out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
   }
+}
+
+function loosened(out: object): object {
+  LOOSE.add(out)
+  return out
+}
+
+function isLoose(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && LOOSE.has(value)
+}
+
+// A schema that lost a restriction accepts more values. A `not` over it would
+// then reject values the original accepts, and so would a `oneOf` whose
+// branches may now overlap, so the `not` is removed and the `oneOf` becomes
+// an `anyOf`. Returns whether the schema is loosened itself.
+function loosen(out: Record<string, unknown>, schema: Record<string, unknown>): boolean {
+  let loose = false
+  for (const key in schema) {
+    if (RESTRICTING_KEYWORDS.has(key) && schema[key] !== undefined) {
+      loose = true
+    }
+  }
+  if (isLoose(out.not)) {
+    delete out.not
+    loose = true
+  }
+  if (Array.isArray(out.oneOf) && out.oneOf.some(isLoose)) {
+    addAnyOf(out, out.oneOf)
+    delete out.oneOf
+    loose = true
+  }
+  return loose
+    || isLoose(out.items)
+    || isLoose(out.additionalProperties)
+    || (isRecord(out.properties) && Object.values(out.properties).some(isLoose))
+    || (Array.isArray(out.allOf) && out.allOf.some(isLoose))
+    || (Array.isArray(out.anyOf) && out.anyOf.some(isLoose))
 }
 
 // 3.0 takes one type, and marks null with `nullable` instead.
@@ -257,6 +303,8 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
   if (Array.isArray(schema.prefixItems)) {
     out.items = convertTuple(schema.prefixItems, schema, ctx)
   }
+  // Before `convertType` moves `items` into an `anyOf` branch.
+  const loose = loosen(out, schema)
   convertType(out, schema.type)
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}
@@ -282,6 +330,9 @@ function finishSchema(out: Record<string, unknown>, schema: Record<string, unkno
     if (schema.type === undefined) {
       out.type = 'string'
     }
+  }
+  if (loose) {
+    LOOSE.add(out)
   }
 }
 

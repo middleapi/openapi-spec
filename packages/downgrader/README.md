@@ -190,6 +190,8 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 | [`unevaluatedItems`][js-unevaluated-items] and [`unevaluatedProperties`][js-unevaluated-properties]                                                                                                               | Removed.                                                                                                                                                     |
 | An array without `items`, or an empty `required`                                                                                                                                                                  | `items: {}`, which 3.0 requires, and no `required`, which 3.0 requires to be non-empty.                                                                      |
 | [`nullable`][3.0-schema-nullable], a 3.0 keyword                                                                                                                                                                  | Removed. 3.1 ignores it, and in 3.0 it would admit null.                                                                                                     |
+| [`not`][js-not] over a schema that lost a restriction above                                                                                                                                                       | Removed. Negating the looser schema would reject values the original accepts.                                                                                |
+| [`oneOf`][js-one-of] with a branch that lost a restriction above                                                                                                                                                  | `anyOf`. Looser branches may overlap, and then match more than one.                                                                                          |
 
 [js-type]: https://json-schema.org/draft/2020-12/json-schema-validation#name-type
 [js-const]: https://json-schema.org/draft/2020-12/json-schema-validation#name-const
@@ -220,11 +222,13 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 [js-property-names]: https://json-schema.org/draft/2020-12/json-schema-core#name-propertynames
 [js-unevaluated-items]: https://json-schema.org/draft/2020-12/json-schema-core#name-unevaluateditems
 [js-unevaluated-properties]: https://json-schema.org/draft/2020-12/json-schema-core#name-unevaluatedproperties
+[js-not]: https://json-schema.org/draft/2020-12/json-schema-core#name-not
+[js-one-of]: https://json-schema.org/draft/2020-12/json-schema-core#name-oneof
 [3.0-schema-nullable]: https://spec.openapis.org/oas/v3.0.4.html#schema-nullable
 
 #### Limitations
 
-- A removed keyword is a removed restriction, so the schema accepts more values than the original. A `not` or `oneOf` over it can then reject values the original accepts, for example when two `oneOf` branches differed only in `propertyNames` and now overlap.
+- A `not` or `oneOf` that reaches a schema that lost a restriction through a `$ref` kept in the output, such as one to `components.schemas`, can still reject values the original accepts.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
 - Older drafts are not supported. Keywords that only draft-07 or 2019-09 define, such as `definitions`, `dependencies`, array-form `items`, and `additionalItems`, pass through unconverted. Convert such schemas to 2020-12 first.
