@@ -200,8 +200,8 @@ importers:
         specifier: ^3.6.1
         version: 3.6.1(typescript@6.0.3)
       uncheck:
-        specifier: ^0.1.0
-        version: 0.1.0(oxfmt@0.71.0)(oxlint@1.86.0)(sherif@1.13.0)(typescript@6.0.3)
+        specifier: ^0.1.1
+        version: 0.1.1(oxfmt@0.71.0)(oxlint@1.86.0)(sherif@1.13.0)(typescript@6.0.3)
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@7.3.6(@types/node@26.4.0)(jiti@2.7.0)(lightningcss@1.33.0)(yaml@2.9.0))
@@ -2272,8 +2272,8 @@ packages:
       typescript:
         optional: true
 
-  uncheck@0.1.0:
-    resolution: {integrity: sha512-KFZos2+8SEIyx1B1NinrsCXWK3U6QVr6Y6yNKr7t+a18mrRJq7a+DL6EmjjakksROJb0cnr8EFuIh8e/rlqhbg==}
+  uncheck@0.1.1:
+    resolution: {integrity: sha512-MOem/+M0H0hqQscT8Yv3VTxVwwGgrPjHvJjaSG+UEi5vTHdTX9ZwF9eqk/6soFoQEOQmSrUEmKGgejiF9E77RQ==}
     engines: {node: '>=22.20'}
     hasBin: true
     peerDependencies:
@@ -4207,7 +4207,7 @@ snapshots:
       - vue-sfc-transformer
       - vue-tsc
 
-  uncheck@0.1.0(oxfmt@0.71.0)(oxlint@1.86.0)(sherif@1.13.0)(typescript@6.0.3):
+  uncheck@0.1.1(oxfmt@0.71.0)(oxlint@1.86.0)(sherif@1.13.0)(typescript@6.0.3):
     optionalDependencies:
       oxfmt: 0.71.0
       oxlint: 1.86.0
