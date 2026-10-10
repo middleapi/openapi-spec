@@ -36,7 +36,6 @@ Each version module targets the latest patch release of its minor line:
 ```ts
 // A whole version as a namespace, handy when mixing versions in one file
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
-
 // Or the types of one version directly
 import type { OpenAPIObject, SchemaObject } from '@openapi-spec/types/v3.1'
 

@@ -1,5 +1,4 @@
 packages:
-  - 'apps/*'
   - 'packages/*'
 
 # Lets playgrounds/* resolve local packages without the 'workspace:' protocol
@@ -10,5 +9,3 @@ preferWorkspacePackages: true
 
 allowBuilds:
   esbuild: true
-minimumReleaseAgeExclude:
-  - uncheck@0.1.0
