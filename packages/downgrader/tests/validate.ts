@@ -66,6 +66,40 @@ export function expectNoNewDanglingRefs(input: object, output: object): void {
   }
 }
 
+function findCycle(
+  value: unknown,
+  path: string,
+  open: Set<object>,
+  done: Set<object>,
+): string | undefined {
+  if (typeof value !== 'object' || value === null || done.has(value)) {
+    return undefined
+  }
+  if (open.has(value)) {
+    return path
+  }
+  open.add(value)
+  for (const [key, item] of Object.entries(value)) {
+    const pointer = `${path}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`
+    const found = findCycle(item, pointer, open, done)
+    if (found !== undefined) {
+      return found
+    }
+  }
+  open.delete(value)
+  done.add(value)
+  return undefined
+}
+
+/**
+ * No object or array in `value` may contain itself, as JSON.stringify
+ * requires. Objects shared between several places are fine. Fails with the
+ * JSON Pointer of the first place a cycle comes back to.
+ */
+export function expectAcyclic(value: unknown, message?: string): void {
+  expect(findCycle(value, '#', new Set(), new Set()), message).toBeUndefined()
+}
+
 /**
  * Validates a document against the official OpenAPI JSON Schema of the
  * version its `openapi` field names.
@@ -78,9 +112,9 @@ export async function expectValidAs(spec: object, expectedVersion: Version): Pro
 }
 
 /**
- * Downgrades a valid `from` document and checks that the result is a valid
- * `to` document, that every reference that resolved still does, and that the
- * input is left untouched.
+ * Downgrades a valid `from` document and checks that the result is a valid,
+ * acyclic `to` document, that every reference that resolved still does, and
+ * that the input is left untouched.
  */
 export async function expectValidDowngrade<I extends object, O extends object>(
   doc: I,
@@ -91,6 +125,7 @@ export async function expectValidDowngrade<I extends object, O extends object>(
   await expectValidAs(doc, from)
   const before = structuredClone(doc)
   const output = downgrade(doc)
+  expectAcyclic(output)
   await expectValidAs(output, to)
   expectNoNewDanglingRefs(doc, output)
   expect(doc).toEqual(before)

@@ -1,13 +1,22 @@
 /** Returned by a converter to leave the value out of its parent. */
 export const DROP: unique symbol = Symbol('drop')
 
+/** The output of an object, from when its conversion starts. */
+interface Converted {
+  readonly out: Record<string, unknown>
+  /** How many targets were being inlined when its conversion started. */
+  readonly depth: number
+  /** Whether its conversion is still under way, leaving `out` incomplete. */
+  building: boolean
+}
+
 export interface Context {
   /** The document or schema being converted, which local `$ref`s resolve against. */
   readonly root: unknown
   /** The target of each `$ref` resolved so far. */
   readonly targets: Map<string, unknown>
-  /** The output of each object converted so far, per field table, so a shared object is converted once and a cycle ends. */
-  readonly seen: Map<Fields, Map<object, Record<string, unknown>>>
+  /** The output of each object converted or being converted, per field table, so a shared object is converted once and a cycle ends. */
+  readonly seen: Map<Fields, Map<object, Converted>>
   /** The targets of the `$ref`s being inlined, so a reference back into one stops there. */
   readonly inlining: Set<unknown>
 }
@@ -109,7 +118,9 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
 /**
  * Converts the object `value` key by key: a key listed in `fields` goes
  * through its converter or is dropped, and any other key is copied. `finish`
- * then edits the output in place.
+ * then edits the output in place. Returns `DROP` when `value` is reached
+ * again inside a target inlined while it was being converted, as a `$ref`
+ * back into that target would be.
  */
 export function convertObject(
   value: unknown,
@@ -127,10 +138,13 @@ export function convertObject(
   }
   const known = seen.get(value)
   if (known !== undefined) {
-    return known
+    // A conversion still under way closes a cycle, which is in the input
+    // only if no `$ref` has been inlined since it started.
+    return known.building && known.depth < ctx.inlining.size ? DROP : known.out
   }
   const out: Record<string, unknown> = {}
-  seen.set(value, out)
+  const converted: Converted = { building: true, depth: ctx.inlining.size, out }
+  seen.set(value, converted)
   for (const [key, item] of Object.entries(value)) {
     if (item === undefined) {
       continue
@@ -143,6 +157,7 @@ export function convertObject(
     }
   }
   finish?.(out, value, ctx)
+  converted.building = false
   return out
 }
 
@@ -237,7 +252,8 @@ export function resolve(ref: string, ctx: Context): unknown {
 /**
  * Converts the target of `ref` to stand in for the reference. Returns `DROP`
  * when the target is missing, or when it is already being inlined around
- * this point, where inlining it again would never end.
+ * this point, where inlining it again would never end. A target whose
+ * conversion started further out ends the same way, in `convertObject`.
  */
 export function inline(ref: string, ctx: Context, convert: Convert): unknown {
   const target = resolvePointer(ref, ctx)

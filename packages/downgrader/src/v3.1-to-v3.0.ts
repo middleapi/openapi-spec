@@ -540,7 +540,9 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (ref !== undefined && isBareRef(value as Record<string, unknown>)) {
     return convertSchemaRef(ref, ctx)
   }
-  return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  // Met again inside a target it is being copied into, it is cut like a `$ref` back.
+  return out === DROP ? loosened({}) : out
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
@@ -584,9 +586,12 @@ function finishMergedPathItem(
 
 function convertPathItem(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref !== undefined && isInlined(ref, ctx)
-    ? convertObject(value, ctx, MERGED_PATH_ITEM_FIELDS, finishMergedPathItem)
-    : convertObject(value, ctx, PATH_ITEM_FIELDS)
+  const out =
+    ref !== undefined && isInlined(ref, ctx)
+      ? convertObject(value, ctx, MERGED_PATH_ITEM_FIELDS, finishMergedPathItem)
+      : convertObject(value, ctx, PATH_ITEM_FIELDS)
+  // Met again inside a target it is being copied into, it is cut like a `$ref` back.
+  return out === DROP ? {} : out
 }
 
 function schemeType(scheme: unknown, ctx: Context): unknown {

@@ -66,6 +66,30 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   })
 })
 
+// oRPC copies the `base` option of `generate` into the document it builds,
+// schemas included, before downgrading.
+it('converts a recursive schema passed as base into a valid 3.0 document', async () => {
+  const Tree: OpenAPIV3_2.SchemaObject = {
+    $defs: {
+      Node: {
+        type: 'object',
+        properties: {
+          children: { type: 'array', items: { $ref: '#/components/schemas/Tree/$defs/Node' } },
+        },
+      },
+    },
+    $ref: '#/components/schemas/Tree/$defs/Node/properties/children',
+  }
+  const spec = {
+    ...doc,
+    components: { ...doc.components, schemas: { ...doc.components?.schemas, Tree } },
+  }
+  const v30 = await expectValidDowngrade(spec, downgradeTwice, '3.2', '3.0')
+  expect(v30.components?.schemas?.Tree).toEqual({
+    allOf: [{ type: 'array', items: { type: 'object', properties: { children: {} } } }],
+  })
+})
+
 it('matches the 3.0 snapshot', () => {
   expect(downgradeTwice(doc)).toMatchSnapshot()
 })

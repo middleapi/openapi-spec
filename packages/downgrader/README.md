@@ -114,7 +114,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
-- A `content` `$ref` that does not resolve is removed, which can leave a parameter or header without the one entry it needs.
+- A `content` `$ref` that does not resolve is removed, and so is a `content` entry that leads back to a media type it is being copied into. Either can leave a parameter or header without the one entry it needs.
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 
 ### Schema (`downgradeSchemaV32ToV31`)
@@ -165,7 +165,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 #### Limitations
 
-- A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target refers back to one it is being copied into, that inner reference becomes `{}`, or is removed where `{}` is not a valid value.
+- A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target leads back to one it is being copied into, through a `$ref` or by containing it, that inner one becomes `{}` if it is a schema or a Path Item, and is removed otherwise.
 - `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
@@ -185,7 +185,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 | [`prefixItems`][js-prefix-items]                                                                                                                                                                                  | `items` matching any of the tuple's item schemas, and those of the items after them unless `items: false` or `maxItems` allows none. `items: false` becomes `maxItems`.                                        |
 | [`contentEncoding`][js-content-encoding] and [`contentMediaType`][js-content-media-type]                                                                                                                          | `format: "byte"` for `base64`, and `format: "binary"` for `binary` or a media type without an encoding or a `contentSchema`, which marks structured text. Without a `type`, the schema gains `type: "string"`. |
 | A [`$ref`][js-ref] with siblings                                                                                                                                                                                  | `allOf: [{ $ref }]` beside the siblings, which 3.0 would ignore.                                                                                                                                               |
-| [`$defs`][js-defs], and `definitions`, its draft-07 name                                                                                                                                                          | Removed. Each `$ref` into it is replaced by its converted target, where a reference back into a target being inlined becomes `{}`.                                                                             |
+| [`$defs`][js-defs], and `definitions`, its draft-07 name                                                                                                                                                          | Removed. Each `$ref` into it is replaced by its converted target, which stops with `{}` wherever it leads back into itself or into a schema it is being copied into.                                           |
 | Boolean subschemas                                                                                                                                                                                                | `{}` for `true` and `{ not: {} }` for `false`, except in `additionalProperties`, which allows booleans.                                                                                                        |
 | [`patternProperties`][js-pattern-properties]                                                                                                                                                                      | Removed, with the `additionalProperties` beside it, which would reject the properties it allowed.                                                                                                              |
 | [`$schema`][js-schema], [`$vocabulary`][js-vocabulary], [`$id`][js-id], [`$anchor`][js-anchor], [`$dynamicRef`, `$dynamicAnchor`][js-dynamic], [`$comment`][js-comment], and [`contentSchema`][js-content-schema] | Removed.                                                                                                                                                                                                       |
@@ -244,7 +244,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 ## Performance
 
-Each object is converted once, however many `$ref`s or shared references reach it, so the work grows with the size of the document, not with the number of paths through it. A cycle of objects in the input, as a dereferencing parser leaves, becomes the same cycle in the output.
+Each object is converted once, however many `$ref`s or shared references reach it, so the work grows with the size of the document, not with the number of paths through it. A cycle of objects in the input, as a dereferencing parser leaves, becomes the same cycle in the output, and acyclic input, such as any JSON, gives acyclic output.
 
 [Benchmarks](https://github.com/middleapi/openapi-spec/tree/main/packages/downgrader/benches) cover each converter on the official example documents, a document generated by oRPC, generated APIs, and worst-case reference graphs. [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every pull request to catch regressions.
 

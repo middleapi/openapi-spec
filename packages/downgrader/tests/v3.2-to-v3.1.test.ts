@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { expectValidDowngrade } from './validate'
+import { expectAcyclic, expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 
@@ -349,6 +349,45 @@ describe('downgradeSpecV32ToV31', () => {
         },
       })
       expect(out?.requestBody).toEqual({ content: {} })
+    })
+
+    it('drops a media type reached again inside the components.mediaTypes target it refers to', () => {
+      // A media type with a multipart header that has `content`.
+      const withHeader = (
+        content: Record<string, OpenAPIV3_2.MediaTypeObject | OpenAPIV3_2.ReferenceObject>,
+      ): OpenAPIV3_2.MediaTypeObject => ({
+        encoding: { part: { headers: { 'X-H': { content } } } },
+      })
+      const out = convert({
+        paths: {
+          '/a': {
+            get: {
+              responses: {
+                200: {
+                  description: 'ok',
+                  content: {
+                    'multipart/mixed': {
+                      $ref: '#/components/mediaTypes/M/encoding/part/headers/X-H/content/text~1plain',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          mediaTypes: {
+            M: withHeader({
+              'text/plain': withHeader({ 'text/plain': { $ref: '#/components/mediaTypes/M' } }),
+            }),
+          },
+        },
+      })
+      expect(out.paths?.['/a']?.get?.responses?.['200']).toEqual({
+        description: 'ok',
+        content: { 'multipart/mixed': withHeader({ 'text/plain': withHeader({}) }) },
+      })
+      expectAcyclic(out)
     })
   })
 

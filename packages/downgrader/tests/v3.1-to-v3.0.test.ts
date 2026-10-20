@@ -1,7 +1,7 @@
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import { expectValidDowngrade } from './validate'
+import { expectAcyclic, expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }
@@ -211,6 +211,24 @@ describe('downgradeSpecV31ToV30', () => {
       expect(out.paths['/a']).toEqual({ post: { callbacks: { cb: { '{$url}': {} } }, responses } })
     })
 
+    it('stops where a webhook, reached through a callback inside it, leads back to that callback', () => {
+      const out = convert({
+        paths: { '/a': { $ref: '#/webhooks/W/post/callbacks/again/%7B$request.query.cb%7D' } },
+        webhooks: {
+          W: {
+            post: {
+              callbacks: { again: { '{$request.query.cb}': { $ref: '#/webhooks/W' } } },
+              responses,
+            },
+          },
+        },
+      })
+      expect(out.paths['/a']).toEqual({
+        post: { callbacks: { again: { '{$request.query.cb}': {} } }, responses },
+      })
+      expectAcyclic(out)
+    })
+
     it('keeps $refs to Path Items that 3.0 keeps, and those that dangle', () => {
       const out = convert({
         paths: {
@@ -365,6 +383,40 @@ describe('downgradeSpecV31ToV30', () => {
       schemas: { S: expected },
       headers: { H: { schema: expected } },
       parameters: { P: { content: { 'application/json': { schema: expected } } } },
+    })
+  })
+
+  it('cuts a schema in components reached again inside the $defs target it refers to', async () => {
+    const out = await expectValidDowngrade(
+      {
+        openapi: '3.1.2',
+        info,
+        paths: {},
+        components: {
+          schemas: {
+            Tree: {
+              $defs: {
+                Node: {
+                  type: 'object',
+                  properties: {
+                    children: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Tree/$defs/Node' },
+                    },
+                  },
+                },
+              },
+              $ref: '#/components/schemas/Tree/$defs/Node/properties/children',
+            },
+          },
+        },
+      },
+      downgradeSpecV31ToV30,
+      '3.1',
+      '3.0',
+    )
+    expect(out.components?.schemas?.Tree).toEqual({
+      allOf: [{ type: 'array', items: { type: 'object', properties: { children: {} } } }],
     })
   })
 
@@ -585,6 +637,22 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('cuts recursion at a subschema reached again inside the $defs target it refers to', () => {
+      const out = downgradeSchemaV31ToV30({
+        $defs: {
+          Node: {
+            type: 'object',
+            properties: { children: { type: 'array', items: { $ref: '#/$defs/Node' } } },
+          },
+        },
+        $ref: '#/$defs/Node/properties/children',
+      })
+      expect(out).toEqual({
+        allOf: [{ type: 'array', items: { type: 'object', properties: { children: {} } } }],
+      })
+      expectAcyclic(out)
+    })
+
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
       expect(
         downgradeSchemaV31ToV30({
@@ -789,6 +857,21 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({})
     })
+
+    it('includes a subschema cut where the $defs target it refers to reaches it again', () => {
+      // `{ x: { x: 5, abcd: 1 } }` matches: its `x` has a name `propertyNames`
+      // rejects, so it does not match A, and the output must match it too.
+      expect(
+        downgradeSchemaV31ToV30({
+          $defs: {
+            A: {
+              properties: { x: { not: { $ref: '#/$defs/A' }, propertyNames: { maxLength: 3 } } },
+            },
+          },
+          $ref: '#/$defs/A/properties/x',
+        }),
+      ).toEqual({ allOf: [{}] })
+    })
   })
 
   it('drops an empty required, which 3.0 forbids', () => {
@@ -838,6 +921,18 @@ describe('downgradeSchemaV31ToV30', () => {
     const out = downgradeSchemaV31ToV30(node) as Record<string, any>
     expect(out.properties.a).toBe(out.properties.b)
     expect(out.properties.self).toBe(out)
+  })
+
+  it('cuts a shared object reached again through a $ref inside it, which is no cycle', () => {
+    const shared: OpenAPIV3_1.SchemaObject = {
+      type: 'object',
+      additionalProperties: { allOf: [{ $ref: '#/$defs/B' }] },
+    }
+    const out = downgradeSchemaV31ToV30({ properties: { a: shared }, $defs: { B: shared } })
+    expect(out).toEqual({
+      properties: { a: { type: 'object', additionalProperties: { allOf: [{}] } } },
+    })
+    expectAcyclic(out)
   })
 
   it('keeps a cycle in a copied value as a cycle', () => {
