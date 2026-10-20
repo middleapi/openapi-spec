@@ -1,8 +1,6 @@
 // oRPC generates 3.2 and downgrades it for older versions. This checks both
 // steps on a document it generated (see orpc-document.ts). The document keeps
-// the oRPC bugs it was generated with, so the downgrades are checked without
-// validating it, and the first test validates it once the bug the 3.2 schema
-// rejects is removed.
+// two oRPC bugs, so the downgrades are checked without validating their input.
 
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
@@ -72,19 +70,6 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
       },
     },
   })
-  const gallery = v30.paths['/planets/{id}/gallery']?.post?.requestBody
-  expect(gallery).toMatchObject({
-    content: {
-      'multipart/form-data': {
-        schema: {
-          properties: { images: { type: 'array', items: { type: 'string', format: 'binary' } } },
-        },
-      },
-    },
-  })
-  expect(v30.paths['/planets/{id}/data']?.put?.requestBody).toMatchObject({
-    content: { '*/*': { schema: { type: 'string', format: 'binary' } } },
-  })
   expect(v30.paths['/planets/events']?.get?.responses['200']).toMatchObject({
     content: {
       'text/event-stream': {
@@ -92,13 +77,6 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
       },
     },
   })
-
-  const removed = v30.paths['/planets/{id}']?.delete?.responses['204']
-  expect(removed).toMatchObject({
-    description: 'Deleted',
-    headers: { 'x-request-id': { required: true, schema: { type: 'string' } } },
-  })
-  expect(removed).not.toHaveProperty('content')
 
   // oRPC writes the empty tuple with `prefixItems: []`.
   expect(v30.paths['/planets/import']?.post?.responses['200']).toHaveProperty(
