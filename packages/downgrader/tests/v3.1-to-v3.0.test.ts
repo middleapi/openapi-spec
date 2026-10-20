@@ -238,6 +238,32 @@ describe('downgradeSpecV31ToV30', () => {
         { in: 'query', name: 'q', schema: { enum: [1] } },
       ])
     })
+
+    it('recognizes percent-encoded $refs into removed parts', async () => {
+      const doc: OpenAPIV3_1.OpenAPIObject = {
+        openapi: '3.1.2',
+        info,
+        paths: {
+          '/a': { $ref: '#/components/path%49tems/A' },
+          '/b': {
+            get: { parameters: [{ $ref: '#/%77ebhooks/hook/post/parameters/0' }], responses },
+          },
+        },
+        webhooks: {
+          hook: {
+            post: { parameters: [{ in: 'query', name: 'q', schema: { const: 1 } }], responses },
+          },
+        },
+        components: { pathItems: { A: { get: { responses } } } },
+      }
+      const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+      expect(out.paths).toEqual({
+        '/a': { get: { responses } },
+        '/b': {
+          get: { parameters: [{ in: 'query', name: 'q', schema: { enum: [1] } }], responses },
+        },
+      })
+    })
   })
 
   describe('mutual TLS', () => {
@@ -365,6 +391,32 @@ describe('downgradeSpecV31ToV30', () => {
       schemas: { S: expected },
       headers: { H: { schema: expected } },
       parameters: { P: { content: { 'application/json': { schema: expected } } } },
+    })
+  })
+
+  it('inlines percent-encoded $refs into $defs and definitions, as bundlers write them', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {},
+      components: {
+        schemas: {
+          User: {
+            type: 'object',
+            properties: {
+              address: { $ref: '#/components/schemas/User/%24defs/Address' },
+              tag: { $ref: '#/components/schemas/User/%64efinitions/Tag' },
+            },
+            $defs: { Address: { type: ['string', 'null'] } },
+            definitions: { Tag: { const: 'a' } },
+          } as OpenAPIV3_1.SchemaObject,
+        },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(out.components?.schemas?.User).toEqual({
+      type: 'object',
+      properties: { address: { type: 'string', nullable: true }, tag: { enum: ['a'] } },
     })
   })
 

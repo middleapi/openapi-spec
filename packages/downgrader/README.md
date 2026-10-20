@@ -167,7 +167,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target refers back to one it is being copied into, that inner reference becomes `{}`, or is removed where `{}` is not a valid value.
-- `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
+- `$ref`s into removed parts are recognized only as fragments of the document itself, such as `#/webhooks/hook`, percent-encoded or not. One that names the document by URI, such as `openapi.yaml#/webhooks/hook`, is left as written and dangles.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
 - An operation whose only `security` alternatives use mutual TLS loses its `security`, so it falls back to the document's.
@@ -238,7 +238,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 #### Limitations
 
 - A `not` or `oneOf` that reaches a schema that lost a restriction through a `$ref` kept in the output, such as one to `components.schemas`, or around a cycle of objects, can still reject values the original accepts.
-- `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
+- `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by a `$defs` key on its path, percent-encoded or not, such as the `%24defs` bundlers write.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
 - Older drafts are not supported. `definitions` is read as `$defs`, but other keywords that only draft-07 or 2019-09 define, such as `dependencies` and `additionalItems`, become extensions unconverted, so `$ref`s into them dangle, and array-form `items` passes through. Convert such schemas to 2020-12 first.
 - `patternProperties` that matches every name, as TypeBox emits for a record, is removed with its value schema rather than turned into `additionalProperties`.
