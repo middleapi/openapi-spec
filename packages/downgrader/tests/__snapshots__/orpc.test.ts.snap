@@ -266,6 +266,70 @@ exports[`matches the 3.0 snapshot 1`] = `
         ],
         "type": "object",
       },
+      "PlanetArchived": {
+        "properties": {
+          "code": {
+            "enum": [
+              "PLANET_ARCHIVED",
+            ],
+          },
+          "data": {},
+          "defined": {
+            "enum": [
+              true,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+        ],
+        "title": "PLANET_ARCHIVED",
+        "type": "object",
+      },
+      "PlanetLocked": {
+        "properties": {
+          "code": {
+            "enum": [
+              "PLANET_LOCKED",
+            ],
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "until": {
+                "format": "date-time",
+                "type": "string",
+                "x-native-type": "date",
+              },
+            },
+            "required": [
+              "until",
+            ],
+            "type": "object",
+          },
+          "defined": {
+            "enum": [
+              true,
+            ],
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data",
+        ],
+        "title": "PLANET_LOCKED",
+        "type": "object",
+      },
       "UndefinedError": {
         "properties": {
           "code": {
@@ -593,6 +657,82 @@ exports[`matches the 3.0 snapshot 1`] = `
         ],
       },
     },
+    "/planets/compare/{ids}/{origin}": {
+      "get": {
+        "operationId": "planets.compare",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "path",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "items": {
+                "type": "string",
+              },
+              "minItems": 2,
+              "type": "array",
+            },
+            "style": "simple",
+          },
+          {
+            "explode": false,
+            "in": "path",
+            "name": "origin",
+            "required": true,
+            "schema": {
+              "properties": {
+                "x": {
+                  "type": "number",
+                },
+                "y": {
+                  "type": "number",
+                },
+                "z": {
+                  "type": "number",
+                },
+              },
+              "required": [
+                "x",
+                "y",
+                "z",
+              ],
+              "type": "object",
+            },
+            "style": "simple",
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "distance": {
+                        "minimum": 0,
+                        "type": "number",
+                      },
+                      "id": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "id",
+                      "distance",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
     "/planets/events": {
       "get": {
         "operationId": "planets.events",
@@ -702,7 +842,334 @@ exports[`matches the 3.0 snapshot 1`] = `
         },
       },
     },
+    "/planets/import": {
+      "post": {
+        "operationId": "planets.import",
+        "requestBody": {
+          "content": {
+            "text/event-stream": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "properties": {
+                      "data": {
+                        "properties": {
+                          "mass": {
+                            "exclusiveMinimum": true,
+                            "minimum": 0,
+                            "type": "number",
+                          },
+                          "name": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "name",
+                          "mass",
+                        ],
+                        "type": "object",
+                      },
+                      "event": {
+                        "enum": [
+                          "message",
+                        ],
+                      },
+                      "id": {
+                        "type": "string",
+                      },
+                      "retry": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "event",
+                      "data",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "properties": {
+                      "data": {
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "source",
+                        ],
+                        "type": "object",
+                      },
+                      "event": {
+                        "enum": [
+                          "close",
+                        ],
+                      },
+                      "id": {
+                        "type": "string",
+                      },
+                      "retry": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "event",
+                      "data",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "properties": {
+                      "data": {},
+                      "event": {
+                        "enum": [
+                          "error",
+                        ],
+                      },
+                      "id": {
+                        "type": "string",
+                      },
+                      "retry": {
+                        "type": "number",
+                      },
+                    },
+                    "required": [
+                      "event",
+                    ],
+                    "type": "object",
+                  },
+                ],
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "imported": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer",
+                    },
+                    "skipped": {
+                      "items": {},
+                      "maxItems": 0,
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "imported",
+                    "skipped",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
+    "/planets/search": {
+      "get": {
+        "operationId": "planets.search",
+        "parameters": [
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "allowEmptyValue": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "by": {
+                      "enum": [
+                        "name",
+                        "mass",
+                      ],
+                      "type": "string",
+                    },
+                    "order": {
+                      "enum": [
+                        "asc",
+                        "desc",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "by",
+                    "order",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "in": "query",
+            "name": "sort",
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "kinds",
+            "schema": {
+              "items": {
+                "enum": [
+                  "rocky",
+                  "gas",
+                  "ice",
+                ],
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "style": "spaceDelimited",
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "mass",
+            "schema": {
+              "properties": {
+                "max": {
+                  "type": "number",
+                },
+                "min": {
+                  "type": "number",
+                },
+              },
+              "required": [
+                "min",
+                "max",
+              ],
+              "type": "object",
+            },
+            "style": "pipeDelimited",
+          },
+          {
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "in": "query",
+            "name": "names",
+            "schema": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Planet",
+                  },
+                  "type": "array",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+        "tags": [
+          "planets",
+        ],
+      },
+    },
     "/planets/{id}": {
+      "delete": {
+        "operationId": "planets.remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object",
+              },
+            },
+          },
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted",
+            "headers": {
+              "x-request-id": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                },
+              },
+              "x-trace-id": {
+                "schema": {
+                  "type": "string",
+                },
+              },
+            },
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PlanetLocked",
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "Planet is locked",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PlanetArchived",
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "Planet is archived",
+          },
+        },
+      },
       "get": {
         "operationId": "planets.find",
         "parameters": [
@@ -935,6 +1402,150 @@ exports[`matches the 3.0 snapshot 1`] = `
               },
             },
             "description": "Accepted",
+          },
+        },
+      },
+    },
+    "/planets/{id}/data": {
+      "get": {
+        "operationId": "planets.getData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+      "put": {
+        "operationId": "planets.putData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "format": "binary",
+                "type": "string",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "size": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "size",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "OK",
+          },
+        },
+      },
+    },
+    "/planets/{id}/gallery": {
+      "post": {
+        "operationId": "planets.gallery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "captions": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "images": {
+                    "items": {
+                      "format": "binary",
+                      "type": "string",
+                    },
+                    "minItems": 1,
+                    "type": "array",
+                  },
+                },
+                "required": [
+                  "images",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "urls": {
+                      "items": {
+                        "format": "uri",
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "urls",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "OK",
           },
         },
       },

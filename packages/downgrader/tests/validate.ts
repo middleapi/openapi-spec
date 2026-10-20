@@ -78,9 +78,8 @@ export async function expectValidAs(spec: object, expectedVersion: Version): Pro
 }
 
 /**
- * Downgrades a valid `from` document and checks that the result is a valid
- * `to` document, that every reference that resolved still does, and that the
- * input is left untouched.
+ * Downgrades a valid `from` document and checks the result as
+ * `expectValidOutput` does.
  */
 export async function expectValidDowngrade<I extends object, O extends object>(
   doc: I,
@@ -89,6 +88,19 @@ export async function expectValidDowngrade<I extends object, O extends object>(
   to: Version,
 ): Promise<O> {
   await expectValidAs(doc, from)
+  return expectValidOutput(doc, downgrade, to)
+}
+
+/**
+ * Downgrades a document without validating it, and checks that the result is
+ * a valid `to` document, that every reference that resolved still does, and
+ * that the input is left untouched.
+ */
+export async function expectValidOutput<I extends object, O extends object>(
+  doc: I,
+  downgrade: (doc: I) => O,
+  to: Version,
+): Promise<O> {
   const before = structuredClone(doc)
   const output = downgrade(doc)
   await expectValidAs(output, to)
