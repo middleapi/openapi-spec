@@ -7,7 +7,7 @@ type Version = '3.0' | '3.1' | '3.2'
 // caches the compiled schema per version, so one instance serves every call.
 const validator = new Validator()
 
-const ARRAY_INDEX = /^(0|[1-9][0-9]*)$/
+const ARRAY_INDEX = /^(?:0|[1-9][0-9]*)$/
 
 /**
  * Resolves a local `$ref` such as `#/components/schemas/Pet` against `root`.
