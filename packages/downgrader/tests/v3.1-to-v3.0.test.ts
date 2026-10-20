@@ -368,6 +368,142 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  describe('a schema $ref below a schema', () => {
+    const target = { type: ['string', 'null'] }
+    const converted = { type: 'string', nullable: true }
+
+    // `Refs` holds a property per `$ref`, so the output shows what stands in for each.
+    function withRefs(
+      refs: string[],
+      schemas: Record<string, unknown>,
+      paths: Record<string, unknown> = {},
+    ): OpenAPIV3_1.OpenAPIObject {
+      return {
+        openapi: '3.1.2',
+        info,
+        paths,
+        components: {
+          schemas: {
+            Refs: { properties: Object.fromEntries(refs.map((ref) => [ref, { $ref: ref }])) },
+            ...schemas,
+          },
+        },
+      } as OpenAPIV3_1.OpenAPIObject
+    }
+
+    it('is replaced by its converted target where the output drops, renames, or moves the place it points at', async () => {
+      const refs = [
+        '#/components/schemas/Tuple/prefixItems/0',
+        '#/components/schemas/Tuple%2FprefixItems%2F0',
+        '#/components/schemas/Tuple/items',
+        '#/components/schemas/Patterns/patternProperties/%5Ex-',
+        '#/components/schemas/Patterns/additionalProperties',
+        '#/components/schemas/Conditional/if',
+        '#/components/schemas/Conditional/then',
+        '#/components/schemas/Conditional/else',
+        '#/components/schemas/Dependent/dependentSchemas/a',
+        '#/components/schemas/Unevaluated/unevaluatedItems',
+        '#/components/schemas/Unevaluated/unevaluatedProperties',
+        '#/components/schemas/Applicators/contains',
+        '#/components/schemas/Applicators/propertyNames',
+        '#/components/schemas/Applicators/contentSchema',
+        '#/components/schemas/Custom/label',
+        '#/components/schemas/Types/items',
+        '#/components/schemas/Loose/oneOf/0',
+        '#/paths/~1a/get/parameters/0/schema/prefixItems/0',
+      ]
+      const doc = withRefs(
+        [...refs, '#/components/schemas/Loose/not'],
+        {
+          Tuple: { type: 'array', prefixItems: [target, { type: 'integer' }], items: target },
+          Patterns: {
+            type: 'object',
+            patternProperties: { '^x-': target },
+            additionalProperties: target,
+          },
+          Conditional: { if: target, then: target, else: target },
+          Dependent: { dependentSchemas: { a: target } },
+          Unevaluated: { unevaluatedItems: target, unevaluatedProperties: target },
+          Applicators: { contains: target, propertyNames: target, contentSchema: target },
+          Custom: { label: target },
+          Types: { type: ['array', 'object'], items: target },
+          Loose: { oneOf: [target, { propertyNames: { pattern: '^a' } }], not: { contains: {} } },
+        },
+        {
+          '/a': {
+            get: {
+              parameters: [
+                { in: 'query', name: 'q', schema: { type: 'array', prefixItems: [target] } },
+              ],
+              responses,
+            },
+          },
+        },
+      )
+      const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+      expect(out.components?.schemas?.Refs).toEqual({
+        properties: {
+          ...Object.fromEntries(refs.map((ref) => [ref, converted])),
+          // The `not` was removed because its subschema lost a restriction.
+          '#/components/schemas/Loose/not': {},
+        },
+      })
+    })
+
+    it('stays where the output keeps the place it points at', async () => {
+      const refs = [
+        '#/components/schemas/Kept/properties/a',
+        '#/components/schemas/Kept/additionalProperties',
+        '#/components/schemas/Kept/allOf/0',
+        '#/components/schemas/Kept/anyOf/0',
+        '#/components/schemas/Kept/oneOf/0',
+        '#/components/schemas/Kept/not',
+        '#/components/schemas/List/items/anyOf/0/properties/a',
+        '#/paths/~1a/get/parameters/0/schema/items',
+      ]
+      const doc = withRefs(
+        refs,
+        {
+          Kept: {
+            type: 'object',
+            properties: { a: target },
+            additionalProperties: target,
+            allOf: [target],
+            anyOf: [target],
+            oneOf: [target],
+            not: { type: 'integer' },
+          },
+          List: { type: ['array', 'null'], items: { anyOf: [{ properties: { a: target } }] } },
+        },
+        {
+          '/a': {
+            get: {
+              parameters: [{ in: 'query', name: 'q', schema: { type: 'array', items: target } }],
+              responses,
+            },
+          },
+        },
+      )
+      const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+      expect(out.components?.schemas?.Refs).toEqual({
+        properties: Object.fromEntries(refs.map((ref) => [ref, { $ref: ref }])),
+      })
+    })
+
+    it('keeps its target in an allOf beside a $ref', async () => {
+      const ref = '#/components/schemas/Wrapper/allOf/0'
+      const doc = withRefs([ref], {
+        Wrapper: { $ref: '#/components/schemas/Strict', allOf: [{ type: 'object' }] },
+        Strict: { type: 'object', required: ['z'] },
+      })
+      const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+      expect(out.components?.schemas).toMatchObject({
+        Refs: { properties: { [ref]: { $ref: ref } } },
+        Wrapper: { allOf: [{ type: 'object' }, { $ref: '#/components/schemas/Strict' }] },
+      })
+    })
+  })
+
   it('leaves the input untouched', () => {
     const doc: OpenAPIV3_1.OpenAPIObject = {
       openapi: '3.1.2',
@@ -599,6 +735,38 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',
       })
+      expect(downgradeSchemaV31ToV30({ $ref: '#/prefixItems/0' })).toEqual({
+        $ref: '#/prefixItems/0',
+      })
+    })
+
+    it('inlines a $ref to another item of a tuple, as bundlers emit for one schema used twice', () => {
+      expect(
+        downgradeSchemaV31ToV30({
+          type: 'array',
+          prefixItems: [{ type: ['string', 'null'] }, { $ref: '#/prefixItems/0' }],
+          items: false,
+        }),
+      ).toEqual({ type: 'array', items: { type: 'string', nullable: true }, maxItems: 2 })
+    })
+
+    it('cuts a $ref inside the target that replaces it with {}, rather than make a cycle', () => {
+      const tuple = downgradeSchemaV31ToV30({
+        type: 'array',
+        prefixItems: [{ type: 'array', items: { $ref: '#/prefixItems/0' } }],
+        items: false,
+      })
+      expect(tuple).toEqual({ type: 'array', items: { type: 'array', items: {} }, maxItems: 1 })
+      const defs = downgradeSchemaV31ToV30({
+        properties: { t: { $ref: '#/$defs/T' } },
+        $defs: {
+          T: { properties: { a: { properties: { self: { $ref: '#/$defs/T/properties/a' } } } } },
+        },
+      })
+      expect(defs).toEqual({
+        properties: { t: { properties: { a: { properties: { self: {} } } } } },
+      })
+      expect(() => JSON.stringify([tuple, defs])).not.toThrow()
     })
   })
 
@@ -860,8 +1028,8 @@ describe('unusual input', () => {
       }),
     ).toEqual({
       allOf: [
-        { $ref: '#/components/schemas/A' },
         { minLength: 1 },
+        { $ref: '#/components/schemas/A' },
         { anyOf: [{ type: 'string' }, { type: 'number' }] },
       ],
       anyOf: [{ maxLength: 3 }, { maximum: 3 }],

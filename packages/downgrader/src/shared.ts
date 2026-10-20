@@ -10,6 +10,8 @@ export interface Context {
   readonly seen: Map<Fields, Map<object, Record<string, unknown>>>
   /** The targets of the `$ref`s being inlined, so a reference back into one stops there. */
   readonly inlining: Set<unknown>
+  /** The objects a converter tracks as being converted around this point, innermost last. */
+  readonly converting: unknown[]
 }
 
 export type Convert = (value: unknown, ctx: Context) => unknown
@@ -186,7 +188,12 @@ export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }
 
-function find(root: unknown, ref: string): unknown {
+/**
+ * The keys a local JSON Pointer `$ref`, such as `#/components/schemas/Pet`,
+ * steps through: percent-decoded (RFC 3986), split, and unescaped (RFC 6901).
+ * `undefined` for any other reference.
+ */
+export function pointerTokens(ref: string): string[] | undefined {
   if (!ref.startsWith('#')) {
     return undefined
   }
@@ -199,9 +206,19 @@ function find(root: unknown, ref: string): unknown {
   if (pointer !== '' && !pointer.startsWith('/')) {
     return undefined
   }
+  return pointer
+    .split('/')
+    .slice(1)
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
+function find(root: unknown, ref: string): unknown {
+  const tokens = pointerTokens(ref)
+  if (tokens === undefined) {
+    return undefined
+  }
   let target = root
-  for (const token of pointer.split('/').slice(1)) {
-    const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
+  for (const key of tokens) {
     if (!(isRecord(target) || Array.isArray(target)) || !Object.hasOwn(target, key)) {
       return undefined
     }
@@ -251,5 +268,11 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
 }
 
 export function downgrade(root: unknown, convert: Convert): unknown {
-  return convert(root, { inlining: new Set(), root, seen: new Map(), targets: new Map() })
+  return convert(root, {
+    converting: [],
+    inlining: new Set(),
+    root,
+    seen: new Map(),
+    targets: new Map(),
+  })
 }

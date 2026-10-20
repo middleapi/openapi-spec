@@ -17,12 +17,15 @@ import {
   isRecord,
   list,
   map,
+  pointerTokens,
   resolve,
   resolvePointer,
 } from './shared'
 
 // 3.0 has no place for these, so `$ref`s into them are replaced by their targets.
 const REMOVED_PARTS = ['#/webhooks/', '#/components/pathItems/']
+
+const COMPONENT_SCHEMAS = '#/components/schemas/'
 
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
@@ -120,6 +123,9 @@ const IN_PLACE_APPLICATORS = [
   'patternProperties',
   'then',
 ]
+
+// Keywords whose subschemas sit one key further down, in a map or a list.
+const SUBSCHEMA_HOLDERS = new Set(['allOf', 'anyOf', 'oneOf', 'properties'])
 
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
@@ -256,11 +262,104 @@ function refOr(convert: Convert): Convert {
   return self
 }
 
+// Whether `ref` names a whole entry of `components.schemas`, as most do,
+// which the output keeps where it is. A `%` may encode a `/`, so such a name
+// is left to the full check.
+function isComponentSchema(ref: string, ctx: Context): boolean {
+  return (
+    ref.startsWith(COMPONENT_SCHEMAS) &&
+    !ref.includes('/', COMPONENT_SCHEMAS.length) &&
+    !ref.includes('%', COMPONENT_SCHEMAS.length) &&
+    ctx.seen.has(DOCUMENT_FIELDS)
+  )
+}
+
+// How many keys of a pointer lead to the Schema Object it enters: none for a
+// schema converted on its own, and in a document those of an entry of
+// `components.schemas` or up to the first `schema` field. A map key named
+// `schema` above that field only makes the schema start sooner, so that more
+// is inlined than needed. All of them where the pointer stays outside schemas.
+function schemaStart(tokens: string[], ctx: Context): number {
+  // Only a document conversion uses these fields, on its root.
+  if (!ctx.seen.has(DOCUMENT_FIELDS)) {
+    return 0
+  }
+  if (tokens[0] === 'components' && tokens[1] === 'schemas' && tokens.length > 2) {
+    return 3
+  }
+  const index = tokens.indexOf('schema')
+  return index === -1 ? tokens.length : index + 1
+}
+
+// Whether the output keeps the subschemas under `key` in place, each as the
+// conversion of the one there in `schema`. `finishSchema` drops or renames
+// those of any other keyword, such as `prefixItems`, `if`, and unknown ones.
+function keepsSubschemas(schema: Record<string, unknown>, key: string, ctx: Context): boolean {
+  switch (key) {
+    case 'properties':
+      return isRecord(schema.properties)
+    case 'allOf':
+    case 'anyOf':
+      return Array.isArray(schema[key])
+    // Rebuilt from a tuple, or moved into the array branch of several types.
+    case 'items':
+      return schema.prefixItems === undefined && nonNullTypes(schema.type).length < 2
+    // Dropped beside `patternProperties`. A boolean stays one, which no 3.0
+    // `$ref` may point at.
+    case 'additionalProperties':
+      return (
+        schema.patternProperties === undefined && typeof schema.additionalProperties !== 'boolean'
+      )
+    // `loosen` removes a `not`, and turns a `oneOf` into an `anyOf`, over a
+    // subschema that lost a restriction. While `schema` is still being
+    // converted, only subschemas it has already converted can count.
+    case 'not':
+    case 'oneOf': {
+      const out = convertSchema(schema, ctx)
+      return key === 'not'
+        ? isRecord(out) && isRecord(out.not) && !isLoose(out.not)
+        : isRecord(out) && Array.isArray(out.oneOf) && !out.oneOf.some(isLoose)
+    }
+    default:
+      return false
+  }
+}
+
+// Whether the output keeps, where a schema `$ref` points, the conversion of
+// what it pointed at in the input, so that the `$ref` can stay as written.
+// Below the schema it enters, each keyword it steps through must keep its
+// subschemas in place. One that already dangles stays too.
+function keepsTarget(ref: string, ctx: Context): boolean {
+  if (isComponentSchema(ref, ctx) || resolvePointer(ref, ctx) === undefined) {
+    return true
+  }
+  const tokens = pointerTokens(ref) ?? []
+  const keys = tokens.values()
+  let value = ctx.root
+  for (let skip = schemaStart(tokens, ctx); skip > 0; skip--) {
+    value = (value as Record<string, unknown>)[keys.next().value ?? '']
+  }
+  for (const key of keys) {
+    if (!isRecord(value) || !keepsSubschemas(value, key, ctx)) {
+      return false
+    }
+    value = value[key]
+    if (SUBSCHEMA_HOLDERS.has(key)) {
+      value = (value as Record<string, unknown>)[keys.next().value ?? '']
+    }
+  }
+  return true
+}
+
 function convertSchemaRef(ref: string, ctx: Context): unknown {
-  if (!isInlined(ref, ctx)) {
+  if (!isInlined(ref, ctx) && keepsTarget(ref, ctx)) {
     return { $ref: ref }
   }
-  const out = inline(ref, ctx, convertSchema)
+  // A target still being converted encloses its `$ref`, and would contain
+  // its own copy, a cycle the input does not have.
+  const out = ctx.converting.includes(resolvePointer(ref, ctx))
+    ? DROP
+    : inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
 }
 
@@ -285,7 +384,8 @@ function convertTuple(
     return false
   }
   // Equal item schemas convert alike, which their outputs, compared while a
-  // cycle is still being converted, need not show.
+  // cycle is still being converted, need not show. A `$ref` to another item
+  // converts to that item's output itself.
   const variants = new Map<unknown, unknown>()
   for (const item of closed ? prefixItems : [...prefixItems, items]) {
     const key = jsonKey(item)
@@ -293,7 +393,7 @@ function convertTuple(
       variants.set(key, convertSchema(item, ctx))
     }
   }
-  const [first, ...rest] = variants.values()
+  const [first, ...rest] = new Set(variants.values())
   out.items = rest.length === 0 ? first : { anyOf: [first, ...rest] }
   return closed && rest.length === 0 && !isLoose(first)
 }
@@ -396,15 +496,20 @@ function loosen(
   )
 }
 
+function nonNullTypes(type: unknown): string[] {
+  return (Array.isArray(type) ? type : [type]).filter(
+    (item): item is string => typeof item === 'string' && item !== 'null',
+  )
+}
+
 // 3.0 takes one type, and marks null with `nullable` instead.
 function convertType(out: Record<string, unknown>, type: unknown): void {
   if (typeof type === 'string' && type !== 'null') {
     out.type = type
     return
   }
-  const types = (Array.isArray(type) ? type : [type]).filter((item) => typeof item === 'string')
-  const nullable = types.includes('null')
-  const rest = types.filter((item) => item !== 'null')
+  const nullable = hasType(type, 'null')
+  const rest = nonNullTypes(type)
   if (rest.length === 1) {
     out.type = rest[0]
     if (nullable) {
@@ -452,8 +557,9 @@ function finishSchema(
   ctx: Context,
 ): void {
   // 3.0 ignores the siblings of a `$ref`, but not the members of an `allOf`.
+  // It goes last, so that `$ref`s to the others keep their targets.
   if (typeof schema.$ref === 'string') {
-    out.allOf = [convertSchemaRef(schema.$ref, ctx), ...(Array.isArray(out.allOf) ? out.allOf : [])]
+    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), convertSchemaRef(schema.$ref, ctx)]
   }
   if (schema.const !== undefined) {
     out.enum = [clone(schema.const)]
@@ -540,7 +646,10 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (ref !== undefined && isBareRef(value as Record<string, unknown>)) {
     return convertSchemaRef(ref, ctx)
   }
-  return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  ctx.converting.push(value)
+  const out = convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  ctx.converting.pop()
+  return out
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
