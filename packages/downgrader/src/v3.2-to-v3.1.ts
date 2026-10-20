@@ -222,9 +222,7 @@ function isEmptyRecord(value: unknown): boolean {
 }
 
 // 3.1 allows these only beside `schema`. The media type in `content`
-// carries its own examples and serialization. A `content` that lost its one
-// entry, to a `$ref` that does not resolve or leads back into the media type
-// being inlined, gives way to a schema that accepts anything.
+// carries its own examples and serialization.
 function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
   if (parameter.content !== undefined) {
     delete out.allowReserved
@@ -233,6 +231,7 @@ function finishParameter(out: Record<string, unknown>, parameter: Record<string,
     delete out.explode
     delete out.style
   }
+  // 3.1 requires one entry, and `inline` may have dropped it. Any value is accepted instead.
   if (isEmptyRecord(out.content) && !isEmptyRecord(parameter.content)) {
     delete out.content
     out.schema = {}
