@@ -1,9 +1,7 @@
-import { runInNewContext } from 'node:vm'
-
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { expectNoSharedObjects, expectValidDowngrade } from './validate'
+import { expectIsolatedDowngrade, expectValidDowngrade, jsonVariants } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 
@@ -437,58 +435,31 @@ describe('downgradeSpecV32ToV31', () => {
     })
   })
 
-  it('leaves the input untouched and shares no objects with it', () => {
+  it('leaves the input untouched and shares no objects with it', async () => {
     const example = { nested: { a: 1 } }
     const doc: OpenAPIV3_2.OpenAPIObject = {
       openapi: '3.2.0',
       info: { ...info, 'x-meta': example },
       paths: {},
     }
-    const before = structuredClone(doc)
-    const out = downgradeSpecV32ToV31(doc)
-    expect(doc).toStrictEqual(before)
+    const out = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
     expect(out.info['x-meta']).toEqual(example)
-    expectNoSharedObjects(doc, out)
   })
 
-  it("reads null-prototype and other-realm objects as JSON would, such as oRPC's generated documents", async () => {
-    function NullProto() {}
-    NullProto.prototype = Object.freeze(Object.create(null))
-    // As users may pass in, and as oRPC serializes to.
-    const makers = [
-      (fields: object) => Object.assign(Object.create(null), fields),
-      (fields: object) => Object.assign(new (NullProto as any)(), fields),
-    ]
-    for (const object of makers) {
-      const doc = object({
-        openapi: '3.2.0',
-        info: object(info),
-        tags: [object({ name: 'a', kind: 'nav' })],
-        paths: object({}),
-      })
-      expect(await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')).toEqual({
-        openapi: '3.1.2',
-        info,
-        tags: [{ name: 'a' }],
-        paths: {},
-      })
-      const schema = object({
-        type: 'array',
-        xml: object({ nodeType: 'element' }),
-        items: object({ type: 'string' }),
-      })
-      const out = downgradeSchemaV32ToV31(schema)
-      expect(out).toEqual({ type: 'array', xml: { wrapped: true }, items: { type: 'string' } })
-      expectNoSharedObjects(schema, out)
+  it("reads null-prototype and other-realm objects as JSON would, such as oRPC's generated documents", () => {
+    // `expectValidDowngrade` reads every document in these forms too.
+    const schema: OpenAPIV3_2.SchemaObject = {
+      type: 'array',
+      xml: { nodeType: 'element' },
+      items: { type: 'string', xml: { nodeType: 'attribute' } },
     }
-    const other = runInNewContext(
-      `(${JSON.stringify({ openapi: '3.2.0', info, servers: [{ url: '/', name: 'main' }] })})`,
-    )
-    expect(downgradeSpecV32ToV31(other)).toEqual({
-      openapi: '3.1.2',
-      info,
-      servers: [{ url: '/' }],
-    })
+    for (const variant of jsonVariants(schema)) {
+      expect(expectIsolatedDowngrade(variant, downgradeSchemaV32ToV31)).toEqual({
+        type: 'array',
+        xml: { wrapped: true },
+        items: { type: 'string', xml: { attribute: true } },
+      })
+    }
     // Keys an object inherits are not part of it as JSON sees it, so such an object is kept as it is.
     const inherits = Object.create(Object.assign(Object.create(null), { type: 'string' }))
     expect(downgradeSchemaV32ToV31(inherits)).toBe(inherits)

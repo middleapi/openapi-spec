@@ -1,3 +1,5 @@
+import { runInNewContext } from 'node:vm'
+
 import { Validator } from '@seriousme/openapi-schema-validator'
 import { expect } from 'vitest'
 
@@ -105,12 +107,50 @@ function collectPlain(
  * No array or plain object reachable from `output` may be one reachable from
  * `input`, so that changing the output never changes the input.
  */
-export function expectNoSharedObjects(input: unknown, output: unknown): void {
+function expectNoSharedObjects(input: unknown, output: unknown): void {
   const inputs = collectPlain(input, '#', new Map())
   const shared = [...collectPlain(output, '#', new Map())]
     .filter(([object]) => inputs.has(object))
     .map(([object, path]) => `${path} is the input's ${inputs.get(object)}`)
   expect(shared).toEqual([])
+}
+
+/**
+ * Downgrades `input` and checks that the output shares no objects with it.
+ * The input is frozen first, so any change to it throws where it is made,
+ * and stays frozen.
+ */
+export function expectIsolatedDowngrade<I, O>(input: I, downgrade: (input: I) => O): O {
+  for (const object of collectPlain(input, '#', new Map()).keys()) {
+    Object.freeze(object)
+  }
+  const output = downgrade(input)
+  expectNoSharedObjects(input, output)
+  return output
+}
+
+// The empty prototype of the objects oRPC serializes to, itself without one.
+const EMPTY_PROTOTYPE: object = Object.freeze(Object.create(null))
+
+/**
+ * The JSON value `value` rebuilt in the other forms a downgrade must read as
+ * JSON would: with every object made by `Object.create(null)`, with every
+ * object inheriting from an empty null-prototype object, and from another
+ * realm.
+ */
+export function jsonVariants<T>(value: T): T[] {
+  const json = JSON.stringify(value)
+  const rebuild = (create: () => object): T =>
+    JSON.parse(json, (_key, item: unknown) =>
+      typeof item === 'object' && item !== null && !Array.isArray(item)
+        ? Object.assign(create(), item)
+        : item,
+    )
+  return [
+    rebuild(() => Object.create(null)),
+    rebuild(() => Object.create(EMPTY_PROTOTYPE)),
+    runInNewContext(`(${json})`),
+  ]
 }
 
 /**
@@ -125,10 +165,10 @@ export async function expectValidAs(spec: object, expectedVersion: Version): Pro
 }
 
 /**
- * Downgrades a valid `from` document and checks that the result is a valid
- * `to` document, that every reference that resolved still does, and that it
- * shares no objects with the input. The input is frozen first, so any change
- * to it throws where it is made, and stays frozen.
+ * Downgrades a valid `from` document as `expectIsolatedDowngrade` does, and
+ * checks that the result is a valid `to` document, that every reference that
+ * resolved still does, and that each of the document's `jsonVariants`
+ * downgrades alike.
  */
 export async function expectValidDowngrade<I extends object, O extends object>(
   doc: I,
@@ -137,12 +177,11 @@ export async function expectValidDowngrade<I extends object, O extends object>(
   to: Version,
 ): Promise<O> {
   await expectValidAs(doc, from)
-  for (const object of collectPlain(doc, '#', new Map()).keys()) {
-    Object.freeze(object)
-  }
-  const output = downgrade(doc)
+  const output = expectIsolatedDowngrade(doc, downgrade)
   await expectValidAs(output, to)
   expectNoNewDanglingRefs(doc, output)
-  expectNoSharedObjects(doc, output)
+  for (const variant of jsonVariants(doc)) {
+    expect(expectIsolatedDowngrade(variant, downgrade)).toEqual(output)
+  }
   return output
 }
