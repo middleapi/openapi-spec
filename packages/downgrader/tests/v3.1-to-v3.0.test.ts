@@ -776,6 +776,7 @@ describe('downgradeSchemaV31ToV30', () => {
 
     it('includes a const outside the enum beside it, which matched nothing', () => {
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['b'] } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: [] } })).toEqual({})
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['a', 'b'] } })).toEqual({
         not: { enum: ['a'] },
       })
