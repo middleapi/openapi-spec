@@ -25,6 +25,49 @@ import {
 // 3.0 has no place for these, so `$ref`s into them are replaced by their targets.
 const REMOVED_PARTS = ['/webhooks/', '/components/pathItems/']
 
+// The keys that lead from the document, or a schema, to the Schema Objects in
+// it, each with the number of names after it before the next key: the entry
+// of a map or list, or for `callbacks`, the Callback Object and its expression.
+const SCHEMA_PATH_KEYS = new Map<string, number>([
+  ...[
+    ...HTTP_METHODS,
+    'additionalProperties',
+    'components',
+    'contains',
+    'contentSchema',
+    'else',
+    'if',
+    'items',
+    'not',
+    'propertyNames',
+    'requestBody',
+    'schema',
+    'then',
+    'unevaluatedItems',
+    'unevaluatedProperties',
+  ].map((key) => [key, 0] as const),
+  ...[
+    'allOf',
+    'anyOf',
+    'content',
+    'dependentSchemas',
+    'encoding',
+    'headers',
+    'oneOf',
+    'parameters',
+    'pathItems',
+    'paths',
+    'patternProperties',
+    'prefixItems',
+    'properties',
+    'requestBodies',
+    'responses',
+    'schemas',
+    'webhooks',
+  ].map((key) => [key, 1] as const),
+  ['callbacks', 2],
+])
+
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
   '$dynamicRef',
@@ -234,6 +277,28 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: DROP,
 })
 
+// Whether `pointer` goes into `$defs` or `definitions` as a schema keyword,
+// rather than through a schema, property, or component of that name, whose
+// target is kept. Keys hold no `/` or `~`, so tokens need no unescaping, and
+// the last token is left out, since it cannot enter what it names.
+function entersDefs(pointer: string): boolean {
+  let names = 0
+  for (const token of pointer.split('/').slice(1, -1)) {
+    if (names > 0) {
+      names--
+    } else if (token === '$defs' || token === 'definitions') {
+      return true
+    } else {
+      const next = SCHEMA_PATH_KEYS.get(token)
+      if (next === undefined) {
+        return false
+      }
+      names = next
+    }
+  }
+  return false
+}
+
 // A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
 // target, unless it already dangles. Its pointer is matched decoded, since
 // bundlers percent-encode the `$` of `$defs`.
@@ -241,8 +306,8 @@ function isInlined(ref: string, ctx: Context): boolean {
   const pointer = decodePointer(ref)
   return (
     pointer !== undefined &&
-    (pointer.includes('/$defs/') ||
-      pointer.includes('/definitions/') ||
+    // Most `$ref`s fail the substring tests, which cost far less than the walk.
+    (((pointer.includes('/$defs/') || pointer.includes('/definitions/')) && entersDefs(pointer)) ||
       REMOVED_PARTS.some((prefix) => pointer.startsWith(prefix))) &&
     resolvePointer(ref, ctx) !== undefined
   )

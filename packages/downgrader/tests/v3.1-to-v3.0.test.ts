@@ -409,6 +409,140 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  it('inlines $refs into $defs wherever a schema holds them', async () => {
+    const defs = { $defs: { A: { type: ['string', 'null'] } } } as OpenAPIV3_1.SchemaObject
+    const media = { 'application/json': { schema: defs } }
+    const refs = [
+      '#/paths/~1a/parameters/0/schema/$defs/A',
+      '#/paths/~1a/post/requestBody/content/multipart~1form-data/schema/$defs/A',
+      '#/paths/~1a/post/requestBody/content/multipart~1form-data/encoding/f/headers/H/content/application~1json/schema/$defs/A',
+      '#/paths/~1a/post/responses/200/headers/H/schema/$defs/A',
+      '#/paths/~1a/post/callbacks/cb/%7B$request.query.url%7D/put/parameters/0/schema/$defs/A',
+      '#/components/schemas/S/properties/p/items/allOf/0/$defs/A',
+      '#/components/schemas/S/additionalProperties/not/$defs/A',
+      '#/components/responses/R/content/application~1json/schema/$defs/A',
+      '#/components/parameters/P/content/application~1json/schema/$defs/A',
+      '#/components/requestBodies/B/content/application~1json/schema/$defs/A',
+      '#/components/headers/H/schema/$defs/A',
+      '#/components/callbacks/C/x/get/responses/200/content/application~1json/schema/$defs/A',
+    ]
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {
+        '/a': {
+          parameters: [{ name: 'p', in: 'query', schema: defs }],
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: defs,
+                  encoding: { f: { headers: { H: { content: media } } } },
+                },
+              },
+            },
+            responses: { 200: { description: 'ok', headers: { H: { schema: defs } } } },
+            callbacks: {
+              cb: {
+                '{$request.query.url}': {
+                  put: { parameters: [{ name: 'q', in: 'query', schema: defs }], responses },
+                },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Refs: {
+            type: 'object',
+            properties: Object.fromEntries(refs.map((ref) => [ref, { $ref: ref }])),
+          },
+          S: {
+            type: 'object',
+            properties: { p: { type: 'array', items: { allOf: [defs] } } },
+            additionalProperties: { not: defs },
+          },
+        },
+        responses: { R: { description: 'ok', content: media } },
+        parameters: { P: { name: 'p', in: 'query', content: media } },
+        requestBodies: { B: { content: media } },
+        headers: { H: { schema: defs } },
+        callbacks: {
+          C: { x: { get: { responses: { 200: { description: 'ok', content: media } } } } },
+        },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(out.components?.schemas?.Refs).toEqual({
+      type: 'object',
+      properties: Object.fromEntries(refs.map((ref) => [ref, { type: 'string', nullable: true }])),
+    })
+  })
+
+  it('keeps $refs through a schema, property, or parameter named $defs or definitions', async () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {},
+      components: {
+        schemas: {
+          User: {
+            type: 'object',
+            properties: {
+              id: { $ref: '#/components/schemas/definitions/properties/id' },
+              tags: { $ref: '#/components/schemas/Config/properties/$defs/items' },
+              query: { $ref: '#/components/parameters/definitions/schema' },
+              // Its own `$defs` is still removed.
+              a: { $ref: '#/components/schemas/definitions/$defs/A' },
+            },
+          },
+          definitions: {
+            type: 'object',
+            properties: { id: { type: 'integer' } },
+            $defs: { A: { const: 'a' } },
+          },
+          Config: {
+            type: 'object',
+            properties: { $defs: { type: 'array', items: { type: 'string' } } },
+          },
+        },
+        parameters: { definitions: { name: 'q', in: 'query', schema: { type: 'string' } } },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(out.components?.schemas?.User).toEqual({
+      type: 'object',
+      properties: {
+        id: { $ref: '#/components/schemas/definitions/properties/id' },
+        tags: { $ref: '#/components/schemas/Config/properties/$defs/items' },
+        query: { $ref: '#/components/parameters/definitions/schema' },
+        a: { enum: ['a'] },
+      },
+    })
+  })
+
+  it('keeps a recursive $ref through a schema named definitions, leaving no cycle', async () => {
+    const node: OpenAPIV3_1.SchemaObject = {
+      type: 'object',
+      properties: {
+        value: { type: 'integer' },
+        next: { $ref: '#/components/schemas/definitions/properties/node' },
+      },
+    }
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {},
+      components: {
+        schemas: { definitions: { type: 'object', properties: { node } } },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(() => JSON.stringify(out)).not.toThrow()
+    expect(out.components?.schemas?.definitions).toEqual({ type: 'object', properties: { node } })
+  })
+
   it('leaves the input untouched', () => {
     const doc: OpenAPIV3_1.OpenAPIObject = {
       openapi: '3.1.2',
