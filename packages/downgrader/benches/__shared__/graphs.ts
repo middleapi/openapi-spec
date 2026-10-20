@@ -160,7 +160,12 @@ export function pathItemChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
 
 /**
  * `length` Security Schemes, each a `$ref` to the next, ending at an HTTP
- * scheme, with an operation requiring every one of them.
+ * scheme, with `length` operations requiring the first. The chain is entered
+ * at every scheme too, when the schemes themselves are converted.
+ *
+ * Every requirement names the same scheme: requirements naming `length`
+ * different ones would each give the empty object's hidden class its own
+ * transition, and growing that list slows every other bench in this file.
  */
 export function securitySchemeChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
   const securitySchemes = refChain<OpenAPIV3_1.SecuritySchemeObject>(
@@ -175,7 +180,7 @@ export function securitySchemeChainV31(length: number): OpenAPIV3_1.OpenAPIObjec
   const paths: OpenAPIV3_1.PathsObject = {}
   for (let index = 0; index < length; index++) {
     paths[`/p${index}`] = {
-      get: { security: [{ [`S${index}`]: [] }], responses: { 200: { description: 'ok' } } },
+      get: { security: [{ S0: [] }], responses: { 200: { description: 'ok' } } },
     }
   }
   return { openapi: '3.1.2', info: info(), components: { securitySchemes }, paths }
