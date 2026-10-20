@@ -2,6 +2,8 @@
 export const DROP: unique symbol = Symbol('drop')
 
 export interface Context {
+  /** Work left for once the whole input is converted, such as a `$ref` that follows its target. */
+  readonly after: (() => void)[]
   /** The document or schema being converted, which local `$ref`s resolve against. */
   readonly root: unknown
   /** The target of each `$ref` resolved so far. */
@@ -186,7 +188,8 @@ export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }
 
-function find(root: unknown, ref: string): unknown {
+/** The keys a local JSON Pointer `$ref` steps through, or `undefined` for any other `$ref`. */
+export function pointerKeys(ref: string): string[] | undefined {
   if (!ref.startsWith('#')) {
     return undefined
   }
@@ -199,13 +202,27 @@ function find(root: unknown, ref: string): unknown {
   if (pointer !== '' && !pointer.startsWith('/')) {
     return undefined
   }
+  return pointer
+    .split('/')
+    .slice(1)
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
+/** The value under `key`, if `value` has its own. */
+export function child(value: unknown, key: string): unknown {
+  return (isRecord(value) || Array.isArray(value)) && Object.hasOwn(value, key)
+    ? (value as Record<string, unknown>)[key]
+    : undefined
+}
+
+function find(root: unknown, ref: string): unknown {
+  const keys = pointerKeys(ref)
+  if (keys === undefined) {
+    return undefined
+  }
   let target = root
-  for (const token of pointer.split('/').slice(1)) {
-    const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (!(isRecord(target) || Array.isArray(target)) || !Object.hasOwn(target, key)) {
-      return undefined
-    }
-    target = (target as Record<string, unknown>)[key]
+  for (const key of keys) {
+    target = child(target, key)
   }
   return target
 }
@@ -251,5 +268,10 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
 }
 
 export function downgrade(root: unknown, convert: Convert): unknown {
-  return convert(root, { inlining: new Set(), root, seen: new Map(), targets: new Map() })
+  const ctx: Context = { after: [], inlining: new Set(), root, seen: new Map(), targets: new Map() }
+  const out = convert(root, ctx)
+  for (const task of ctx.after) {
+    task()
+  }
+  return out
 }

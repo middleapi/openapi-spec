@@ -1,8 +1,9 @@
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import type { Context, Convert } from './shared'
+import type { Context, Convert, Fields } from './shared'
 import {
+  child,
   clone,
   convertObject,
   defineFields,
@@ -17,6 +18,7 @@ import {
   isRecord,
   list,
   map,
+  pointerKeys,
   resolve,
 } from './shared'
 
@@ -41,6 +43,11 @@ const SUBSCHEMA_KEYWORDS = [
 const SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'dependentSchemas', 'patternProperties', 'properties']
 const SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems']
 
+// Matches every `$ref` that may point past a removed querystring parameter or
+// into a lone `itemSchema`, since a pointer without `%` holds its keys as
+// written.
+const MAY_MOVE = /%|itemSchema|parameters\/\d/
+
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaTypeEntry)
 const convertServers = list(convertServer)
@@ -53,6 +60,10 @@ const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(SUBSCHEMA_KEYWORDS.map((key) => [key, convertSchema])),
   ...Object.fromEntries(SUBSCHEMA_MAP_KEYWORDS.map((key) => [key, map(convertSchema)])),
   ...Object.fromEntries(SUBSCHEMA_LIST_KEYWORDS.map((key) => [key, list(convertSchema)])),
+  $ref: (item, ctx, schema) => {
+    moveLater(item, ctx, () => ctx.seen.get(SCHEMA_FIELDS)?.get(schema))
+    return clone(item)
+  },
   discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
   xml: convertXml,
 })
@@ -163,9 +174,85 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: map(convertPathItem),
 })
 
-/** Reference Objects are the same in 3.1, so they are copied as they are. */
+// Whether `value` was converted with `fields`, unlike a copy such as an
+// extension.
+function isConverted(value: unknown, fields: Fields, ctx: Context): boolean {
+  return isRecord(value) && ctx.seen.get(fields)?.has(value) === true
+}
+
+// Where `ref` points once querystring parameters have left their lists,
+// shifting the entries after them, and each lone `itemSchema` has become
+// `schema.items`. Only the keys that move are rewritten. A `$ref` into a
+// removed parameter gets `-`, which names no array element (RFC 6901), so it
+// dangles instead of reaching the next parameter.
+function moveRef(ref: string, ctx: Context): string {
+  const keys = pointerKeys(ref)
+  if (keys === undefined) {
+    return ref
+  }
+  // The keys as written. One holds a `/` only as `~1`, so each `/` or `%2F`
+  // separates two.
+  const written = ref.slice(1).split(/\/|%2f/i)
+  let moved = false
+  let inList = false
+  let node = ctx.root
+  for (const [i, key] of keys.entries()) {
+    const next = child(node, key)
+    if (next === undefined) {
+      return ref
+    }
+    let to = key
+    const index = Number(key)
+    if (inList && Array.isArray(node) && Number.isInteger(index)) {
+      to = isQuerystring(node[index], ctx)
+        ? '-'
+        : String(node.slice(0, index).filter((item) => !isQuerystring(item, ctx)).length)
+    } else if (
+      key === 'itemSchema' &&
+      isConverted(node, MEDIA_TYPE_FIELDS, ctx) &&
+      hasLoneItemSchema(node as Record<string, unknown>)
+    ) {
+      to = 'schema/items'
+    }
+    if (to !== key) {
+      written[i + 1] = to
+      moved = true
+    }
+    inList =
+      key === 'parameters' &&
+      (isConverted(node, PATH_ITEM_FIELDS, ctx) || isConverted(node, OPERATION_FIELDS, ctx))
+    node = next
+  }
+  return moved ? `#${written.join('/')}` : ref
+}
+
+// A `$ref` can come before its target, so it moves once the whole input is
+// converted, in the output that `holder` then returns.
+function moveLater(
+  ref: unknown,
+  ctx: Context,
+  holder: () => Record<string, unknown> | undefined,
+): void {
+  if (typeof ref === 'string' && MAY_MOVE.test(ref)) {
+    ctx.after.push(() => {
+      const out = holder()
+      if (out !== undefined) {
+        out.$ref = moveRef(ref, ctx)
+      }
+    })
+  }
+}
+
+/** Reference Objects are the same in 3.1, so they are copied, and only their `$ref` may move. */
+function convertReference(value: unknown, ctx: Context): unknown {
+  const out = clone(value) as Record<string, unknown>
+  moveLater(out.$ref, ctx, () => out)
+  return out
+}
+
 function refOr(convert: Convert): Convert {
-  return (value, ctx) => (getRef(value) === undefined ? convert(value, ctx) : clone(value))
+  return (value, ctx) =>
+    getRef(value) === undefined ? convert(value, ctx) : convertReference(value, ctx)
 }
 
 function convertSchema(value: unknown, ctx: Context): unknown {
@@ -213,8 +300,12 @@ function convertExample(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, EXAMPLE_FIELDS, finishExample)
 }
 
-function isQuerystring(parameter: unknown): boolean {
-  return isRecord(parameter) && parameter.in === 'querystring'
+// Whether the parameter, or the one its `$ref` resolves to, is in the
+// querystring, which 3.1 lacks.
+function isQuerystring(parameter: unknown, ctx: Context): boolean {
+  const ref = getRef(parameter)
+  const target = ref === undefined ? parameter : resolve(ref, ctx)
+  return isRecord(target) && target.in === 'querystring'
 }
 
 // 3.1 allows these only beside `schema`. The media type in `content`
@@ -230,19 +321,22 @@ function finishParameter(out: Record<string, unknown>, parameter: Record<string,
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
-  return isQuerystring(value) ? DROP : convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
+  return convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
 }
 
 function convertParameterRef(value: unknown, ctx: Context): unknown {
-  const ref = getRef(value)
-  if (ref === undefined) {
-    return convertParameter(value, ctx)
+  if (isQuerystring(value, ctx)) {
+    return DROP
   }
-  return isQuerystring(resolve(ref, ctx)) ? DROP : clone(value)
+  return getRef(value) === undefined ? convertParameter(value, ctx) : convertReference(value, ctx)
 }
 
 function convertEncoding(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, ENCODING_FIELDS)
+}
+
+function hasLoneItemSchema(mediaType: Record<string, unknown>): boolean {
+  return mediaType.itemSchema !== undefined && mediaType.schema === undefined
 }
 
 function finishMediaType(
@@ -250,7 +344,7 @@ function finishMediaType(
   mediaType: Record<string, unknown>,
   ctx: Context,
 ): void {
-  if (mediaType.itemSchema !== undefined && mediaType.schema === undefined) {
+  if (hasLoneItemSchema(mediaType)) {
     out.schema = { items: convertSchema(mediaType.itemSchema, ctx), type: 'array' }
   }
 }

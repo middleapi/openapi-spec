@@ -79,6 +79,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 | Parameter [`example`][3.2-parameter-example], [`examples`][3.2-parameter-examples], `style`, `explode`, and `allowReserved` beside `content`                                                                    | Removed. 3.1 allows them only beside `schema`. The media types keep their own examples.                 |
 | Media Type [`description`][3.2-schema]                                                                                                                                                                          | Removed.                                                                                                |
 | Media Type [`itemSchema`][3.2-media-type-item-schema]                                                                                                                                                           | Alone, `schema: { type: "array", items: … }`. Beside `schema`, which describes the whole body, removed. |
+| `$ref`s to entries after a removed querystring parameter in a `parameters` list, or into a lone `itemSchema`                                                                                                    | Rewritten to reach the same target, at its new index or inside `items`.                                 |
 | Media Type [`prefixEncoding`][3.2-media-type-prefix-encoding] and [`itemEncoding`][3.2-media-type-item-encoding], and Encoding Object [`encoding`][3.2-encoding-encoding], `prefixEncoding`, and `itemEncoding` | Removed. 3.1 matches multipart parts only by property name, and does not nest encodings.                |
 | Response [`summary`][3.2-response-summary]                                                                                                                                                                      | Removed. It becomes the `description` that 3.1 requires when that is missing.                           |
 | Example [`dataValue`][3.2-example-data-value] and [`serializedValue`][3.2-example-serialized-value]                                                                                                             | Removed. Without `value` or `externalValue`, `dataValue`, or else `serializedValue`, fills `value`.     |
@@ -113,7 +114,8 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 #### Limitations
 
-- Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
+- Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes` or into an `itemSchema` beside `schema`, are left as written and dangle. One into a removed querystring parameter dangles too: its index becomes `-`, which names no entry, so it cannot reach the next parameter.
+- Links and discriminator `mapping` values are left as written, so those that point at a removed operation dangle, and a `mapping` value is not rewritten as a `$ref` is.
 - A `content` `$ref` that does not resolve is removed, which can leave a parameter or header without the one entry it needs.
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 

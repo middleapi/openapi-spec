@@ -200,6 +200,142 @@ describe('downgradeSpecV32ToV31', () => {
       expect(out.components?.parameters).toEqual({ Kept: { in: 'query', name: 'k' } })
     })
 
+    it('points $refs past a removed querystring parameter at the entry they meant', async () => {
+      const querystring = {
+        in: 'querystring',
+        name: 'q',
+        content: { 'application/json': { schema: { type: 'object' } } },
+      } as const
+      const responses = { 200: { description: 'ok' } }
+      const doc: OpenAPIV3_2.OpenAPIObject = {
+        openapi: '3.2.0',
+        info,
+        paths: {
+          // Before the lists it points into.
+          '/b': {
+            parameters: [{ $ref: '#/paths/~1c/parameters/1' }],
+            get: {
+              parameters: [
+                { $ref: '#/paths/~1a/get/parameters/1' },
+                {
+                  in: 'cookie',
+                  name: 'count',
+                  schema: { $ref: '#/paths/~1a/get/parameters/2/schema' },
+                  examples: { many: { $ref: '#/paths/~1a/get/parameters/2/examples/many' } },
+                },
+              ],
+              responses,
+            },
+          },
+          '/a': {
+            get: {
+              parameters: [
+                querystring,
+                { in: 'header', name: 'X-Id', required: true, schema: { type: 'string' } },
+                {
+                  in: 'header',
+                  name: 'X-Count',
+                  schema: { type: 'integer' },
+                  examples: { many: { value: 10 } },
+                },
+              ],
+              responses,
+            },
+          },
+          '/c': {
+            parameters: [
+              querystring,
+              { in: 'header', name: 'X-Trace', schema: { type: 'string' } },
+            ],
+            get: { responses },
+          },
+        },
+      }
+      const out = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+      expect(out.paths?.['/b']).toEqual({
+        parameters: [{ $ref: '#/paths/~1c/parameters/0' }],
+        get: {
+          parameters: [
+            { $ref: '#/paths/~1a/get/parameters/0' },
+            {
+              in: 'cookie',
+              name: 'count',
+              schema: { $ref: '#/paths/~1a/get/parameters/1/schema' },
+              examples: { many: { $ref: '#/paths/~1a/get/parameters/1/examples/many' } },
+            },
+          ],
+          responses,
+        },
+      })
+    })
+
+    it('leaves a $ref into a removed querystring parameter dangling, never at the next entry', () => {
+      const content = { 'application/json': { schema: { type: 'object' } } } as const
+      const out = convert({
+        paths: {
+          '/a': {
+            get: {
+              parameters: [
+                { in: 'querystring', name: 'q', content },
+                { in: 'header', name: 'X-Filter', content },
+              ],
+            },
+          },
+          '/b': {
+            post: {
+              parameters: [{ $ref: '#/paths/~1a/get/parameters/0' }],
+              requestBody: {
+                content: {
+                  'application/json': {
+                    schema: {
+                      $ref: '#/paths/~1a/get/parameters/0/content/application~1json/schema',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+      expect(out.paths?.['/b']?.post).toEqual({
+        parameters: [],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/paths/~1a/get/parameters/-/content/application~1json/schema' },
+            },
+          },
+        },
+      })
+    })
+
+    it('rewrites only the index of a moved pointer, and only in the lists it converts', () => {
+      const parameters = (): OpenAPIV3_2.ParameterObject[] => [
+        { in: 'querystring', name: 'q', content: { 'text/plain': {} } },
+        { in: 'header', name: 'X-Id' },
+      ]
+      const out = convert({
+        paths: {
+          '/a/{id}': {
+            'get': { parameters: parameters() },
+            'x-copy': { parameters: parameters() },
+          },
+          '/b': {
+            get: {
+              parameters: [
+                { $ref: '#/paths/~1a~1%7Bid%7D/get/parameters/1' },
+                { $ref: '#/paths/~1a~1%7Bid%7D/x-copy/parameters/1' },
+              ],
+            },
+          },
+        },
+      })
+      expect(out.paths?.['/b']?.get?.parameters).toEqual([
+        { $ref: '#/paths/~1a~1%7Bid%7D/get/parameters/0' },
+        { $ref: '#/paths/~1a~1%7Bid%7D/x-copy/parameters/1' },
+      ])
+    })
+
     it('keeps allowReserved only on query parameters', () => {
       const out = convertOperation({
         parameters: [
@@ -289,6 +425,85 @@ describe('downgradeSpecV32ToV31', () => {
             schema: { type: 'array', items: { type: 'string', xml: { attribute: true } } },
           },
           'text/event-stream': { schema: { type: 'string' } },
+        },
+      })
+    })
+
+    it('points $refs into a lone itemSchema at the items it becomes', async () => {
+      const lines = '#/paths/~1b/get/responses/200/content/application~1jsonl'
+      const ids = '#/paths/~1b/get/parameters/1/content/application~1jsonl'
+      const doc: OpenAPIV3_2.OpenAPIObject = {
+        openapi: '3.2.0',
+        info,
+        paths: {
+          // Before the media types it points into.
+          '/a': {
+            post: {
+              parameters: [{ in: 'cookie', name: 'ids', schema: { $ref: `${ids}/itemSchema` } }],
+              requestBody: {
+                content: { 'application/json': { schema: { $ref: `${lines}/itemSchema` } } },
+              },
+              responses: {
+                200: {
+                  description: 'ok',
+                  content: {
+                    'application/json': {
+                      schema: { $ref: `${lines}/itemSchema/properties/id` },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '/b': {
+            get: {
+              parameters: [
+                {
+                  in: 'querystring',
+                  name: 'q',
+                  content: { 'application/json': { schema: { type: 'object' } } },
+                },
+                {
+                  in: 'header',
+                  name: 'X-Ids',
+                  content: { 'application/jsonl': { itemSchema: { type: 'string' } } },
+                },
+              ],
+              responses: {
+                200: {
+                  description: 'ok',
+                  content: {
+                    'application/jsonl': {
+                      itemSchema: { type: 'object', properties: { id: { type: 'string' } } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }
+      const out = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+      expect(out.paths?.['/a']?.post).toEqual({
+        parameters: [
+          {
+            in: 'cookie',
+            name: 'ids',
+            schema: {
+              $ref: '#/paths/~1b/get/parameters/0/content/application~1jsonl/schema/items',
+            },
+          },
+        ],
+        requestBody: {
+          content: { 'application/json': { schema: { $ref: `${lines}/schema/items` } } },
+        },
+        responses: {
+          200: {
+            description: 'ok',
+            content: {
+              'application/json': { schema: { $ref: `${lines}/schema/items/properties/id` } },
+            },
+          },
         },
       })
     })
