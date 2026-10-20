@@ -128,12 +128,12 @@ const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
 const convertMapping = map((item, ctx) =>
-  typeof item === 'string' && isInlined(item, ctx) ? DROP : clone(item),
+  typeof item === 'string' ? (getRef(convertSchemaRef(item, ctx)) ?? DROP) : clone(item),
 )
 
 const DISCRIMINATOR_FIELDS = defineFields({
-  // 3.0 ignores inline schemas when selecting by discriminator, so a value
-  // whose target is inlined has nothing left to point at.
+  // A value names what its `$ref` becomes. 3.0 ignores inline schemas when
+  // selecting by discriminator, so one whose target is inlined is removed.
   mapping: (item, ctx) => {
     const out = convertMapping(item, ctx)
     return isRecord(out) && Object.keys(out).length === 0 ? DROP : out

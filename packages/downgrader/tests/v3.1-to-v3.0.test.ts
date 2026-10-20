@@ -649,25 +649,21 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
-    it('drops discriminator mapping values into $defs, whose targets are inlined, and a mapping left empty', () => {
+    it('converts discriminator mapping values into $defs as their $refs, dropping inlined ones and a mapping left empty', () => {
       expect(
         downgradeSchemaV31ToV30({
-          oneOf: [
-            { $ref: '#/$defs/Cat' },
-            { $ref: '#/definitions/Dog' },
-            { $ref: '#/components/schemas/Fish' },
-          ],
+          oneOf: [{ $ref: '#/$defs/Cat' }, { $ref: '#/definitions/Dog' }, { $ref: '#/$defs/Fish' }],
           discriminator: {
             propertyName: 'kind',
             mapping: {
               cat: '#/$defs/Cat',
               dog: '#/definitions/Dog',
-              fish: '#/components/schemas/Fish',
+              fish: '#/$defs/Fish',
               bird: 'Bird',
               missing: '#/$defs/Missing',
             },
           },
-          $defs: { Cat: { type: 'object' } },
+          $defs: { Cat: { type: 'object' }, Fish: { $ref: '#/components/schemas/Fish' } },
           definitions: { Dog: { type: 'object' } },
         } as OpenAPIV3_1.SchemaObject),
       ).toEqual({

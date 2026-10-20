@@ -42,23 +42,19 @@ function isLocalRef(value: unknown): value is string {
 
 function collectLocalRefs(value: unknown, refs: Set<string>): Set<string> {
   if (typeof value === 'object' && value !== null) {
+    // The official schemas leave discriminator `mapping` values unchecked.
+    const { discriminator } = value as { discriminator?: { mapping?: object } }
+    for (const target of Object.values(discriminator?.mapping ?? {})) {
+      if (isLocalRef(target)) {
+        refs.add(target)
+      }
+    }
     for (const [key, item] of Object.entries(value)) {
       if ((key === '$ref' || key === 'operationRef') && isLocalRef(item)) {
         refs.add(item)
-        continue
+      } else {
+        collectLocalRefs(item, refs)
       }
-      // The official schemas leave discriminator `mapping` values unchecked.
-      if (key === 'discriminator' && typeof item === 'object' && item !== null) {
-        const { mapping } = item as { mapping?: unknown }
-        if (typeof mapping === 'object' && mapping !== null) {
-          for (const target of Object.values(mapping)) {
-            if (isLocalRef(target)) {
-              refs.add(target)
-            }
-          }
-        }
-      }
-      collectLocalRefs(item, refs)
     }
   }
   return refs
