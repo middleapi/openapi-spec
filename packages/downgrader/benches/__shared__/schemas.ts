@@ -115,3 +115,21 @@ export const ORDER_SCHEMA: OpenAPIV3_2.SchemaObject = {
     },
   },
 }
+
+/**
+ * `depth` closed tuples, each the first item of the next, as zod emits
+ * `z.tuple([inner, z.number()])` nested `depth` times.
+ */
+export function nestedTuples(depth: number): OpenAPIV3_2.SchemaObject {
+  let node: OpenAPIV3_2.SchemaObject = { type: 'number' }
+  for (let level = 0; level < depth; level++) {
+    node = {
+      type: 'array',
+      prefixItems: [node, { type: 'number' }],
+      items: false,
+      minItems: 2,
+      maxItems: 2,
+    }
+  }
+  return node
+}

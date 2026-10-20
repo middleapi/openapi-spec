@@ -1,4 +1,5 @@
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
+import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import { bench, describe } from 'vitest'
 
 import { corpusV31 } from '../tests/corpus'
@@ -9,7 +10,7 @@ import {
   referenceDiamondV31,
   schemaDiamond,
 } from './__shared__/graphs'
-import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
+import { nestedTuples, ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
 
 const API_10_RESOURCES = createApiV31(10)
 const API_100_RESOURCES = createApiV31(100)
@@ -17,6 +18,13 @@ const REFERENCE_DIAMOND = referenceDiamondV31(64)
 const CALLBACK_GRAPH = callbackGraphV31(8)
 const PATH_ITEM_CHAIN = pathItemChainV31(200)
 const SCHEMA_DIAMOND = schemaDiamond(64)
+// Equal tuple items are merged, so comparing them must not walk every path.
+const SCHEMA_DIAMOND_IN_TUPLE: OpenAPIV3_1.SchemaObject = {
+  type: 'array',
+  prefixItems: [SCHEMA_DIAMOND, { type: 'number' }],
+  items: false,
+}
+const NESTED_TUPLES = nestedTuples(400)
 
 describe('downgradeSpecV31ToV30', () => {
   bench('official corpus', () => {
@@ -57,5 +65,13 @@ describe('downgradeSchemaV31ToV30', () => {
 
   bench('dereferenced diamond, 64 levels', () => {
     downgradeSchemaV31ToV30(SCHEMA_DIAMOND)
+  })
+
+  bench('dereferenced diamond in a closed tuple, 64 levels', () => {
+    downgradeSchemaV31ToV30(SCHEMA_DIAMOND_IN_TUPLE)
+  })
+
+  bench('nested closed tuples, 400 levels', () => {
+    downgradeSchemaV31ToV30(NESTED_TUPLES)
   })
 })

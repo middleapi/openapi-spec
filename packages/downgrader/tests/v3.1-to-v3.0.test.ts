@@ -745,6 +745,18 @@ describe('downgradeSchemaV31ToV30', () => {
           },
         ],
       })
+      // Equal item schemas, whatever order their keys are in.
+      expect(
+        downgradeSchemaV31ToV30({
+          not: {
+            prefixItems: [
+              { type: 'string', minLength: 1 },
+              { minLength: 1, type: 'string' },
+            ],
+            items: false,
+          },
+        }),
+      ).toEqual({ not: { items: { type: 'string', minLength: 1 }, maxItems: 2 } })
     })
 
     it('includes a tuple with an item that lost a restriction, even beside an equal item', () => {
@@ -902,6 +914,21 @@ describe('unusual input', () => {
       items: false,
     }) as Record<string, any>
     expect(out.items.properties.self).toBe(out.items)
+  })
+
+  it('compares tuple item schemas once per shared object, not once per path', () => {
+    // As a dereferencing parser leaves them: 2^64 paths reach the leaf.
+    let node: Record<string, unknown> = { type: 'string' }
+    for (let level = 0; level < 64; level++) {
+      node = { type: 'object', properties: { left: node, right: node } }
+    }
+    const out = downgradeSchemaV31ToV30({
+      type: 'array',
+      prefixItems: [node, { ...node }],
+      items: false,
+    }) as Record<string, any>
+    expect(out.maxItems).toBe(2)
+    expect(out.items.properties.left).toBe(out.items.properties.right)
   })
 
   it('resolves only local JSON Pointers, leaving other $refs as written', () => {

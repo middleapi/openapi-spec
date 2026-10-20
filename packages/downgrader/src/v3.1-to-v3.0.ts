@@ -264,6 +264,101 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
   return out === DROP ? loosened({}) : out
 }
 
+// Interns records and arrays. The path from a root to a node spells the items
+// of an array, or the sorted keys of a record each followed by its value, so
+// the node stands for every value equal to it.
+interface Trie {
+  /** The next node for each key, and for each value that is no record or array. */
+  leaves?: Map<unknown, Trie>
+  /** The next node for each record or array, by the node that stands for it. */
+  nodes?: Map<Trie, Trie>
+}
+
+// Stands for objects that reach a cycle, each only equal to itself.
+const CYCLIC: Trie = {}
+
+interface Structures {
+  readonly arrays: Trie
+  readonly records: Trie
+  /** The node of each object interned so far, or `undefined` while it is being interned. */
+  readonly objects: Map<object, Trie | undefined>
+}
+
+const STRUCTURES = new WeakMap<Context, Structures>()
+
+// Equal JSON values get the same key, whatever order their keys are in. A
+// value that reaches a cycle is only equal to itself, and so are other
+// objects, such as a `Date`. Each object is interned once per conversion,
+// after its children, so shared objects and nested tuples cost nothing more.
+function structuralKey(value: unknown, ctx: Context): unknown {
+  if (!isStructure(value)) {
+    return value
+  }
+  let structures = STRUCTURES.get(ctx)
+  if (structures === undefined) {
+    structures = { arrays: {}, objects: new Map(), records: {} }
+    STRUCTURES.set(ctx, structures)
+  }
+  const node = intern(value, structures)
+  return node === CYCLIC ? value : node
+}
+
+function isStructure(value: unknown): value is unknown[] | Record<string, unknown> {
+  return Array.isArray(value) || isRecord(value)
+}
+
+function intern(value: unknown[] | Record<string, unknown>, structures: Structures): Trie {
+  const { objects } = structures
+  const known = objects.get(value)
+  if (known !== undefined || objects.has(value)) {
+    return known ?? CYCLIC
+  }
+  objects.set(value, undefined)
+  let node: Trie
+  if (Array.isArray(value)) {
+    node = structures.arrays
+    for (const item of value) {
+      node = follow(node, item, isStructure(item) ? intern(item, structures) : undefined)
+      if (node === CYCLIC) {
+        break
+      }
+    }
+  } else {
+    node = structures.records
+    for (const key of Object.keys(value).sort()) {
+      const item = value[key]
+      if (item !== undefined) {
+        const child = isStructure(item) ? intern(item, structures) : undefined
+        node = follow(edge((node.leaves ??= new Map()), key), item, child)
+        if (node === CYCLIC) {
+          break
+        }
+      }
+    }
+  }
+  objects.set(value, node)
+  return node
+}
+
+// The node after `node` for the value `item`, which `child` stands for if it
+// is a record or array. Interning `item` beforehand, not here, takes one stack
+// frame per level of nesting.
+function follow(node: Trie, item: unknown, child: Trie | undefined): Trie {
+  if (child === undefined) {
+    return edge((node.leaves ??= new Map()), item)
+  }
+  return child === CYCLIC ? CYCLIC : edge((node.nodes ??= new Map()), child)
+}
+
+function edge<K>(edges: Map<K, Trie>, key: K): Trie {
+  let node = edges.get(key)
+  if (node === undefined) {
+    node = {}
+    edges.set(key, node)
+  }
+  return node
+}
+
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
 // whose items match any of its item schemas, and those of the items after
 // them, unless `items: false` or `maxItems` allows none. `items: false`
@@ -288,7 +383,7 @@ function convertTuple(
   // cycle is still being converted, need not show.
   const variants = new Map<unknown, unknown>()
   for (const item of closed ? prefixItems : [...prefixItems, items]) {
-    const key = jsonKey(item)
+    const key = structuralKey(item, ctx)
     if (!variants.has(key)) {
       variants.set(key, convertSchema(item, ctx))
     }
