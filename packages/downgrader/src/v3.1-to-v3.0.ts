@@ -308,8 +308,12 @@ function jsonKey(value: unknown): unknown {
 }
 
 // Serializes `value` once, not once per item, so a large `value` beside many
-// items costs their sizes added, not multiplied.
+// items costs their sizes added, not multiplied. With no items, not at all: a
+// value that shares objects is written out once per path to them.
 function includesJson(items: unknown[], value: unknown): boolean {
+  if (items.length === 0) {
+    return false
+  }
   const key = jsonKey(value)
   return items.some((item) => jsonKey(item) === key)
 }
