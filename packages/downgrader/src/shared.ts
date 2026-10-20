@@ -186,17 +186,30 @@ export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }
 
-function find(root: unknown, ref: string): unknown {
+/**
+ * The JSON Pointer held by a local `$ref`, such as `#/components/schemas/Pet`:
+ * its fragment, percent-decoded. Each `/` in it starts a token, since a `/`
+ * in a key is escaped as `~1`. Returns `undefined` for any other `$ref`.
+ */
+export function decodePointer(ref: string): string | undefined {
   if (!ref.startsWith('#')) {
     return undefined
   }
-  let pointer: string
-  try {
-    pointer = decodeURIComponent(ref.slice(1))
-  } catch {
-    return undefined
+  let pointer = ref.slice(1)
+  // Decoding is slow, and most fragments hold nothing to decode.
+  if (pointer.includes('%')) {
+    try {
+      pointer = decodeURIComponent(pointer)
+    } catch {
+      return undefined
+    }
   }
-  if (pointer !== '' && !pointer.startsWith('/')) {
+  return pointer === '' || pointer.startsWith('/') ? pointer : undefined
+}
+
+function find(root: unknown, ref: string): unknown {
+  const pointer = decodePointer(ref)
+  if (pointer === undefined) {
     return undefined
   }
   let target = root

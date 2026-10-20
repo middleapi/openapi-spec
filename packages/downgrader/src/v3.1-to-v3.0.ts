@@ -5,6 +5,7 @@ import type { Context, Convert } from './shared'
 import {
   clone,
   convertObject,
+  decodePointer,
   defineFields,
   downgrade,
   DROP,
@@ -22,7 +23,7 @@ import {
 } from './shared'
 
 // 3.0 has no place for these, so `$ref`s into them are replaced by their targets.
-const REMOVED_PARTS = ['#/webhooks/', '#/components/pathItems/']
+const REMOVED_PARTS = ['/webhooks/', '/components/pathItems/']
 
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
@@ -234,12 +235,15 @@ const DOCUMENT_FIELDS = defineFields({
 })
 
 // A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
-// target, unless it already dangles.
+// target, unless it already dangles. Its pointer is matched decoded, since
+// bundlers percent-encode the `$` of `$defs`.
 function isInlined(ref: string, ctx: Context): boolean {
+  const pointer = decodePointer(ref)
   return (
-    (ref.includes('/$defs/') ||
-      ref.includes('/definitions/') ||
-      REMOVED_PARTS.some((prefix) => ref.startsWith(prefix))) &&
+    pointer !== undefined &&
+    (pointer.includes('/$defs/') ||
+      pointer.includes('/definitions/') ||
+      REMOVED_PARTS.some((prefix) => pointer.startsWith(prefix))) &&
     resolvePointer(ref, ctx) !== undefined
   )
 }
