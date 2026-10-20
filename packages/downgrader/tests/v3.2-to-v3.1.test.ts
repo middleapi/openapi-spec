@@ -480,6 +480,21 @@ describe('downgradeSpecV32ToV31', () => {
     expect(downgradeSchemaV32ToV31(inherits)).toBe(inherits)
   })
 
+  it('reads objects as JSON would while Object.prototype has enumerable keys, as an old polyfill may add', () => {
+    const doc: OpenAPIV3_2.OpenAPIObject = {
+      openapi: '3.2.0',
+      info,
+      servers: [{ url: '/', name: 'main' }],
+    }
+    const clean = downgradeSpecV32ToV31(doc)
+    Object.assign(Object.prototype, { polyfill() {} })
+    try {
+      expect(downgradeSpecV32ToV31(doc)).toEqual(clean)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'polyfill')
+    }
+  })
+
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {
     const date = new Date(0)
     const out = convertOperation({

@@ -945,4 +945,24 @@ describe('unusual input', () => {
     })
     expect(out.components?.schemas?.S).toEqual({ properties: 'none', allOf: {}, example: { a: 1 } })
   })
+
+  it('reads objects as JSON would while Object.prototype has enumerable keys, as an old polyfill may add', () => {
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {},
+      components: { schemas: { Name: { type: ['string', 'null'] } } },
+    }
+    const clean = downgradeSpecV31ToV30(doc)
+    Object.assign(Object.prototype, { polyfill() {} })
+    try {
+      expect(downgradeSpecV31ToV30(doc)).toEqual(clean)
+      expect(downgradeSchemaV31ToV30({ type: ['string', 'null'] })).toEqual({
+        type: 'string',
+        nullable: true,
+      })
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'polyfill')
+    }
+  })
 })
