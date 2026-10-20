@@ -114,7 +114,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
-- A `content` `$ref` that does not resolve is removed, which can leave a parameter or header without the one entry it needs.
+- A `content` `$ref` that does not resolve, or that leads back into the media type being inlined, is removed. A parameter or header left without its one `content` entry gets `schema: {}` instead, which accepts any value.
 - Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
 
 ### Schema (`downgradeSchemaV32ToV31`)

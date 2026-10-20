@@ -217,8 +217,14 @@ function isQuerystring(parameter: unknown): boolean {
   return isRecord(parameter) && parameter.in === 'querystring'
 }
 
+function isEmptyRecord(value: unknown): boolean {
+  return isRecord(value) && Object.keys(value).length === 0
+}
+
 // 3.1 allows these only beside `schema`. The media type in `content`
-// carries its own examples and serialization.
+// carries its own examples and serialization. A `content` that lost its one
+// entry, to a `$ref` that does not resolve or leads back into the media type
+// being inlined, gives way to a schema that accepts anything.
 function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
   if (parameter.content !== undefined) {
     delete out.allowReserved
@@ -226,6 +232,10 @@ function finishParameter(out: Record<string, unknown>, parameter: Record<string,
     delete out.examples
     delete out.explode
     delete out.style
+  }
+  if (isEmptyRecord(out.content) && !isEmptyRecord(parameter.content)) {
+    delete out.content
+    out.schema = {}
   }
 }
 

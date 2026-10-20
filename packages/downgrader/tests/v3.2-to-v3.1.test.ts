@@ -350,6 +350,76 @@ describe('downgradeSpecV32ToV31', () => {
       })
       expect(out?.requestBody).toEqual({ content: {} })
     })
+
+    it('gives a parameter or header whose content $ref does not resolve an empty schema', async () => {
+      // A chain that loops, since the validator rejects a missing target as invalid 3.2.
+      const content = { 'application/json': { $ref: '#/components/mediaTypes/A' } }
+      const doc: OpenAPIV3_2.OpenAPIObject = {
+        openapi: '3.2.0',
+        info,
+        paths: {
+          '/a': {
+            get: {
+              parameters: [{ in: 'query', name: 'q', content, example: 1 }],
+              responses: { 200: { description: 'ok', headers: { 'X-A': { content } } } },
+            },
+          },
+        },
+        components: {
+          mediaTypes: {
+            A: { $ref: '#/components/mediaTypes/B' },
+            B: { $ref: '#/components/mediaTypes/A' },
+          },
+        },
+      }
+      const out = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+      expect(out.paths?.['/a']?.get).toEqual({
+        parameters: [{ in: 'query', name: 'q', schema: {} }],
+        responses: { 200: { description: 'ok', headers: { 'X-A': { schema: {} } } } },
+      })
+    })
+
+    it('gives a header whose content $ref leads back into the media type being inlined an empty schema', async () => {
+      const doc: OpenAPIV3_2.OpenAPIObject = {
+        openapi: '3.2.0',
+        info,
+        paths: {
+          '/a': {
+            post: {
+              requestBody: {
+                content: { 'multipart/form-data': { $ref: '#/components/mediaTypes/Form' } },
+              },
+              responses: { 200: { description: 'ok' } },
+            },
+          },
+        },
+        components: {
+          mediaTypes: {
+            Form: {
+              schema: { type: 'object', properties: { meta: { type: 'string' } } },
+              encoding: {
+                meta: {
+                  headers: {
+                    'X-Nested': {
+                      content: { 'multipart/form-data': { $ref: '#/components/mediaTypes/Form' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }
+      const out = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
+      expect(out.paths?.['/a']?.post?.requestBody).toEqual({
+        content: {
+          'multipart/form-data': {
+            schema: { type: 'object', properties: { meta: { type: 'string' } } },
+            encoding: { meta: { headers: { 'X-Nested': { schema: {} } } } },
+          },
+        },
+      })
+    })
   })
 
   it('drops Response summary, using it as the description when that is missing', () => {
