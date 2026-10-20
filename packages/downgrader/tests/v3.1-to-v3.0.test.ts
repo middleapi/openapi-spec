@@ -245,24 +245,13 @@ describe('downgradeSpecV31ToV30', () => {
         info,
         paths: {
           '/a': { $ref: '#/components/path%49tems/A' },
-          '/b': {
-            get: { parameters: [{ $ref: '#/%77ebhooks/hook/post/parameters/0' }], responses },
-          },
+          '/b': { $ref: '#/%77ebhooks/hook' },
         },
-        webhooks: {
-          hook: {
-            post: { parameters: [{ in: 'query', name: 'q', schema: { const: 1 } }], responses },
-          },
-        },
+        webhooks: { hook: { post: { responses } } },
         components: { pathItems: { A: { get: { responses } } } },
       }
       const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
-      expect(out.paths).toEqual({
-        '/a': { get: { responses } },
-        '/b': {
-          get: { parameters: [{ in: 'query', name: 'q', schema: { enum: [1] } }], responses },
-        },
-      })
+      expect(out.paths).toEqual({ '/a': { get: { responses } }, '/b': { post: { responses } } })
     })
   })
 
