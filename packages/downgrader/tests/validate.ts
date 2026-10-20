@@ -67,6 +67,53 @@ export function expectNoNewDanglingRefs(input: object, output: object): void {
 }
 
 /**
+ * Whether `value` is an array, or an object JSON would see as one: whatever
+ * realm it comes from or null prototype it has, as long as it inherits no
+ * keys. A downgrade copies these, and keeps other values, such as a `Date`,
+ * as they are.
+ */
+function isPlain(value: unknown): value is object {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  if (Array.isArray(value)) {
+    return true
+  }
+  const proto: unknown = Object.getPrototypeOf(value)
+  return (
+    proto === null ||
+    (Object.getPrototypeOf(proto) === null && Object.keys(proto as object).length === 0)
+  )
+}
+
+/** Every array and plain object reachable from `value`, with the JSON Pointer it is first reached at. */
+function collectPlain(
+  value: unknown,
+  path: string,
+  found: Map<object, string>,
+): Map<object, string> {
+  if (isPlain(value) && !found.has(value)) {
+    found.set(value, path)
+    for (const [key, item] of Object.entries(value)) {
+      collectPlain(item, `${path}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`, found)
+    }
+  }
+  return found
+}
+
+/**
+ * No array or plain object reachable from `output` may be one reachable from
+ * `input`, so that changing the output never changes the input.
+ */
+export function expectNoSharedObjects(input: unknown, output: unknown): void {
+  const inputs = collectPlain(input, '#', new Map())
+  const shared = [...collectPlain(output, '#', new Map())]
+    .filter(([object]) => inputs.has(object))
+    .map(([object, path]) => `${path} is the input's ${inputs.get(object)}`)
+  expect(shared).toEqual([])
+}
+
+/**
  * Validates a document against the official OpenAPI JSON Schema of the
  * version its `openapi` field names.
  */
@@ -79,8 +126,9 @@ export async function expectValidAs(spec: object, expectedVersion: Version): Pro
 
 /**
  * Downgrades a valid `from` document and checks that the result is a valid
- * `to` document, that every reference that resolved still does, and that the
- * input is left untouched.
+ * `to` document, that every reference that resolved still does, and that it
+ * shares no objects with the input. The input is frozen first, so any change
+ * to it throws where it is made, and stays frozen.
  */
 export async function expectValidDowngrade<I extends object, O extends object>(
   doc: I,
@@ -89,10 +137,12 @@ export async function expectValidDowngrade<I extends object, O extends object>(
   to: Version,
 ): Promise<O> {
   await expectValidAs(doc, from)
-  const before = structuredClone(doc)
+  for (const object of collectPlain(doc, '#', new Map()).keys()) {
+    Object.freeze(object)
+  }
   const output = downgrade(doc)
   await expectValidAs(output, to)
   expectNoNewDanglingRefs(doc, output)
-  expect(doc).toEqual(before)
+  expectNoSharedObjects(doc, output)
   return output
 }

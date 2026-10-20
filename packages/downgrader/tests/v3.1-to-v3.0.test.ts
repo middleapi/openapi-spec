@@ -1,7 +1,9 @@
+import { runInNewContext } from 'node:vm'
+
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import { expectValidDowngrade } from './validate'
+import { expectNoSharedObjects, expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }
@@ -368,16 +370,84 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
-  it('leaves the input untouched', () => {
+  it('leaves the input untouched and shares no objects with it', () => {
     const doc: OpenAPIV3_1.OpenAPIObject = {
       openapi: '3.1.2',
-      info,
+      info: { ...info, 'x-meta': { nested: { a: 1 } } },
       paths: { '/a': { $ref: '#/components/pathItems/A' } },
-      components: { pathItems: { A: { get: { responses } } } },
+      components: {
+        schemas: {
+          S: { const: { a: [1] }, default: { b: [2] }, examples: [{ c: [3] }] },
+          T: { enum: [{ d: [4] }], type: ['object', 'null'] },
+        },
+        pathItems: { A: { get: { responses } } },
+      },
     }
     const before = structuredClone(doc)
-    downgradeSpecV31ToV30(doc)
-    expect(doc).toEqual(before)
+    const out = downgradeSpecV31ToV30(doc)
+    expect(doc).toStrictEqual(before)
+    expectNoSharedObjects(doc, out)
+  })
+
+  it('reads null-prototype and other-realm objects as JSON would, such as those oRPC users pass in', async () => {
+    const pet: OpenAPIV3_1.SchemaObject = {
+      type: ['object', 'null'],
+      required: ['kind'],
+      properties: {
+        kind: { const: 'cat' },
+        age: { type: 'integer', exclusiveMinimum: 0 },
+        point: {
+          type: 'array',
+          prefixItems: [{ type: 'number' }, { type: 'number' }],
+          items: false,
+        },
+      },
+      examples: [{ kind: 'cat', point: [0, 0] }],
+    }
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info: { ...info, summary: 'An API', license: { name: 'MIT', identifier: 'MIT' } },
+      security: [{ mtls: [] }, { bearer: [] }],
+      paths: { '/pets': { $ref: '#/components/pathItems/Pets', summary: 'Pets' } },
+      webhooks: { created: { post: { responses } } },
+      components: {
+        schemas: { Pet: pet },
+        pathItems: {
+          Pets: {
+            get: {
+              responses: {
+                200: {
+                  description: 'ok',
+                  content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } },
+                },
+              },
+            },
+          },
+        },
+        securitySchemes: {
+          mtls: { type: 'mutualTLS' },
+          bearer: { type: 'http', scheme: 'bearer' },
+        },
+      },
+    }
+    const json = JSON.stringify(doc)
+    const variants = [
+      JSON.parse(json, (_key, value: unknown) =>
+        typeof value === 'object' && value !== null && !Array.isArray(value)
+          ? Object.assign(Object.create(null), value)
+          : value,
+      ),
+      runInNewContext(`(${json})`),
+    ]
+    for (const variant of variants) {
+      expect(await expectValidDowngrade(variant, downgradeSpecV31ToV30, '3.1', '3.0')).toEqual(
+        downgradeSpecV31ToV30(doc),
+      )
+      const schema = variant.components.schemas.Pet
+      const out = downgradeSchemaV31ToV30(schema)
+      expect(out).toEqual(downgradeSchemaV31ToV30(pet))
+      expectNoSharedObjects(schema, out)
+    }
   })
 })
 
@@ -473,6 +543,11 @@ describe('downgradeSchemaV31ToV30', () => {
   it('turns examples into example', () => {
     expect(downgradeSchemaV31ToV30({ examples: ['a', 'b'] })).toEqual({ example: 'a' })
     expect(downgradeSchemaV31ToV30({ example: 'x', examples: ['a'] })).toEqual({ example: 'x' })
+    const example = { name: 'Rex', tags: ['cat'] }
+    const out = downgradeSchemaV31ToV30({ examples: [example] }) as Record<string, any>
+    expect(out).toEqual({ example })
+    expect(out.example).not.toBe(example)
+    expect(out.example.tags).not.toBe(example.tags)
   })
 
   it('turns tuples into arrays whose items match any item schema', () => {

@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { expectValidDowngrade } from './validate'
+import { expectNoSharedObjects, expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 
@@ -446,27 +446,41 @@ describe('downgradeSpecV32ToV31', () => {
     }
     const before = structuredClone(doc)
     const out = downgradeSpecV32ToV31(doc)
-    expect(doc).toEqual(before)
+    expect(doc).toStrictEqual(before)
     expect(out.info['x-meta']).toEqual(example)
-    expect(out.info['x-meta']).not.toBe(example)
+    expectNoSharedObjects(doc, out)
   })
 
-  it("reads null-prototype and other-realm objects as JSON would, such as oRPC's generated documents", () => {
+  it("reads null-prototype and other-realm objects as JSON would, such as oRPC's generated documents", async () => {
     function NullProto() {}
     NullProto.prototype = Object.freeze(Object.create(null))
-    const object = (fields: object) => Object.assign(new (NullProto as any)(), fields)
-    const doc = object({
-      openapi: '3.2.0',
-      info: object(info),
-      tags: [object({ name: 'a', kind: 'nav' })],
-      paths: object({}),
-    })
-    expect(downgradeSpecV32ToV31(doc)).toEqual({
-      openapi: '3.1.2',
-      info,
-      tags: [{ name: 'a' }],
-      paths: {},
-    })
+    // As users may pass in, and as oRPC serializes to.
+    const makers = [
+      (fields: object) => Object.assign(Object.create(null), fields),
+      (fields: object) => Object.assign(new (NullProto as any)(), fields),
+    ]
+    for (const object of makers) {
+      const doc = object({
+        openapi: '3.2.0',
+        info: object(info),
+        tags: [object({ name: 'a', kind: 'nav' })],
+        paths: object({}),
+      })
+      expect(await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')).toEqual({
+        openapi: '3.1.2',
+        info,
+        tags: [{ name: 'a' }],
+        paths: {},
+      })
+      const schema = object({
+        type: 'array',
+        xml: object({ nodeType: 'element' }),
+        items: object({ type: 'string' }),
+      })
+      const out = downgradeSchemaV32ToV31(schema)
+      expect(out).toEqual({ type: 'array', xml: { wrapped: true }, items: { type: 'string' } })
+      expectNoSharedObjects(schema, out)
+    }
     const other = runInNewContext(
       `(${JSON.stringify({ openapi: '3.2.0', info, servers: [{ url: '/', name: 'main' }] })})`,
     )
