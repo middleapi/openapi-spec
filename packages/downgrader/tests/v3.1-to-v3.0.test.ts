@@ -148,32 +148,22 @@ describe('downgradeSpecV31ToV30', () => {
 
   it('marks every path parameter required, which the 3.1 schema checks only beside schema', async () => {
     const content = { 'text/plain': { schema: { type: 'string' } } } as const
+    const p = { name: 'p', in: 'path', content } as const
+    const q = { name: 'q', in: 'path', required: false, content } as const
+    const r = { name: 'r', in: 'query', content } as const
+    const get = {
+      parameters: [q, r],
+      responses: { 200: { description: 'ok', headers: { H: { content } } } },
+    }
     const doc: OpenAPIV3_1.OpenAPIObject = {
       openapi: '3.1.2',
       info,
-      paths: {
-        '/a/{p}/{q}': {
-          parameters: [{ name: 'p', in: 'path', content }],
-          get: {
-            parameters: [
-              { name: 'q', in: 'path', required: false, content },
-              { name: 'r', in: 'query', content },
-            ],
-            responses: { 200: { description: 'ok', headers: { H: { content } } } },
-          },
-        },
-      },
+      paths: { '/a/{p}/{q}': { parameters: [p], get } },
     }
     const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
     expect(out.paths['/a/{p}/{q}']).toEqual({
-      parameters: [{ name: 'p', in: 'path', required: true, content }],
-      get: {
-        parameters: [
-          { name: 'q', in: 'path', required: true, content },
-          { name: 'r', in: 'query', content },
-        ],
-        responses: { 200: { description: 'ok', headers: { H: { content } } } },
-      },
+      parameters: [{ ...p, required: true }],
+      get: { ...get, parameters: [{ ...q, required: true }, r] },
     })
   })
 

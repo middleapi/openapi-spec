@@ -79,19 +79,13 @@ import { doc as webhookExampleV32 } from '../../types/tests/schema-tests-3.2/web
 
 type Corpus<T> = readonly (readonly [name: string, doc: T])[]
 
-function withoutEncodingExtensions(doc: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
+function withoutEncodingComments(doc: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
   const out = structuredClone(doc)
-  for (const parameter of Object.values(out.components?.parameters ?? {})) {
-    const content = 'content' in parameter ? parameter.content : undefined
-    for (const mediaType of Object.values(content ?? {})) {
-      for (const encoding of Object.values(mediaType.encoding ?? {})) {
-        for (const key of Object.keys(encoding)) {
-          if (key.startsWith('x-')) {
-            delete encoding[key as `x-${string}`]
-          }
-        }
-      }
-    }
+  const encodings = Object.values(out.components?.parameters ?? {})
+    .flatMap((parameter) => ('content' in parameter ? Object.values(parameter.content ?? {}) : []))
+    .flatMap((mediaType) => Object.values(mediaType.encoding ?? {}))
+  for (const encoding of encodings) {
+    delete encoding['x-comment']
   }
   return out
 }
@@ -103,12 +97,10 @@ function withoutEncodingExtensions(doc: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_1.
 // Left out:
 // - security-scheme-object-examples, whose external `$ref` the validator
 //   cannot resolve
-// - style-defaults, which puts an `x-comment` in an Encoding Object. 3.0
-//   allows extensions there, and the downgrader keeps them, but the
-//   2021-09-28 3.0 schema the validator bundles rejects them. Its path
-//   parameter `encoding_object_defaults` also uses `content` without
-//   `required`, which the 3.1 schema allows there but the 3.0 one does not,
-//   so the copy without the extensions checks that the downgrader adds it.
+// - style-defaults, which puts an `x-comment` in an Encoding Object, where
+//   3.0 allows extensions but the bundled 2021-09-28 3.0 schema rejects them.
+//   A copy without them checks its path parameter that uses `content` and
+//   leaves out `required`, which only the 3.0 schema requires.
 export const corpusV31: Corpus<OpenAPIV3_1.OpenAPIObject> = [
   ['examples/non-oauth-scopes-3-1', exampleNonOauthScopesV31],
   ['examples/tictactoe-3-1', exampleTictactoeV31],
@@ -143,7 +135,7 @@ export const corpusV31: Corpus<OpenAPIV3_1.OpenAPIObject> = [
   ['schema', schemaV31],
   ['servers', serversV31],
   ['specification-extensions', specificationExtensionsV31],
-  ['style-defaults without Encoding extensions', withoutEncodingExtensions(styleDefaultsV31)],
+  ['style-defaults without Encoding x-comments', withoutEncodingComments(styleDefaultsV31)],
   ['tag-object-example', tagObjectExampleV31],
   ['valid-schema-types', validSchemaTypesV31],
   ['webhook-example', webhookExampleV31],
