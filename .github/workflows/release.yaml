@@ -33,6 +33,8 @@ concurrency:
 
 jobs:
   release:
+    # Publish only from main; skip_git_check is the explicit opt-out.
+    if: github.ref == 'refs/heads/main' || inputs.skip_git_check
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,19 +72,34 @@ jobs:
 
       - run: pnpm i
 
+      - run: pnpm run check
+
+      - run: pnpm test
+
       - run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - run: pnpm exec bumpp -r "$VERSION" --yes
+      # Commit and tag locally only; nothing is pushed until npm has the release.
+      - run: pnpm exec bumpp -r "$VERSION" --yes --no-push
         if: ${{ !inputs.skip_bump }}
 
-      - run: pnpm exec changelogithub --draft
-        if: ${{ !inputs.skip_changelog }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: pnpm run test:pack
+
+      # Fail before publishing if the branch moved and the push would be rejected.
+      - run: git push --dry-run --atomic --follow-tags
+        if: ${{ !inputs.skip_bump }}
 
       - run: pnpm --filter='./packages/*' publish -r --provenance --access=public --tag="$TAG" $NO_GIT_CHECKS
         env:
           TAG: ${{ steps.version.outputs.tag }}
           NO_GIT_CHECKS: ${{ inputs.skip_git_check && '--no-git-checks' || '' }}
+
+      - run: git push --atomic --follow-tags
+        if: ${{ !inputs.skip_bump }}
+
+      # Runs after the push: changelogithub skips the release unless the tag is on GitHub.
+      - run: pnpm exec changelogithub --draft
+        if: ${{ !inputs.skip_changelog }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

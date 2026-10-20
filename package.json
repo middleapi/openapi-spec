@@ -10,6 +10,7 @@
     "fix": "uncheck --fix",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:pack": "node scripts/smoke-pack.ts",
     "bench": "vitest bench --run",
     "sync:sponsors": "node scripts/sync-sponsors.ts && pnpm run fix '**/README.md'"
   },
