@@ -281,6 +281,7 @@ describe('downgradeSpecV31ToV30', () => {
     })
 
     it('follows chains of $refs entered at any point, and keeps the names of those in a cycle', () => {
+      const ref = (name: string) => ({ $ref: `#/components/securitySchemes/${name}` })
       const out = convert({
         paths: {
           '/a': {
@@ -289,22 +290,18 @@ describe('downgradeSpecV31ToV30', () => {
         },
         components: {
           securitySchemes: {
-            a: { $ref: '#/components/securitySchemes/b' },
-            b: { $ref: '#/components/securitySchemes/c' },
-            c: { $ref: '#/components/securitySchemes/mtls' },
+            a: ref('b'),
+            b: ref('c'),
+            c: ref('mtls'),
             mtls: { type: 'mutualTLS' },
-            x: { $ref: '#/components/securitySchemes/y' },
-            y: { $ref: '#/components/securitySchemes/x' },
-            z: { $ref: '#/components/securitySchemes/y' },
+            x: ref('y'),
+            y: ref('x'),
+            z: ref('y'),
           },
         },
       })
       expect(out.paths['/a']?.get?.security).toEqual([{ z: ['s'] }, { x: ['s'] }])
-      expect(out.components?.securitySchemes).toEqual({
-        x: { $ref: '#/components/securitySchemes/y' },
-        y: { $ref: '#/components/securitySchemes/x' },
-        z: { $ref: '#/components/securitySchemes/y' },
-      })
+      expect(out.components?.securitySchemes).toEqual({ x: ref('y'), y: ref('x'), z: ref('y') })
     })
   })
 

@@ -127,18 +127,33 @@ export function callbackGraphV32(k: number): OpenAPIV3_2.OpenAPIObject {
 }
 
 /**
+ * The components `<name>0` … `<name><length>` of one kind, each a `$ref` to
+ * the next but the last, which is `end`.
+ */
+function refChain<T>(
+  kind: string,
+  name: string,
+  length: number,
+  end: T,
+): Record<string, T | { $ref: string }> {
+  const chain: Record<string, T | { $ref: string }> = { [`${name}${length}`]: end }
+  for (let index = 0; index < length; index++) {
+    chain[`${name}${index}`] = { $ref: `#/components/${kind}/${name}${index + 1}` }
+  }
+  return chain
+}
+
+/**
  * `length` Path Items in `components.pathItems`, which 3.0 lacks, each a
  * `$ref` to the next, with a path entering the chain at every one of them.
  */
 export function pathItemChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
-  const pointer = (index: number): string => `#/components/pathItems/P${index}`
-  const pathItems: Record<string, OpenAPIV3_1.PathItemObject> = {
-    [`P${length}`]: { get: { responses: { 200: { description: 'ok' } } } },
-  }
+  const pathItems = refChain('pathItems', 'P', length, {
+    get: { responses: { 200: { description: 'ok' } } },
+  })
   const paths: OpenAPIV3_1.PathsObject = {}
   for (let index = 0; index < length; index++) {
-    pathItems[`P${index}`] = { $ref: pointer(index + 1) }
-    paths[`/p${index}`] = { $ref: pointer(index) }
+    paths[`/p${index}`] = { $ref: `#/components/pathItems/P${index}` }
   }
   return { openapi: '3.1.2', info: info(), components: { pathItems }, paths }
 }
@@ -148,16 +163,17 @@ export function pathItemChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
  * scheme, with an operation requiring every one of them.
  */
 export function securitySchemeChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
-  const pointer = (index: number): string => `#/components/securitySchemes/S${index}`
-  const securitySchemes: Record<
-    string,
-    OpenAPIV3_1.SecuritySchemeObject | OpenAPIV3_1.ReferenceObject
-  > = {
-    [`S${length}`]: { type: 'http', scheme: 'bearer' },
-  }
+  const securitySchemes = refChain<OpenAPIV3_1.SecuritySchemeObject>(
+    'securitySchemes',
+    'S',
+    length,
+    {
+      type: 'http',
+      scheme: 'bearer',
+    },
+  )
   const paths: OpenAPIV3_1.PathsObject = {}
   for (let index = 0; index < length; index++) {
-    securitySchemes[`S${index}`] = { $ref: pointer(index + 1) }
     paths[`/p${index}`] = {
       get: { security: [{ [`S${index}`]: [] }], responses: { 200: { description: 'ok' } } },
     }
@@ -170,15 +186,18 @@ export function securitySchemeChainV31(length: number): OpenAPIV3_1.OpenAPIObjec
  * parameter, with an operation using every one of them.
  */
 export function parameterChainV32(length: number): OpenAPIV3_2.OpenAPIObject {
-  const pointer = (index: number): string => `#/components/parameters/P${index}`
-  const parameters: Record<string, OpenAPIV3_2.ParameterObject | OpenAPIV3_2.ReferenceObject> = {
-    [`P${length}`]: { name: 'q', in: 'query', schema: { type: 'string' } },
-  }
+  const parameters = refChain<OpenAPIV3_2.ParameterObject>('parameters', 'P', length, {
+    name: 'q',
+    in: 'query',
+    schema: { type: 'string' },
+  })
   const paths: OpenAPIV3_2.PathsObject = {}
   for (let index = 0; index < length; index++) {
-    parameters[`P${index}`] = { $ref: pointer(index + 1) }
     paths[`/p${index}`] = {
-      get: { parameters: [{ $ref: pointer(index) }], responses: { 200: { description: 'ok' } } },
+      get: {
+        parameters: [{ $ref: `#/components/parameters/P${index}` }],
+        responses: { 200: { description: 'ok' } },
+      },
     }
   }
   return { openapi: '3.2.0', info: info(), components: { parameters }, paths }
