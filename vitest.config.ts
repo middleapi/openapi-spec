@@ -8,7 +8,7 @@ export default defineConfig({
       exclude: ['**.bench.*', '**.test-d.*', '**.test.*'],
       include: ['apps/*/src/**', 'packages/*/src/**'],
     },
-    exclude: [...defaultExclude, '**/.claude/**'],
+    exclude: [...defaultExclude, '**/.claude/**', 'tests/package/**'],
     globals: true,
     include: ['**/*.test.ts'],
     passWithNoTests: true,

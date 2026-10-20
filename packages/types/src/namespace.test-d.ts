@@ -4,8 +4,9 @@ import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
 // Every export of every version entry, used as a type through a namespace
 // import. A member that exists only as a value fails with TS2749, the way
-// `OpenAPIV3_1.TagObject` did in 0.1.0. `namespace.test.ts` fails when an
-// export is missing from these lists.
+// `OpenAPIV3_1.TagObject` did in 0.1.0. `pnpm run test:package` checks this
+// file against the published `.d.mts` and fails when an export is missing
+// from these lists.
 
 export type V3_0Members = [
   OpenAPIV3_0.ApiKeySecuritySchemeObject,

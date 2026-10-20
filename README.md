@@ -33,6 +33,7 @@ TypeScript tooling for the [OpenAPI Specification](https://spec.openapis.org/), 
 ```bash
 pnpm install
 pnpm test
+pnpm test:package # packs the packages and tests the tarballs
 pnpm check
 pnpm bench
 ```

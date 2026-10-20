@@ -42,3 +42,21 @@ jobs:
         if: matrix.node-version == 24
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Packs the packages and tests the tarballs the way consumers install them
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 20]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - run: pnpm runtime set node ${{ matrix.node-version }}
+
+      - run: pnpm i
+
+      - run: pnpm run test:package
