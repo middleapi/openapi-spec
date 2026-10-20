@@ -146,6 +146,37 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  it('marks every path parameter required, which the 3.1 schema checks only beside schema', async () => {
+    const content = { 'text/plain': { schema: { type: 'string' } } } as const
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {
+        '/a/{p}/{q}': {
+          parameters: [{ name: 'p', in: 'path', content }],
+          get: {
+            parameters: [
+              { name: 'q', in: 'path', required: false, content },
+              { name: 'r', in: 'query', content },
+            ],
+            responses: { 200: { description: 'ok', headers: { H: { content } } } },
+          },
+        },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    expect(out.paths['/a/{p}/{q}']).toEqual({
+      parameters: [{ name: 'p', in: 'path', required: true, content }],
+      get: {
+        parameters: [
+          { name: 'q', in: 'path', required: true, content },
+          { name: 'r', in: 'query', content },
+        ],
+        responses: { 200: { description: 'ok', headers: { H: { content } } } },
+      },
+    })
+  })
+
   describe('path items', () => {
     it('merges a $ref to components.pathItems into the referencing Path Item, whose own fields win', () => {
       const out = convert({

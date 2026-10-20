@@ -543,8 +543,17 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
 }
 
+// Every version requires `required: true` on a path parameter, but the 3.1
+// schema checks it only beside `schema`, and the 3.0 one checks it always.
+// A Header Object, which shares this converter, has no `in`.
+function finishParameter(out: Record<string, unknown>): void {
+  if (out.in === 'path') {
+    out.required = true
+  }
+}
+
 function convertParameter(value: unknown, ctx: Context): unknown {
-  return convertObject(value, ctx, PARAMETER_FIELDS)
+  return convertObject(value, ctx, PARAMETER_FIELDS, finishParameter)
 }
 
 function convertMediaType(value: unknown, ctx: Context): unknown {
