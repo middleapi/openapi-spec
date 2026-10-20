@@ -200,6 +200,30 @@ describe('downgradeSpecV32ToV31', () => {
       expect(out.components?.parameters).toEqual({ Kept: { in: 'query', name: 'k' } })
     })
 
+    it('follows chains of $refs entered at any point, and keeps those in a cycle', () => {
+      const ref = (name: string) => ({ $ref: `#/components/parameters/${name}` })
+      const out = convert({
+        paths: {
+          '/a': {
+            get: { parameters: [ref('C'), ref('B'), ref('Z'), ref('A'), ref('X')], responses: {} },
+          },
+        },
+        components: {
+          parameters: {
+            A: ref('B'),
+            B: ref('C'),
+            C: ref('Q'),
+            Q: { in: 'querystring', name: 'q', content: { 'text/plain': {} } },
+            X: ref('Y'),
+            Y: ref('X'),
+            Z: ref('Y'),
+          },
+        },
+      })
+      expect(out.paths?.['/a']?.get?.parameters).toEqual([ref('Z'), ref('X')])
+      expect(out.components?.parameters).toEqual({ X: ref('Y'), Y: ref('X'), Z: ref('Y') })
+    })
+
     it('keeps allowReserved only on query parameters', () => {
       const out = convertOperation({
         parameters: [

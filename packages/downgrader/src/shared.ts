@@ -6,6 +6,8 @@ export interface Context {
   readonly root: unknown
   /** The target of each `$ref` resolved so far. */
   readonly targets: Map<string, unknown>
+  /** Where the chain from each `$ref` followed so far ends, or `undefined` if it ends in a cycle. */
+  readonly resolved: Map<string, unknown>
   /** The output of each object converted so far, per field table, so a shared object is converted once and a cycle ends. */
   readonly seen: Map<Fields, Map<object, Record<string, unknown>>>
   /** The targets of the `$ref`s being inlined, so a reference back into one stops there. */
@@ -220,16 +222,31 @@ export function resolvePointer(ref: string, ctx: Context): unknown {
   return target
 }
 
-/** Follows `ref`, and any `$ref` its target holds in turn, to the value they end at. */
+/**
+ * Follows `ref`, and any `$ref` its target holds in turn, to the value they
+ * end at. Every `$ref` on the way ends at the same value, so the walk stops
+ * at one followed before and records the end for each, which keeps a long
+ * chain from being walked again for every reference into it.
+ */
 export function resolve(ref: string, ctx: Context): unknown {
   const visited = new Set<string>()
   let target: unknown
-  for (let next: string | undefined = ref; next !== undefined; next = getRef(target)) {
+  let next: string | undefined = ref
+  while (next !== undefined) {
+    if (ctx.resolved.has(next)) {
+      target = ctx.resolved.get(next)
+      break
+    }
     if (visited.has(next)) {
-      return undefined
+      target = undefined
+      break
     }
     visited.add(next)
     target = resolvePointer(next, ctx)
+    next = getRef(target)
+  }
+  for (const each of visited) {
+    ctx.resolved.set(each, target)
   }
   return target
 }
@@ -251,5 +268,11 @@ export function inline(ref: string, ctx: Context, convert: Convert): unknown {
 }
 
 export function downgrade(root: unknown, convert: Convert): unknown {
-  return convert(root, { inlining: new Set(), root, seen: new Map(), targets: new Map() })
+  return convert(root, {
+    inlining: new Set(),
+    resolved: new Map(),
+    root,
+    seen: new Map(),
+    targets: new Map(),
+  })
 }

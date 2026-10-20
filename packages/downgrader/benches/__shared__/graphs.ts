@@ -142,3 +142,44 @@ export function pathItemChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
   }
   return { openapi: '3.1.2', info: info(), components: { pathItems }, paths }
 }
+
+/**
+ * `length` Security Schemes, each a `$ref` to the next, ending at an HTTP
+ * scheme, with an operation requiring every one of them.
+ */
+export function securitySchemeChainV31(length: number): OpenAPIV3_1.OpenAPIObject {
+  const pointer = (index: number): string => `#/components/securitySchemes/S${index}`
+  const securitySchemes: Record<
+    string,
+    OpenAPIV3_1.SecuritySchemeObject | OpenAPIV3_1.ReferenceObject
+  > = {
+    [`S${length}`]: { type: 'http', scheme: 'bearer' },
+  }
+  const paths: OpenAPIV3_1.PathsObject = {}
+  for (let index = 0; index < length; index++) {
+    securitySchemes[`S${index}`] = { $ref: pointer(index + 1) }
+    paths[`/p${index}`] = {
+      get: { security: [{ [`S${index}`]: [] }], responses: { 200: { description: 'ok' } } },
+    }
+  }
+  return { openapi: '3.1.2', info: info(), components: { securitySchemes }, paths }
+}
+
+/**
+ * `length` Parameters, each a `$ref` to the next, ending at a query
+ * parameter, with an operation using every one of them.
+ */
+export function parameterChainV32(length: number): OpenAPIV3_2.OpenAPIObject {
+  const pointer = (index: number): string => `#/components/parameters/P${index}`
+  const parameters: Record<string, OpenAPIV3_2.ParameterObject | OpenAPIV3_2.ReferenceObject> = {
+    [`P${length}`]: { name: 'q', in: 'query', schema: { type: 'string' } },
+  }
+  const paths: OpenAPIV3_2.PathsObject = {}
+  for (let index = 0; index < length; index++) {
+    parameters[`P${index}`] = { $ref: pointer(index + 1) }
+    paths[`/p${index}`] = {
+      get: { parameters: [{ $ref: pointer(index) }], responses: { 200: { description: 'ok' } } },
+    }
+  }
+  return { openapi: '3.2.0', info: info(), components: { parameters }, paths }
+}

@@ -8,6 +8,7 @@ import {
   pathItemChainV31,
   referenceDiamondV31,
   schemaDiamond,
+  securitySchemeChainV31,
 } from './__shared__/graphs'
 import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
 
@@ -16,6 +17,7 @@ const API_100_RESOURCES = createApiV31(100)
 const REFERENCE_DIAMOND = referenceDiamondV31(64)
 const CALLBACK_GRAPH = callbackGraphV31(8)
 const PATH_ITEM_CHAIN = pathItemChainV31(200)
+const SECURITY_SCHEME_CHAIN = securitySchemeChainV31(1000)
 const SCHEMA_DIAMOND = schemaDiamond(64)
 
 describe('downgradeSpecV31ToV30', () => {
@@ -43,6 +45,10 @@ describe('downgradeSpecV31ToV30', () => {
 
   bench('path item $ref chain in removed components, 200 hops', () => {
     downgradeSpecV31ToV30(PATH_ITEM_CHAIN)
+  })
+
+  bench('security scheme $ref chain, 1000 hops', () => {
+    downgradeSpecV31ToV30(SECURITY_SCHEME_CHAIN)
   })
 })
 

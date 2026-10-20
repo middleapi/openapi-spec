@@ -3,13 +3,19 @@ import { bench, describe } from 'vitest'
 
 import { corpusV32 } from '../tests/corpus'
 import { createApiV32 } from './__shared__/api'
-import { callbackGraphV32, referenceDiamondV32, schemaDiamond } from './__shared__/graphs'
+import {
+  callbackGraphV32,
+  parameterChainV32,
+  referenceDiamondV32,
+  schemaDiamond,
+} from './__shared__/graphs'
 import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
 
 const API_10_RESOURCES = createApiV32(10)
 const API_100_RESOURCES = createApiV32(100)
 const REFERENCE_DIAMOND = referenceDiamondV32(64)
 const CALLBACK_GRAPH = callbackGraphV32(8)
+const PARAMETER_CHAIN = parameterChainV32(1000)
 const SCHEMA_DIAMOND = schemaDiamond(64)
 
 describe('downgradeSpecV32ToV31', () => {
@@ -33,6 +39,10 @@ describe('downgradeSpecV32ToV31', () => {
 
   bench('cyclic callback graph in a removed operation, 8 path items', () => {
     downgradeSpecV32ToV31(CALLBACK_GRAPH)
+  })
+
+  bench('parameter $ref chain, 1000 hops', () => {
+    downgradeSpecV32ToV31(PARAMETER_CHAIN)
   })
 })
 

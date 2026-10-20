@@ -279,6 +279,33 @@ describe('downgradeSpecV31ToV30', () => {
       expect(out.paths['/a']?.put).toEqual({ responses })
       expect(out.paths['/a']?.post?.security).toEqual([])
     })
+
+    it('follows chains of $refs entered at any point, and keeps the names of those in a cycle', () => {
+      const out = convert({
+        paths: {
+          '/a': {
+            get: { security: [{ c: [] }, { b: [], z: ['s'] }, { a: [] }, { x: ['s'] }], responses },
+          },
+        },
+        components: {
+          securitySchemes: {
+            a: { $ref: '#/components/securitySchemes/b' },
+            b: { $ref: '#/components/securitySchemes/c' },
+            c: { $ref: '#/components/securitySchemes/mtls' },
+            mtls: { type: 'mutualTLS' },
+            x: { $ref: '#/components/securitySchemes/y' },
+            y: { $ref: '#/components/securitySchemes/x' },
+            z: { $ref: '#/components/securitySchemes/y' },
+          },
+        },
+      })
+      expect(out.paths['/a']?.get?.security).toEqual([{ z: ['s'] }, { x: ['s'] }])
+      expect(out.components?.securitySchemes).toEqual({
+        x: { $ref: '#/components/securitySchemes/y' },
+        y: { $ref: '#/components/securitySchemes/x' },
+        z: { $ref: '#/components/securitySchemes/y' },
+      })
+    })
   })
 
   it('empties the scopes of apiKey and http requirements, which 3.0 allows only for OAuth2 and OpenID Connect', () => {
