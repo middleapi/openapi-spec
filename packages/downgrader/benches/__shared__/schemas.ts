@@ -115,3 +115,16 @@ export const ORDER_SCHEMA: OpenAPIV3_2.SchemaObject = {
     },
   },
 }
+
+/**
+ * A `const` object with `size` keys beside an `enum` of `size` numbers that
+ * leaves it out, as an untrusted upload might send. Checking the `const`
+ * against the `enum` costs their sizes added; serializing the `const` again
+ * for every entry would cost them multiplied.
+ */
+export function constOutsideEnum(size: number): OpenAPIV3_2.SchemaObject {
+  return {
+    const: Object.fromEntries(Array.from({ length: size }, (_, index) => [`k${index}`, index])),
+    enum: Array.from({ length: size }, (_, index) => index),
+  }
+}

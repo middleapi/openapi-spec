@@ -779,6 +779,9 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['a', 'b'] } })).toEqual({
         not: { enum: ['a'] },
       })
+      expect(downgradeSchemaV31ToV30({ not: { const: { a: 1 }, enum: [{ a: 1 }] } })).toEqual({
+        not: { enum: [{ a: 1 }] },
+      })
     })
 
     it('includes a $defs target cut at recursion', () => {

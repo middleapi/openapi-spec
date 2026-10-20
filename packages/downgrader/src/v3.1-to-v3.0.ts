@@ -307,6 +307,13 @@ function jsonKey(value: unknown): unknown {
   }
 }
 
+// Serializes `value` once, not once per item, so a large `value` beside many
+// items costs their sizes added, not multiplied.
+function includesJson(items: unknown[], value: unknown): boolean {
+  const key = jsonKey(value)
+  return items.some((item) => jsonKey(item) === key)
+}
+
 function addAnyOf(out: Record<string, unknown>, variants: unknown[]): void {
   if (out.anyOf === undefined) {
     out.anyOf = variants
@@ -473,7 +480,7 @@ function finishSchema(
   const constOutsideEnum =
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
-    !schema.enum.some((item) => jsonKey(item) === jsonKey(schema.const))
+    !includesJson(schema.enum, schema.const)
   let loose = loosen(out, schema, exactTuple) || constOutsideEnum
   convertType(out, schema.type)
   // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.

@@ -9,7 +9,7 @@ import {
   referenceDiamondV31,
   schemaDiamond,
 } from './__shared__/graphs'
-import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
+import { constOutsideEnum, ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
 
 const API_10_RESOURCES = createApiV31(10)
 const API_100_RESOURCES = createApiV31(100)
@@ -17,6 +17,7 @@ const REFERENCE_DIAMOND = referenceDiamondV31(64)
 const CALLBACK_GRAPH = callbackGraphV31(8)
 const PATH_ITEM_CHAIN = pathItemChainV31(200)
 const SCHEMA_DIAMOND = schemaDiamond(64)
+const CONST_OUTSIDE_ENUM = constOutsideEnum(6000)
 
 describe('downgradeSpecV31ToV30', () => {
   bench('official corpus', () => {
@@ -57,5 +58,9 @@ describe('downgradeSchemaV31ToV30', () => {
 
   bench('dereferenced diamond, 64 levels', () => {
     downgradeSchemaV31ToV30(SCHEMA_DIAMOND)
+  })
+
+  bench('const object outside an enum, 6000 entries each', () => {
+    downgradeSchemaV31ToV30(CONST_OUTSIDE_ENUM)
   })
 })
