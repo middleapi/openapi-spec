@@ -127,6 +127,18 @@ const LOOSE = new WeakSet<object>()
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
+const convertMapping = map((item, ctx) =>
+  typeof item === 'string' && isInlined(item, ctx) ? DROP : clone(item),
+)
+
+const DISCRIMINATOR_FIELDS = defineFields({
+  // 3.0 ignores inline schemas when selecting by discriminator, so a value
+  // whose target is inlined has nothing left to point at.
+  mapping: (item, ctx) => {
+    const out = convertMapping(item, ctx)
+    return isRecord(out) && Object.keys(out).length === 0 ? DROP : out
+  },
+})
 
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
@@ -139,6 +151,7 @@ const SCHEMA_FIELDS = defineFields({
   },
   allOf: list(convertSchema),
   anyOf: list(convertSchema),
+  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
   // An empty one rejects every value, which `finishSchema` keeps another way.
   enum: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.

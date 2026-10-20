@@ -36,27 +36,38 @@ function resolvePointer(root: unknown, ref: string): unknown {
   return current
 }
 
+function isLocalRef(value: unknown): value is string {
+  return typeof value === 'string' && value.startsWith('#')
+}
+
 function collectLocalRefs(value: unknown, refs: Set<string>): Set<string> {
   if (typeof value === 'object' && value !== null) {
     for (const [key, item] of Object.entries(value)) {
-      if (
-        (key === '$ref' || key === 'operationRef') &&
-        typeof item === 'string' &&
-        item.startsWith('#')
-      ) {
+      if ((key === '$ref' || key === 'operationRef') && isLocalRef(item)) {
         refs.add(item)
-      } else {
-        collectLocalRefs(item, refs)
+        continue
       }
+      // The official schemas leave discriminator `mapping` values unchecked.
+      if (key === 'discriminator' && typeof item === 'object' && item !== null) {
+        const { mapping } = item as { mapping?: unknown }
+        if (typeof mapping === 'object' && mapping !== null) {
+          for (const target of Object.values(mapping)) {
+            if (isLocalRef(target)) {
+              refs.add(target)
+            }
+          }
+        }
+      }
+      collectLocalRefs(item, refs)
     }
   }
   return refs
 }
 
 /**
- * Every local `$ref` and `operationRef` in `output` that resolved in `input`
- * must still resolve in `output`: a conversion may keep a reference only
- * when its target survives.
+ * Every local `$ref`, `operationRef`, and discriminator `mapping` value in
+ * `output` that resolved in `input` must still resolve in `output`: a
+ * conversion may keep a reference only when its target survives.
  */
 export function expectNoNewDanglingRefs(input: object, output: object): void {
   for (const ref of collectLocalRefs(output, new Set())) {

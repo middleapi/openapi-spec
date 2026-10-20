@@ -368,6 +368,54 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  it('drops discriminator mapping values whose targets are inlined, and a mapping left empty', async () => {
+    const cat: OpenAPIV3_1.SchemaObject = { type: 'object', properties: { kind: { const: 'cat' } } }
+    const hooked = '#/webhooks/hook/post/requestBody/content/application~1json/schema'
+    const doc: OpenAPIV3_1.OpenAPIObject = {
+      openapi: '3.1.2',
+      info,
+      paths: {},
+      webhooks: {
+        hook: {
+          post: { requestBody: { content: { 'application/json': { schema: cat } } }, responses },
+        },
+      },
+      components: {
+        schemas: {
+          Pet: {
+            oneOf: [
+              { $ref: '#/components/schemas/Pet/$defs/Cat' },
+              { $ref: '#/components/schemas/Dog' },
+            ],
+            discriminator: {
+              propertyName: 'kind',
+              mapping: {
+                cat: '#/components/schemas/Pet/$defs/Cat',
+                dog: '#/components/schemas/Dog',
+              },
+            },
+            $defs: { Cat: cat },
+          },
+          Dog: { type: 'object', properties: { kind: { const: 'dog' } } },
+          Hooked: {
+            oneOf: [{ $ref: hooked }],
+            discriminator: { propertyName: 'kind', mapping: { cat: hooked } },
+          },
+        },
+      },
+    }
+    const out = await expectValidDowngrade(doc, downgradeSpecV31ToV30, '3.1', '3.0')
+    const expected = { type: 'object', properties: { kind: { enum: ['cat'] } } }
+    expect(out.components?.schemas).toEqual({
+      Pet: {
+        oneOf: [expected, { $ref: '#/components/schemas/Dog' }],
+        discriminator: { propertyName: 'kind', mapping: { dog: '#/components/schemas/Dog' } },
+      },
+      Dog: { type: 'object', properties: { kind: { enum: ['dog'] } } },
+      Hooked: { oneOf: [expected], discriminator: { propertyName: 'kind' } },
+    })
+  })
+
   it('leaves the input untouched', () => {
     const doc: OpenAPIV3_1.OpenAPIObject = {
       openapi: '3.1.2',
@@ -599,6 +647,43 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',
       })
+    })
+
+    it('drops discriminator mapping values into $defs, whose targets are inlined, and a mapping left empty', () => {
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [
+            { $ref: '#/$defs/Cat' },
+            { $ref: '#/definitions/Dog' },
+            { $ref: '#/components/schemas/Fish' },
+          ],
+          discriminator: {
+            propertyName: 'kind',
+            mapping: {
+              cat: '#/$defs/Cat',
+              dog: '#/definitions/Dog',
+              fish: '#/components/schemas/Fish',
+              bird: 'Bird',
+              missing: '#/$defs/Missing',
+            },
+          },
+          $defs: { Cat: { type: 'object' } },
+          definitions: { Dog: { type: 'object' } },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({
+        oneOf: [{ type: 'object' }, { type: 'object' }, { $ref: '#/components/schemas/Fish' }],
+        discriminator: {
+          propertyName: 'kind',
+          mapping: { fish: '#/components/schemas/Fish', bird: 'Bird', missing: '#/$defs/Missing' },
+        },
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ $ref: '#/$defs/Cat' }],
+          discriminator: { propertyName: 'kind', mapping: { cat: '#/$defs/Cat' } },
+          $defs: { Cat: { type: 'object' } },
+        }),
+      ).toEqual({ oneOf: [{ type: 'object' }], discriminator: { propertyName: 'kind' } })
     })
   })
 
