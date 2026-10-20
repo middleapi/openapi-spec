@@ -1,7 +1,7 @@
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import { expectValidDowngrade } from './validate'
+import { expectNoNewDanglingRefs, expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }
@@ -237,6 +237,21 @@ describe('downgradeSpecV31ToV30', () => {
       expect(out.paths['/a']?.get?.parameters).toEqual([
         { in: 'query', name: 'q', schema: { enum: [1] } },
       ])
+    })
+
+    it('keeps $refs into removed parts that dangle, such as one to the length of an array', () => {
+      const ref = '#/webhooks/hook/post/parameters/length'
+      const doc: OpenAPIV3_1.OpenAPIObject = {
+        openapi: '3.1.2',
+        info,
+        paths: { '/a': { get: { parameters: [{ $ref: ref }], responses } } },
+        webhooks: {
+          hook: { post: { parameters: [{ in: 'query', name: 'q', schema: {} }], responses } },
+        },
+      }
+      const out = downgradeSpecV31ToV30(doc)
+      expect(out.paths['/a']?.get?.parameters).toEqual([{ $ref: ref }])
+      expectNoNewDanglingRefs(doc, out)
     })
   })
 
@@ -598,6 +613,25 @@ describe('downgradeSchemaV31ToV30', () => {
     it('leaves a $ref into $defs that does not resolve as written', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',
+      })
+    })
+
+    it('resolves a token on an array only as an index, leaving others such as length as written', () => {
+      expect(
+        downgradeSchemaV31ToV30({
+          properties: {
+            a: { $ref: '#/$defs/A/allOf/0' },
+            b: { $ref: '#/$defs/A/allOf/length' },
+            c: { $ref: '#/$defs/A/allOf/00' },
+          },
+          $defs: { A: { allOf: [{ type: 'string' }] } },
+        }),
+      ).toEqual({
+        properties: {
+          a: { type: 'string' },
+          b: { $ref: '#/$defs/A/allOf/length' },
+          c: { $ref: '#/$defs/A/allOf/00' },
+        },
       })
     })
   })

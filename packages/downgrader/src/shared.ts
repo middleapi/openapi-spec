@@ -186,6 +186,9 @@ export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }
 
+// RFC 6901 reads a token on an array only as an index, never as a key such as `length`.
+const ARRAY_INDEX = /^(0|[1-9][0-9]*)$/
+
 function find(root: unknown, ref: string): unknown {
   if (!ref.startsWith('#')) {
     return undefined
@@ -202,7 +205,10 @@ function find(root: unknown, ref: string): unknown {
   let target = root
   for (const token of pointer.split('/').slice(1)) {
     const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (!(isRecord(target) || Array.isArray(target)) || !Object.hasOwn(target, key)) {
+    if (
+      !(isRecord(target) || (Array.isArray(target) && ARRAY_INDEX.test(key))) ||
+      !Object.hasOwn(target, key)
+    ) {
       return undefined
     }
     target = (target as Record<string, unknown>)[key]

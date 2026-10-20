@@ -7,10 +7,13 @@ type Version = '3.0' | '3.1' | '3.2'
 // caches the compiled schema per version, so one instance serves every call.
 const validator = new Validator()
 
+const ARRAY_INDEX = /^(0|[1-9][0-9]*)$/
+
 /**
  * Resolves a local `$ref` such as `#/components/schemas/Pet` against `root`.
  * The fragment is percent-decoded first (RFC 3986) and then split into
- * JSON Pointer tokens with `~1` and `~0` unescaped (RFC 6901).
+ * JSON Pointer tokens with `~1` and `~0` unescaped (RFC 6901). A token on an
+ * array resolves only as an index, so `length` does not.
  */
 function resolvePointer(root: unknown, ref: string): unknown {
   if (!ref.startsWith('#')) {
@@ -28,7 +31,12 @@ function resolvePointer(root: unknown, ref: string): unknown {
   let current = root
   for (const token of pointer.slice(1).split('/')) {
     const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (typeof current !== 'object' || current === null || !Object.hasOwn(current, key)) {
+    if (
+      typeof current !== 'object' ||
+      current === null ||
+      (Array.isArray(current) && !ARRAY_INDEX.test(key)) ||
+      !Object.hasOwn(current, key)
+    ) {
       return undefined
     }
     current = (current as Record<string, unknown>)[key]

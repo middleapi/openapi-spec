@@ -341,9 +341,11 @@ describe('downgradeSpecV32ToV31', () => {
 
     it('drops a content $ref that does not resolve or loops', () => {
       const out = convertOperation({
+        tags: ['pets'],
         requestBody: {
           content: {
             'application/json': { $ref: '#/components/mediaTypes/Missing' },
+            'text/html': { $ref: '#/paths/~1a/get/tags/length' },
             'text/plain': { $ref: '#/paths/~1a/get/requestBody/content/text~1plain' },
           },
         },
