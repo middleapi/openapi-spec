@@ -151,10 +151,13 @@ const SCHEMA_FIELDS = defineFields({
   required: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
 })
 
+// A bare `$ref` kept as written, copied as it is.
+const KEPT_REF_FIELDS = defineFields({})
+
 const PARAMETER_FIELDS = defineFields({
   content: convertContent,
   examples: map(convertReference),
-  schema: convertSchema,
+  schema: convertTopSchema,
 })
 
 const ENCODING_FIELDS = defineFields({
@@ -164,7 +167,7 @@ const ENCODING_FIELDS = defineFields({
 const MEDIA_TYPE_FIELDS = defineFields({
   encoding: map((item, ctx) => convertObject(item, ctx, ENCODING_FIELDS)),
   examples: map(convertReference),
-  schema: convertSchema,
+  schema: convertTopSchema,
 })
 
 const REQUEST_BODY_FIELDS = defineFields({
@@ -202,7 +205,7 @@ const COMPONENTS_FIELDS = defineFields({
   pathItems: DROP,
   requestBodies: map(refOr(convertRequestBody)),
   responses: map(refOr(convertResponse)),
-  schemas: map(convertSchema),
+  schemas: map(convertTopSchema),
   securitySchemes: map((item, ctx) =>
     schemeType(item, ctx) === 'mutualTLS' ? DROP : convertReference(item, ctx),
   ),
@@ -256,12 +259,42 @@ function refOr(convert: Convert): Convert {
   return self
 }
 
+// A `$ref` kept as written accepts whatever its target does, so it lost a
+// restriction if the converted target did. The target converts once, for
+// `components.schemas` too, but one still being converted around a cycle has
+// not lost any yet.
+function hasLooseTarget(ref: string, ctx: Context): boolean {
+  const target = resolvePointer(ref, ctx)
+  if (!isRecord(target)) {
+    return false
+  }
+  // `convertSchema` makes a new object for each bare `$ref`, so one kept as
+  // written converts here instead, cached like any other object, so that a
+  // chain of them is followed once, and a cycle of them ends.
+  const next = getRef(target)
+  return isLoose(
+    next !== undefined && isBareRef(target) && !isInlined(next, ctx)
+      ? convertObject(target, ctx, KEPT_REF_FIELDS, finishKeptRef)
+      : convertSchema(target, ctx),
+  )
+}
+
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
-    return { $ref: ref }
+    return hasLooseTarget(ref, ctx) ? loosened({ $ref: ref }) : { $ref: ref }
   }
   const out = inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
+}
+
+function finishKeptRef(
+  out: Record<string, unknown>,
+  schema: Record<string, unknown>,
+  ctx: Context,
+): void {
+  if (hasLooseTarget(schema.$ref as string, ctx)) {
+    LOOSE.add(out)
+  }
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -543,6 +576,15 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
 }
 
+// Whether a schema lost a restriction matters only to a schema holding it, so
+// a bare `$ref` kept as written where none does skips converting its target.
+function convertTopSchema(value: unknown, ctx: Context): unknown {
+  const ref = getRef(value)
+  return ref !== undefined && isBareRef(value as Record<string, unknown>) && !isInlined(ref, ctx)
+    ? { $ref: ref }
+    : convertSchema(value, ctx)
+}
+
 function convertParameter(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, PARAMETER_FIELDS)
 }
@@ -646,7 +688,7 @@ export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV
 export function downgradeSchemaV31ToV30<T = unknown>(
   schema: OpenAPIV3_1.SchemaObject<T>,
 ): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as
+  return downgrade(schema, convertTopSchema) as
     | OpenAPIV3_0.ReferenceObject
     | OpenAPIV3_0.SchemaObject<T>
 }

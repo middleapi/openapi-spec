@@ -789,6 +789,107 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({})
     })
+
+    describe('through a $ref kept in the output', () => {
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      // As oRPC emits a z.tuple of two items: in 3.0 each item matches either type.
+      const pair = (first: string, second: string) =>
+        ({
+          type: 'array',
+          prefixItems: [{ type: first }, { type: second }],
+          items: false,
+          minItems: 2,
+          maxItems: 2,
+        }) as OpenAPIV3_1.SchemaObject
+
+      it('includes a named tuple or map whose items lost one', () => {
+        // As oRPC emits z.xor over named z.tuples, or over named z.maps.
+        const map = (key: string, value: string) =>
+          ({
+            'type': 'array',
+            'items': {
+              type: 'array',
+              prefixItems: [{ type: key }, { type: value }],
+              maxItems: 2,
+              minItems: 2,
+            },
+            'x-native-type': 'map',
+          }) as OpenAPIV3_1.SchemaObject
+        const out = convert({
+          components: {
+            schemas: {
+              Tuples: { oneOf: [ref('StrNum'), ref('NumStr')] },
+              Maps: { oneOf: [ref('StrNumMap'), ref('NumStrMap')] },
+              NotTuple: { not: { ...ref('StrNum'), description: 'Not a pair' } },
+              Points: { oneOf: [ref('Point'), { type: 'string' }] },
+              StrNum: pair('string', 'number'),
+              NumStr: pair('number', 'string'),
+              StrNumMap: map('string', 'number'),
+              NumStrMap: map('number', 'string'),
+              Point: pair('number', 'number'),
+            },
+          },
+        })
+        const schemas = out.components?.schemas ?? {}
+        expect(schemas.Tuples).toEqual({ anyOf: [ref('StrNum'), ref('NumStr')] })
+        expect(schemas.Maps).toEqual({ anyOf: [ref('StrNumMap'), ref('NumStrMap')] })
+        expect(schemas.NotTuple).toEqual({})
+        // A tuple converted exactly lost nothing.
+        expect(schemas.Points).toEqual({ oneOf: [ref('Point'), { type: 'string' }] })
+      })
+
+      it('includes a discriminated union over named branches, as it does inline', () => {
+        // Its const tags keep the branches exclusive, so anyOf means the same.
+        const branch = (kind: string, first: string, second: string) =>
+          ({
+            type: 'object',
+            properties: { kind: { type: 'string', const: kind }, pair: pair(first, second) },
+            required: ['kind', 'pair'],
+          }) as OpenAPIV3_1.SchemaObject
+        const a = branch('a', 'string', 'number')
+        const b = branch('b', 'number', 'string')
+        const out = convert({
+          components: {
+            schemas: {
+              Named: { oneOf: [ref('A'), ref('B')] },
+              Inline: { oneOf: [a, b] },
+              A: a,
+              B: b,
+            },
+          },
+        })
+        const { A, B, Inline, Named } = out.components?.schemas ?? {}
+        expect(Named).toEqual({ anyOf: [ref('A'), ref('B')] })
+        expect(Inline).toEqual({ anyOf: [A, B] })
+      })
+
+      it('follows a chain of bare $refs, and ends a cycle of them', () => {
+        const out = convert({
+          components: {
+            schemas: {
+              Chain: { oneOf: [ref('Alias'), { type: 'string' }] },
+              Alias: ref('AliasOfAlias'),
+              AliasOfAlias: ref('StrNum'),
+              StrNum: pair('string', 'number'),
+              Cycle: { oneOf: [ref('A'), ref('Self')], not: ref('B') },
+              A: ref('B'),
+              B: ref('A'),
+              Self: ref('Self'),
+            },
+          },
+        })
+        const schemas = out.components?.schemas ?? {}
+        expect(schemas.Chain).toEqual({ anyOf: [ref('Alias'), { type: 'string' }] })
+        expect(schemas.Cycle).toEqual({ oneOf: [ref('A'), ref('Self')], not: ref('B') })
+        expect([schemas.Alias, schemas.AliasOfAlias, schemas.A, schemas.B, schemas.Self]).toEqual([
+          ref('AliasOfAlias'),
+          ref('StrNum'),
+          ref('B'),
+          ref('A'),
+          ref('Self'),
+        ])
+      })
+    })
   })
 
   it('drops an empty required, which 3.0 forbids', () => {
