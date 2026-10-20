@@ -481,15 +481,15 @@ describe('downgradeSpecV32ToV31', () => {
   })
 
   it('reads objects as JSON would while Object.prototype has enumerable keys, as an old polyfill may add', () => {
-    const doc: OpenAPIV3_2.OpenAPIObject = {
-      openapi: '3.2.0',
-      info,
-      servers: [{ url: '/', name: 'main' }],
-    }
-    const clean = downgradeSpecV32ToV31(doc)
+    const fields = { servers: [{ url: '/', name: 'main' }] }
+    const clean = convert(fields)
+    const other = runInNewContext(
+      `Object.prototype.polyfill = () => {}; (${JSON.stringify({ openapi: '3.2.0', info, ...fields })})`,
+    )
+    expect(downgradeSpecV32ToV31(other)).toEqual(clean)
     Object.assign(Object.prototype, { polyfill() {} })
     try {
-      expect(downgradeSpecV32ToV31(doc)).toEqual(clean)
+      expect(convert(fields)).toEqual(clean)
     } finally {
       Reflect.deleteProperty(Object.prototype, 'polyfill')
     }

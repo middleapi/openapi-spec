@@ -37,11 +37,10 @@ export const HTTP_METHODS = [
 
 /**
  * Whether `value` is an object JSON would see as one: its prototype is null,
- * or is an object with a null prototype that is `Object.prototype` or has no
- * keys of its own to inherit. That covers `Object.prototype` from any realm,
- * even with keys a polyfill added, and empty null-prototype classes, such as
- * the objects oRPC serializes to, but not a `Date`, a `Map`, or another class
- * instance. Only own keys are ever copied, so inherited ones are left out.
+ * `Object.prototype` from any realm, even with keys a polyfill added, or an
+ * object with a null prototype and no keys of its own to inherit, as in the
+ * empty null-prototype classes oRPC serializes to. A `Date`, a `Map`, or
+ * another class instance is not one.
  */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -49,9 +48,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   }
   const proto: object | null = Object.getPrototypeOf(value)
   return (
+    proto === Object.prototype ||
     proto === null ||
     (Object.getPrototypeOf(proto) === null &&
-      // Recognizes `Object.prototype` by its structure, as another realm has its own.
       (Object.hasOwn(proto, 'hasOwnProperty') || Object.keys(proto).length === 0))
   )
 }
