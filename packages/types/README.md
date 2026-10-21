@@ -159,6 +159,16 @@ Like what we build over at [middleapi](https://github.com/middleapi)? You can he
 
 With thanks to [39 past sponsors](https://htmlpreview.github.io/?https://github.com/middleapi/static/blob/main/sponsors.svg) who helped get openapi-spec here.
 
+## Open Source Programs
+
+OpenAPI Spec's development is supported by these programs for open source maintainers:
+
+<table>
+  <tr>
+   <td align="center"><a href="https://claude.com/contact-sales/claude-for-oss" target="_blank" rel="noopener" title="Claude for Open Source"><img src="https://cdn.simpleicons.org/claude" width="64" alt="Claude"/><br />Claude for Open Source</a></td>
+  </tr>
+</table>
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](https://github.com/middleapi/openapi-spec/blob/main/LICENSE) for more information.
