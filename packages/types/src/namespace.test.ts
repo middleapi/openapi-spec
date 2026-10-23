@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import ts from 'typescript'
+import ts from '@typescript/typescript6'
 
 const testFile = fileURLToPath(new URL('./namespace.test-d.ts', import.meta.url))
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
