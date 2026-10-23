@@ -260,7 +260,10 @@ function refOr(convert: Convert): Convert {
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
-    return { $ref: ref }
+    // A `$ref` kept as written loses what its target loses. Converting the
+    // target here reuses the copy the components get, and stops at a cycle.
+    const out = { $ref: ref }
+    return isLoose(inline(ref, ctx, convertSchema)) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out

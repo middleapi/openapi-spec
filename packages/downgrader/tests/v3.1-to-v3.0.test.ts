@@ -804,6 +804,65 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({})
     })
+
+    it('includes the target of a $ref kept in the output', () => {
+      // As zod emits z.xor over tuples registered as components.
+      const tuple = (
+        a: OpenAPIV3_1.SchemaObjectType,
+        b: OpenAPIV3_1.SchemaObjectType,
+      ): OpenAPIV3_1.SchemaObject => ({
+        type: 'array',
+        prefixItems: [{ type: a }, { type: b }],
+        items: false,
+      })
+      const schemas = convert({
+        components: {
+          schemas: {
+            StrNum: tuple('string', 'number'),
+            NumStr: tuple('number', 'string'),
+            Point: tuple('number', 'number'),
+            Alias: { $ref: '#/components/schemas/StrNum' },
+            A: { $ref: '#/components/schemas/B' },
+            B: { $ref: '#/components/schemas/A' },
+            Xor: {
+              oneOf: [
+                { $ref: '#/components/schemas/StrNum' },
+                { $ref: '#/components/schemas/NumStr' },
+              ],
+            },
+            Not: { not: { $ref: '#/components/schemas/StrNum' } },
+            Exact: { oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }] },
+            ViaAlias: { oneOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }] },
+            Nested: {
+              oneOf: [
+                { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
+                { type: 'string' },
+              ],
+            },
+            Cycle: { oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }] },
+          },
+        },
+      }).components?.schemas
+      expect(schemas?.Xor).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/StrNum' }, { $ref: '#/components/schemas/NumStr' }],
+      })
+      expect(schemas?.Not).toEqual({})
+      expect(schemas?.Exact).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }],
+      })
+      expect(schemas?.ViaAlias).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }],
+      })
+      expect(schemas?.Nested).toEqual({
+        anyOf: [
+          { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
+          { type: 'string' },
+        ],
+      })
+      expect(schemas?.Cycle).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }],
+      })
+    })
   })
 
   it('drops an empty required, which 3.0 forbids', () => {
