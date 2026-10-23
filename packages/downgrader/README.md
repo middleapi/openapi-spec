@@ -237,7 +237,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 #### Limitations
 
-- A `not` or `oneOf` that reaches a schema that lost a restriction through a `$ref` kept in the output, such as one to `components.schemas`, or around a cycle of objects, can still reject values the original accepts.
+- A `not` or `oneOf` inside a cycle of schemas, over a `$ref` back into that cycle to a schema that lost a restriction, can still reject values the original accepts.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
 - Older drafts are not supported. `definitions` is read as `$defs`, but other keywords that only draft-07 or 2019-09 define, such as `dependencies` and `additionalItems`, become extensions unconverted, so `$ref`s into them dangle, and array-form `items` passes through. Convert such schemas to 2020-12 first.
