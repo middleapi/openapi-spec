@@ -391,6 +391,21 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ type: 'integer' })).toEqual({ type: 'integer' })
     })
 
+    it('keeps a single type where it was written', () => {
+      const keys = (schema: OpenAPIV3_1.SchemaObject) =>
+        Object.keys(downgradeSchemaV31ToV30(schema))
+      expect(keys({ type: 'string', minLength: 1, const: 'a' })).toEqual([
+        'type',
+        'minLength',
+        'enum',
+      ])
+      expect(keys({ type: ['object', 'null'], properties: {} })).toEqual([
+        'type',
+        'properties',
+        'nullable',
+      ])
+    })
+
     it('keeps a 3.0-style nullable written beside a type, which only 3.0 gives meaning', () => {
       const schema = (fields: Record<string, unknown>) =>
         downgradeSchemaV31ToV30(fields as OpenAPIV3_1.SchemaObject)
