@@ -64,7 +64,6 @@ const REMOVED_KEYWORDS = [
   'exclusiveMaximum',
   'exclusiveMinimum',
   'nullable',
-  'type',
 ]
 
 // The only keywords a 3.0 Schema Object allows, besides extensions.
@@ -149,6 +148,9 @@ const SCHEMA_FIELDS = defineFields({
   properties: map(convertSchema),
   // 3.0 requires at least one entry.
   required: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
+  // Kept in place when it names one type besides `null`. `convertType`
+  // rewrites any other.
+  type: (item) => singleType(item) ?? DROP,
 })
 
 const PARAMETER_FIELDS = defineFields({
@@ -396,17 +398,25 @@ function loosen(
   )
 }
 
-// 3.0 takes one type, and marks null with `nullable` instead.
+// The one type besides `null` that `type` names, which 3.0 keeps as it is.
+function singleType(type: unknown): string | undefined {
+  if (!Array.isArray(type)) {
+    return typeof type === 'string' && type !== 'null' ? type : undefined
+  }
+  const rest = type.filter((item) => typeof item === 'string' && item !== 'null')
+  return rest.length === 1 ? rest[0] : undefined
+}
+
+// 3.0 takes one type, which `SCHEMA_FIELDS` keeps, and marks null with
+// `nullable` instead.
 function convertType(out: Record<string, unknown>, type: unknown): void {
   if (typeof type === 'string' && type !== 'null') {
-    out.type = type
     return
   }
   const types = (Array.isArray(type) ? type : [type]).filter((item) => typeof item === 'string')
   const nullable = types.includes('null')
   const rest = types.filter((item) => item !== 'null')
   if (rest.length === 1) {
-    out.type = rest[0]
     if (nullable) {
       out.nullable = true
     }
