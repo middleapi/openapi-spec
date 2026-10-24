@@ -144,9 +144,9 @@ const convertReference = refOr(clone)
 
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
-  // It would reject the properties that `patternProperties` allowed.
+  // A schema would reject the properties that `patternProperties` allowed.
   additionalProperties: (item, ctx, schema) => {
-    if (schema.patternProperties !== undefined) {
+    if (schema.patternProperties !== undefined && item !== true) {
       return DROP
     }
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)

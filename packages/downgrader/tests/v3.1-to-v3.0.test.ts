@@ -1100,7 +1100,7 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
-  it('drops additionalProperties beside patternProperties, which it would contradict', () => {
+  it('drops an additionalProperties schema beside patternProperties, which it would contradict', () => {
     expect(
       downgradeSchemaV31ToV30({
         type: 'object',
@@ -1108,6 +1108,21 @@ describe('downgradeSchemaV31ToV30', () => {
         additionalProperties: false,
       }),
     ).toEqual({ type: 'object' })
+    expect(
+      downgradeSchemaV31ToV30({
+        patternProperties: { '^x-': { type: 'string' } },
+        additionalProperties: { type: 'number' },
+      }),
+    ).toEqual({})
+    // As Effect writes a record with number keys. Kept, so code generators
+    // do not read the object as empty.
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        patternProperties: { '^\\d+$': { type: 'string' } },
+        additionalProperties: true,
+      }),
+    ).toEqual({ type: 'object', additionalProperties: true })
   })
 
   describe('a schema that lost a restriction', () => {
