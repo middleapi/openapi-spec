@@ -741,9 +741,11 @@ function schemeType(scheme: unknown, ctx: Context): unknown {
 }
 
 // 3.0 has no mutual TLS, so security requirements lose the schemes that use
-// it. A requirement left empty is removed, and so is a list left empty,
-// because an empty one would mean that no security is needed. 3.0 also
-// allows scopes only for OAuth2 and OpenID Connect.
+// it. A requirement left empty is removed, because an empty one would mean
+// that no security is needed. A list left empty is removed too, so an
+// operation falls back to the document's `security`, though the document's
+// own list then needs no security either way. 3.0 also allows scopes only for
+// OAuth2 and OpenID Connect.
 function convertSecurity(value: unknown, ctx: Context): unknown {
   if (!Array.isArray(value)) {
     return clone(value)
