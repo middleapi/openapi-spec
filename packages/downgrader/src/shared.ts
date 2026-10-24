@@ -153,14 +153,14 @@ export function map(convert: Convert, isEntry: (key: string) => boolean = () => 
     if (!isRecord(value)) {
       return clone(value)
     }
-    const out: [string, unknown][] = []
+    const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value)) {
       const converted = item === undefined ? DROP : isEntry(key) ? convert(item, ctx) : clone(item)
       if (converted !== DROP) {
-        out.push([key, converted])
+        setOwn(out, key, converted)
       }
     }
-    return Object.fromEntries(out)
+    return out
   }
 }
 
