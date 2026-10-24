@@ -625,6 +625,11 @@ describe('downgradeSchemaV31ToV30', () => {
       nullable: true,
       enum: [null],
     })
+    // As Zod emits `z.literal(5)`: the written type stays, though 5 is an integer.
+    expect(downgradeSchemaV31ToV30({ type: 'number', const: 5 })).toEqual({
+      type: 'number',
+      enum: [5],
+    })
   })
 
   it('types a const with no type after its value', () => {
@@ -687,6 +692,7 @@ describe('downgradeSchemaV31ToV30', () => {
   it('turns examples into example', () => {
     expect(downgradeSchemaV31ToV30({ examples: ['a', 'b'] })).toEqual({ example: 'a' })
     expect(downgradeSchemaV31ToV30({ example: 'x', examples: ['a'] })).toEqual({ example: 'x' })
+    expect(downgradeSchemaV31ToV30({ examples: [] })).toStrictEqual({})
   })
 
   it('turns tuples into arrays whose items match any item schema', () => {
@@ -1530,6 +1536,9 @@ describe('unusual input', () => {
           { type: 'string' },
         ],
       }),
+    ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ type: 'object', if: undefined }, { type: 'string' }] }),
     ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
   })
 
