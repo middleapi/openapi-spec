@@ -1,8 +1,8 @@
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-// Standalone Schema Objects, in the shape a schema library emits them. The
-// 3.1 and 3.2 dialects share these keywords, so both steps take the same
-// inputs.
+// Standalone Schema Objects, in the shape a schema library emits them, and
+// one an untrusted upload might send. The 3.1 and 3.2 dialects share these
+// keywords, so both steps take the same inputs.
 
 /** One nullable property, the smallest common call. */
 export const PROPERTY_SCHEMA: OpenAPIV3_2.SchemaObject = {
@@ -114,4 +114,15 @@ export const ORDER_SCHEMA: OpenAPIV3_2.SchemaObject = {
       },
     },
   },
+}
+
+/**
+ * A `const` object with `size` keys beside an `enum` of `size` numbers that
+ * leaves it out.
+ */
+export function constOutsideEnum(size: number): OpenAPIV3_2.SchemaObject {
+  return {
+    const: Object.fromEntries(Array.from({ length: size }, (_, index) => [`k${index}`, index])),
+    enum: Array.from({ length: size }, (_, index) => index),
+  }
 }
