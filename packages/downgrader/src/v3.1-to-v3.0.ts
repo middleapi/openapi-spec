@@ -127,7 +127,11 @@ const LOOSE = new WeakSet<object>()
 // Converted schemas with an `anyOf` of two branches, for `mergeNullable`. It
 // runs once the whole input is converted, since a cycle can meet a branch
 // before its conversion is done.
-const twoBranchAnyOfs: Record<string, unknown>[] = []
+const twoBranchAnyOfs: [schema: Record<string, unknown>, input: object][] = []
+
+// Input schemas whose `anyOf` a `$ref` kept as written points into. They keep
+// it, so the `$ref` still resolves.
+const anyOfTargets = new Set<object>()
 
 // A branch with these stays: null can still fail them beside `nullable: true`,
 // and a `nullable` already there was written 3.0-style.
@@ -251,14 +255,11 @@ const DOCUMENT_FIELDS = defineFields({
 })
 
 // A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
-// target, unless it already dangles. So is one into an `anyOf` or `oneOf`,
-// which 3.0 can merge away or rename.
+// target, unless it already dangles.
 function isInlined(ref: string, ctx: Context): boolean {
   return (
     (ref.includes('/$defs/') ||
       ref.includes('/definitions/') ||
-      ref.includes('/anyOf/') ||
-      ref.includes('/oneOf/') ||
       REMOVED_PARTS.some((prefix) => ref.startsWith(prefix))) &&
     resolvePointer(ref, ctx) !== undefined
   )
@@ -278,6 +279,12 @@ function refOr(convert: Convert): Convert {
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
+    for (let at = ref.indexOf('/anyOf/'); at !== -1; at = ref.indexOf('/anyOf/', at + 1)) {
+      const holder = resolvePointer(ref.slice(0, at), ctx)
+      if (isRecord(holder)) {
+        anyOfTargets.add(holder)
+      }
+    }
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
     const out = { $ref: ref }
@@ -664,7 +671,7 @@ function finishSchema(
     }
   }
   if (Array.isArray(out.anyOf) && out.anyOf.length === 2) {
-    twoBranchAnyOfs.push(out)
+    twoBranchAnyOfs.push([out, schema])
   }
   if (loose) {
     LOOSE.add(out)
@@ -791,10 +798,14 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
   twoBranchAnyOfs.length = 0
+  anyOfTargets.clear()
   const out = downgrade(root, convert)
-  for (const schema of twoBranchAnyOfs.splice(0)) {
-    mergeNullable(schema, root)
+  for (const [schema, input] of twoBranchAnyOfs.splice(0)) {
+    if (!anyOfTargets.has(input)) {
+      mergeNullable(schema, root)
+    }
   }
+  anyOfTargets.clear()
   return out
 }
 

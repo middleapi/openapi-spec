@@ -844,7 +844,7 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ properties: { a: { type: 'string', nullable: true } } })
     })
 
-    it('inlines $refs into an anyOf or oneOf, which 3.0 can merge away or rename', () => {
+    it('keeps an anyOf of a branch and null that a $ref points into, so the $ref still resolves', () => {
       const address = { type: 'object', properties: { city: { type: 'string' } } } as const
       expect(
         downgradeSchemaV31ToV30({
@@ -852,19 +852,30 @@ describe('downgradeSchemaV31ToV30', () => {
           properties: {
             home: { anyOf: [address, { type: 'null' }] },
             work: { anyOf: [{ $ref: '#/properties/home/anyOf/0' }, { type: 'null' }] },
-            id: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
-            parentId: { $ref: '#/properties/id/oneOf/0' },
           },
         }),
       ).toEqual({
         type: 'object',
         properties: {
-          home: { ...address, nullable: true },
-          work: { ...address, nullable: true },
-          id: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
-          parentId: { type: 'string' },
+          home: { anyOf: [address, { type: 'string', nullable: true, enum: [null] }] },
+          work: {
+            oneOf: [
+              { $ref: '#/properties/home/anyOf/0' },
+              { type: 'string', nullable: true, enum: [null] },
+            ],
+          },
         },
       })
+    })
+
+    it('keeps an anyOf of a branch and null that a $ref inside it points into', () => {
+      const node = {
+        type: 'object',
+        properties: { children: { type: 'array', items: { $ref: '#/anyOf/0' } } },
+      } as const
+      const out = downgradeSchemaV31ToV30({ anyOf: [node, { type: 'null' }] })
+      expect(out).toEqual({ anyOf: [node, { type: 'string', nullable: true, enum: [null] }] })
+      expect(() => JSON.stringify(out)).not.toThrow()
     })
 
     it('leaves a $ref into $defs that does not resolve as written', () => {
