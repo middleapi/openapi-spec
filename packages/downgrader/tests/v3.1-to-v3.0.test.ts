@@ -235,7 +235,7 @@ describe('downgradeSpecV31ToV30', () => {
         },
       })
       expect(out.paths['/a']?.get?.parameters).toEqual([
-        { in: 'query', name: 'q', schema: { enum: [1] } },
+        { in: 'query', name: 'q', schema: { type: 'integer', enum: [1] } },
       ])
     })
   })
@@ -483,6 +483,31 @@ describe('downgradeSchemaV31ToV30', () => {
       nullable: true,
       enum: [null],
     })
+  })
+
+  it('types a const with no type after its value', () => {
+    expect(downgradeSchemaV31ToV30({ const: true })).toEqual({ type: 'boolean', enum: [true] })
+    expect(downgradeSchemaV31ToV30({ const: 'a' })).toEqual({ type: 'string', enum: ['a'] })
+    expect(downgradeSchemaV31ToV30({ const: 1 })).toEqual({ type: 'integer', enum: [1] })
+    expect(downgradeSchemaV31ToV30({ const: 1.5 })).toEqual({ type: 'number', enum: [1.5] })
+    expect(downgradeSchemaV31ToV30({ const: { a: 1 } })).toEqual({
+      type: 'object',
+      enum: [{ a: 1 }],
+    })
+    expect(downgradeSchemaV31ToV30({ const: [1] })).toEqual({
+      type: 'array',
+      enum: [[1]],
+      items: {},
+    })
+    expect(Object.keys(downgradeSchemaV31ToV30({ description: 'd', const: true }))).toEqual([
+      'description',
+      'type',
+      'enum',
+    ])
+    // A 3.0-style nullable means nothing in 3.1, so null stays out.
+    expect(
+      downgradeSchemaV31ToV30({ const: 'a', nullable: true } as OpenAPIV3_1.SchemaObject),
+    ).toEqual({ type: 'string', enum: ['a'] })
   })
 
   it('turns numeric exclusive bounds into boolean ones, keeping the stricter bound', () => {
@@ -833,7 +858,7 @@ describe('downgradeSchemaV31ToV30', () => {
     it('includes a const outside the enum beside it, which matched nothing', () => {
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['b'] } })).toEqual({})
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['a', 'b'] } })).toEqual({
-        not: { enum: ['a'] },
+        not: { type: 'string', enum: ['a'] },
       })
     })
 

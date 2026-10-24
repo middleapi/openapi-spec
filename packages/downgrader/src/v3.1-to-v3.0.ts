@@ -452,6 +452,24 @@ function isOnlyNull(values: unknown): boolean {
   return Array.isArray(values) && values.length === 1 && values[0] === null
 }
 
+// The type of a JSON value other than null.
+function valueType(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return 'array'
+  }
+  switch (typeof value) {
+    case 'boolean':
+    case 'string':
+      return typeof value
+    case 'number':
+      return Number.isInteger(value) ? 'integer' : 'number'
+    case 'object':
+      return value === null ? undefined : 'object'
+    default:
+      return undefined
+  }
+}
+
 function isMediaTypeOnly(value: unknown): boolean {
   return (
     isRecord(value) && Object.keys(value).length === 1 && typeof value.contentMediaType === 'string'
@@ -517,6 +535,15 @@ function finishSchema(
     out.type = 'string'
     out.nullable = true
     out.enum = [null]
+  }
+  // Code generators drop or leave untyped an `enum` with no `type`, as a
+  // `const` becomes, so it gets the type of its value.
+  const constType = out.type === undefined ? valueType(schema.const) : undefined
+  if (constType !== undefined) {
+    const values = out.enum
+    delete out.enum
+    out.type = constType
+    out.enum = values
   }
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}

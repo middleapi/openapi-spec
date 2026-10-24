@@ -51,7 +51,10 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
     },
   })
   expect(NotFound).toMatchObject({
-    properties: { defined: { enum: [true] }, code: { enum: ['NOT_FOUND'] } },
+    properties: {
+      defined: { type: 'boolean', enum: [true] },
+      code: { type: 'string', enum: ['NOT_FOUND'] },
+    },
   })
 
   const upload = v30.paths['/planets/{id}/image']?.put?.requestBody
@@ -71,7 +74,9 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   expect(v30.paths['/planets/events']?.get?.responses['200']).toMatchObject({
     content: {
       'text/event-stream': {
-        schema: { oneOf: [{ properties: { event: { enum: ['message'] } } }, {}, {}] },
+        schema: {
+          oneOf: [{ properties: { event: { type: 'string', enum: ['message'] } } }, {}, {}],
+        },
       },
     },
   })
