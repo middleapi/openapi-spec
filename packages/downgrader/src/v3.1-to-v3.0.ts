@@ -132,6 +132,9 @@ const twoBranchAnyOfs: Record<string, unknown>[] = []
 // and a `nullable` already there was written 3.0-style.
 const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'nullable', 'oneOf']
 
+// `$ref`s kept as written whose targets reject null, for `mergeNullable`.
+const NULL_REJECTING_REFS = new WeakSet<object>()
+
 const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -277,6 +280,10 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
     const out = { $ref: ref }
+    // The target as written, since a cycle can meet its conversion unfinished.
+    if (rejectsNull(resolvePointer(ref, ctx))) {
+      NULL_REJECTING_REFS.add(out)
+    }
     return isLoose(inline(ref, ctx, convertSchema)) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
@@ -487,23 +494,41 @@ function isOnlyNullSchema(value: unknown): boolean {
   )
 }
 
+// A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.
+function rejectsNull(schema: unknown): boolean {
+  if (!isRecord(schema) || schema.nullable === true) {
+    return false
+  }
+  const { type } = schema
+  return Array.isArray(type)
+    ? type.length > 0 && type.every((item) => typeof item === 'string' && item !== 'null')
+    : typeof type === 'string' && type !== 'null'
+}
+
 // Zod writes a nullable object, array, or integer as an `anyOf` of it and
 // `{ type: "null" }`. Code generators read that pair in 3.0 as a union or an
 // empty class, so the branch takes its place with `nullable: true`, as 3.0
-// writes it, when the schema around it has none of its keywords.
+// writes it, when the schema around it has none of its keywords. A branch
+// that stays, such as a `$ref` or an `enum`, makes the pair a `oneOf` when it
+// rejects null, as null then matches one branch only. NSwag reads that
+// `oneOf` as nullable, and the `anyOf` as an empty class.
 function mergeNullable(out: Record<string, unknown>): void {
   const [first, second] = out.anyOf as unknown[]
   const other = isOnlyNullSchema(first) ? second : isOnlyNullSchema(second) ? first : undefined
-  if (
-    !isRecord(other) ||
-    typeof other.type !== 'string' ||
-    NOT_NULLABLE_KEYWORDS.some((key) => Object.hasOwn(other, key)) ||
-    Object.keys(other).some((key) => Object.hasOwn(out, key))
-  ) {
+  if (!isRecord(other)) {
     return
   }
-  delete out.anyOf
-  Object.assign(out, other, { nullable: true })
+  if (
+    typeof other.type === 'string' &&
+    !NOT_NULLABLE_KEYWORDS.some((key) => Object.hasOwn(other, key)) &&
+    !Object.keys(other).some((key) => Object.hasOwn(out, key))
+  ) {
+    delete out.anyOf
+    Object.assign(out, other, { nullable: true })
+  } else if (out.oneOf === undefined && (NULL_REJECTING_REFS.has(other) || rejectsNull(other))) {
+    out.oneOf = out.anyOf
+    delete out.anyOf
+  }
 }
 
 // The type of a JSON value other than null.

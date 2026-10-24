@@ -82,7 +82,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "type": "string",
           },
           "parent": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/Category",
               },
@@ -745,7 +745,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
+                  "oneOf": [
                     {
                       "$ref": "#/components/schemas/Planet",
                     },

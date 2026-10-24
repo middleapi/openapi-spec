@@ -495,15 +495,23 @@ describe('downgradeSchemaV31ToV30', () => {
 
     it('keeps an anyOf with null whose other branch null would not pass, or shares a key', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
-      const branches: OpenAPIV3_1.SchemaObject[] = [
-        { $ref: '#/components/schemas/Pet' },
+      // Null matches only the null branch here, so it becomes a oneOf.
+      const typed: OpenAPIV3_1.SchemaObject[] = [
         { type: 'string', enum: ['a', 'b'] },
         { type: 'object', allOf: [{ required: ['a'] }] },
         { type: 'integer', not: { const: 0 } },
+      ]
+      for (const branch of typed) {
+        expect(downgradeSchemaV31ToV30({ anyOf: [branch, { type: 'null' }] })).toEqual({
+          oneOf: [downgradeSchemaV31ToV30(branch), onlyNull],
+        })
+      }
+      const untyped: OpenAPIV3_1.SchemaObject[] = [
+        { $ref: '#/components/schemas/Pet' },
         { type: 'string', nullable: true },
         { minLength: 1 },
       ]
-      for (const branch of branches) {
+      for (const branch of untyped) {
         expect(downgradeSchemaV31ToV30({ anyOf: [branch, { type: 'null' }] })).toEqual({
           anyOf: [downgradeSchemaV31ToV30(branch), onlyNull],
         })
@@ -513,12 +521,43 @@ describe('downgradeSchemaV31ToV30', () => {
           description: 'A',
           anyOf: [{ type: 'string', description: 'B' }, { type: 'null' }],
         }),
-      ).toEqual({ description: 'A', anyOf: [{ type: 'string', description: 'B' }, onlyNull] })
+      ).toEqual({ description: 'A', oneOf: [{ type: 'string', description: 'B' }, onlyNull] })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string', enum: ['a'] }, { type: 'null' }],
+          oneOf: [{ minLength: 1 }, { maxLength: 0 }],
+        }),
+      ).toEqual({
+        anyOf: [{ type: 'string', enum: ['a'] }, onlyNull],
+        oneOf: [{ minLength: 1 }, { maxLength: 0 }],
+      })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
         }),
       ).toEqual({ anyOf: [{ type: 'string' }, onlyNull, onlyNull] })
+    })
+
+    it('makes an anyOf of a $ref and null a oneOf when the target rejects null', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      const pet = (target: OpenAPIV3_1.SchemaObject) =>
+        convert({
+          components: {
+            schemas: {
+              Pet: target,
+              Owner: { anyOf: [{ $ref: '#/components/schemas/Pet' }, { type: 'null' }] },
+            },
+          },
+        }).components?.schemas?.Owner
+      expect(pet({ type: 'object' })).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
+      expect(pet({ type: ['object', 'null'] })).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
+      expect(pet({ type: 'object', nullable: true } as OpenAPIV3_1.SchemaObject)).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
