@@ -187,7 +187,8 @@ export function getRef(value: unknown): string | undefined {
   return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
 }
 
-function find(root: unknown, ref: string): unknown {
+/** The target of a local JSON Pointer `$ref` in `root`, looked up afresh each time. */
+export function find(root: unknown, ref: string): unknown {
   if (!ref.startsWith('#')) {
     return undefined
   }
