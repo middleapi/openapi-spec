@@ -794,16 +794,19 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
-  twoBranchAnyOfs.length = 0
-  anyOfTargets.clear()
-  const out = downgrade(root, convert)
-  for (const [schema, input] of twoBranchAnyOfs.splice(0)) {
-    if (!anyOfTargets.has(input)) {
-      mergeNullable(schema, root)
+  try {
+    const out = downgrade(root, convert)
+    for (const [schema, input] of twoBranchAnyOfs) {
+      if (!anyOfTargets.has(input)) {
+        mergeNullable(schema, root)
+      }
     }
+    return out
+  } finally {
+    // Cleared even when conversion throws, so nothing keeps the input alive.
+    twoBranchAnyOfs.length = 0
+    anyOfTargets.clear()
   }
-  anyOfTargets.clear()
-  return out
 }
 
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
