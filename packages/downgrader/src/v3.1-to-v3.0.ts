@@ -123,6 +123,7 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
+const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
@@ -137,7 +138,11 @@ const SCHEMA_FIELDS = defineFields({
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
   },
   allOf: list(convertSchema),
-  anyOf: list(convertSchema),
+  // Zod writes a file with several media types as an `anyOf` of branches
+  // that hold only `contentMediaType`, an annotation, so it matches every
+  // value. Its branches would each become a binary string in 3.0.
+  anyOf: (item, ctx) =>
+    Array.isArray(item) && item.some(isMediaTypeOnly) ? DROP : convertAnyOf(item, ctx),
   // An empty one rejects every value, which `finishSchema` keeps another way.
   enum: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.
@@ -445,6 +450,12 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
 
 function isOnlyNull(values: unknown): boolean {
   return Array.isArray(values) && values.length === 1 && values[0] === null
+}
+
+function isMediaTypeOnly(value: unknown): boolean {
+  return (
+    isRecord(value) && Object.keys(value).length === 1 && typeof value.contentMediaType === 'string'
+  )
 }
 
 // 3.0 marks encoded and raw binary strings with `format` instead. A string

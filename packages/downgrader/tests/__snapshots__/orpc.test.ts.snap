@@ -1000,6 +1000,10 @@ exports[`matches the 3.0 snapshot 1`] = `
                     "format": "binary",
                     "type": "string",
                   },
+                  "thumbnail": {
+                    "format": "binary",
+                    "type": "string",
+                  },
                 },
                 "required": [
                   "image",

@@ -590,6 +590,26 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ type: 'string' })
   })
 
+  it('drops an anyOf whose branch holds only contentMediaType, which matches every value', () => {
+    // Zod's `z.file().mime(['image/png', 'image/jpeg'])`.
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'string',
+        format: 'binary',
+        contentEncoding: 'binary',
+        anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }],
+      }),
+    ).toEqual({ type: 'string', format: 'binary' })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [
+          { contentMediaType: 'image/png' },
+          { type: 'string', contentMediaType: 'text/plain' },
+        ],
+      }),
+    ).toEqual({})
+  })
+
   describe('$ref', () => {
     it('wraps a $ref with siblings in allOf, which 3.0 does not ignore', () => {
       expect(
