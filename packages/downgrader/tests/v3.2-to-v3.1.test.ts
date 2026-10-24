@@ -359,12 +359,14 @@ describe('downgradeSpecV32ToV31', () => {
         200: { summary: 'OK', description: 'Everything went fine' },
         201: { summary: 'Created' },
         204: {},
+        404: { $ref: '#/components/responses/NotFound' },
       },
     })
     expect(out?.responses).toEqual({
       200: { description: 'Everything went fine' },
       201: { description: 'Created' },
       204: { description: '' },
+      404: { $ref: '#/components/responses/NotFound' },
     })
   })
 

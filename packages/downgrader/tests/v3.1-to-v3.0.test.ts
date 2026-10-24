@@ -495,6 +495,7 @@ describe('downgradeSchemaV31ToV30', () => {
       ])
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual(onlyNull)
       expect(downgradeSchemaV31ToV30({ enum: [null] })).toEqual(onlyNull)
+      expect(downgradeSchemaV31ToV30({ enum: [null, 'a'] })).toEqual({ enum: [null, 'a'] })
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
         enum: ['a'],
@@ -784,6 +785,10 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       format: 'binary',
     })
+    expect(downgradeSchemaV31ToV30({ type: 'string', contentEncoding: 'binary' })).toEqual({
+      type: 'string',
+      format: 'binary',
+    })
     expect(
       downgradeSchemaV31ToV30({
         type: 'string',
@@ -820,6 +825,11 @@ describe('downgradeSchemaV31ToV30', () => {
         ],
       }),
     ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string', contentMediaType: 'image/png' }, { type: 'integer' }],
+      }),
+    ).toEqual({ anyOf: [{ type: 'string', format: 'binary' }, { type: 'integer' }] })
   })
 
   describe('$ref', () => {
@@ -1143,6 +1153,44 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(
         downgradeSchemaV31ToV30({ anyOf: [{ minimum: 0 }], oneOf: [{ prefixItems: [true] }, {}] }),
       ).toEqual({ anyOf: [{ minimum: 0 }], allOf: [{ anyOf: [{ items: {} }, {}] }] })
+    })
+
+    it('includes propertyNames beyond a string type, and unevaluatedProperties beside an in-place applicator', () => {
+      // As zod emits z.record with a key pattern.
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { type: 'object', propertyNames: { type: 'string', pattern: '^a' } },
+        }),
+      ).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { allOf: [{ properties: { a: {} } }], unevaluatedProperties: false },
+        }),
+      ).toEqual({})
+    })
+
+    it('excludes propertyNames: true, and unevaluatedProperties beside additionalProperties', () => {
+      expect(downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: true } })).toEqual({
+        not: { type: 'object' },
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { additionalProperties: { type: 'string' }, unevaluatedProperties: false },
+        }),
+      ).toEqual({ not: { additionalProperties: { type: 'string' } } })
+    })
+
+    it('carries over to a schema around it, through allOf, anyOf, properties, not, and oneOf', () => {
+      const lost = { type: 'object', propertyNames: { pattern: '^a' } } as const
+      expect(downgradeSchemaV31ToV30({ not: { allOf: [lost, { required: ['a'] }] } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { anyOf: [lost, { type: 'string' }] } })).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({ not: { properties: { a: lost, b: { type: 'string' } } } }),
+      ).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { not: lost } })).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({ not: { anyOf: [{ minimum: 0 }], oneOf: [lost, {}] } }),
+      ).toEqual({})
     })
 
     it('excludes keywords that restrict nothing, and tuples converted exactly', () => {
