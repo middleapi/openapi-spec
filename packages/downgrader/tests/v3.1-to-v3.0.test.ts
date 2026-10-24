@@ -1210,6 +1210,23 @@ describe('unusual input', () => {
     ])
   })
 
+  it('treats keys holding undefined as missing when deciding what to drop or loosen', () => {
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'string',
+        anyOf: [{ contentMediaType: 'image/png', description: undefined }],
+      }),
+    ).toEqual({ type: 'string' })
+    expect(
+      downgradeSchemaV31ToV30({
+        oneOf: [
+          { type: 'object', propertyNames: { type: 'string', description: undefined } },
+          { type: 'string' },
+        ],
+      }),
+    ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
+  })
+
   it('tolerates malformed input without throwing', () => {
     const doc = {
       openapi: '3.1.2',
