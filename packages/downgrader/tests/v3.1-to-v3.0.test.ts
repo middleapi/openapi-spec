@@ -844,6 +844,29 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ properties: { a: { type: 'string', nullable: true } } })
     })
 
+    it('inlines $refs into an anyOf or oneOf, which 3.0 can merge away or rename', () => {
+      const address = { type: 'object', properties: { city: { type: 'string' } } } as const
+      expect(
+        downgradeSchemaV31ToV30({
+          type: 'object',
+          properties: {
+            home: { anyOf: [address, { type: 'null' }] },
+            work: { anyOf: [{ $ref: '#/properties/home/anyOf/0' }, { type: 'null' }] },
+            id: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
+            parentId: { $ref: '#/properties/id/oneOf/0' },
+          },
+        }),
+      ).toEqual({
+        type: 'object',
+        properties: {
+          home: { ...address, nullable: true },
+          work: { ...address, nullable: true },
+          id: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
+          parentId: { type: 'string' },
+        },
+      })
+    })
+
     it('leaves a $ref into $defs that does not resolve as written', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',

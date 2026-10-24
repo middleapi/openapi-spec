@@ -251,11 +251,14 @@ const DOCUMENT_FIELDS = defineFields({
 })
 
 // A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
-// target, unless it already dangles.
+// target, unless it already dangles. So is one into an `anyOf` or `oneOf`,
+// which 3.0 can merge away or rename.
 function isInlined(ref: string, ctx: Context): boolean {
   return (
     (ref.includes('/$defs/') ||
       ref.includes('/definitions/') ||
+      ref.includes('/anyOf/') ||
+      ref.includes('/oneOf/') ||
       REMOVED_PARTS.some((prefix) => ref.startsWith(prefix))) &&
     resolvePointer(ref, ctx) !== undefined
   )
