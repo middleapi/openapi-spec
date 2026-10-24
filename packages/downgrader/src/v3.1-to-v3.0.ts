@@ -369,7 +369,9 @@ function losesRestriction(
       return !(
         names === true ||
         (isRecord(names) &&
-          Object.entries(names).every(([name, item]) => name === 'type' && item === 'string'))
+          Object.entries(names).every(
+            ([name, item]) => item === undefined || (name === 'type' && item === 'string'),
+          ))
       )
     }
     case 'unevaluatedProperties':
@@ -486,7 +488,9 @@ function valueType(value: unknown): string | undefined {
 
 function isMediaTypeOnly(value: unknown): boolean {
   return (
-    isRecord(value) && Object.keys(value).length === 1 && typeof value.contentMediaType === 'string'
+    isRecord(value) &&
+    typeof value.contentMediaType === 'string' &&
+    Object.entries(value).every(([key, item]) => key === 'contentMediaType' || item === undefined)
   )
 }
 
