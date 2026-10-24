@@ -59,5 +59,8 @@
   },
   "scripts": {
     "prepack": "unbuild"
+  },
+  "unbuild": {
+    "declaration": "node16"
   }
 }
