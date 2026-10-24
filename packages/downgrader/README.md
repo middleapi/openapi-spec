@@ -245,6 +245,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 - Older drafts are not supported. `definitions` is read as `$defs`, but other keywords that only draft-07 or 2019-09 define, such as `dependencies` and `additionalItems`, become extensions unconverted, so `$ref`s into them dangle, and array-form `items` passes through. Convert such schemas to 2020-12 first.
 - `patternProperties` that matches every name, as TypeBox emits for a record, is removed with its value schema rather than turned into `additionalProperties`.
 - An untyped schema that gains a `format` from `contentEncoding` or `contentMediaType` also gains `type: "string"`, as 3.0 binary strings need, so it rejects non-string values it accepted. 3.0 tools find file uploads only by `type: "string"` with `format: "binary"`.
+- OpenAPI Generator merges the `"null"` branch beside a `$ref` to a string enum into a new enum, so the reference is lost. Pass `--openapi-normalizer SIMPLIFY_ONEOF_ANYOF_ENUM=false` to keep it.
 
 ## Performance
 
