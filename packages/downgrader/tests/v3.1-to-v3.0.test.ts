@@ -520,6 +520,43 @@ describe('downgradeSchemaV31ToV30', () => {
         type: 'string',
         nullable: true,
       })
+      // As Effect writes a nullish value, with null twice.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
+        }),
+      ).toEqual({ type: 'string', nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'null' }, { type: 'string', enum: ['a'] }, { type: 'null' }],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', nullable: true, enum: [null] },
+          { type: 'string', enum: ['a'] },
+        ],
+      })
+      // One null object twice still gives null once, or the oneOf rejects it.
+      const nullType: OpenAPIV3_1.SchemaObject = { type: 'null' }
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ type: 'string', enum: ['a'] }, nullType, nullType] }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', enum: ['a'] },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }],
+        }),
+      ).toEqual({
+        anyOf: [
+          { type: 'string' },
+          { type: 'number' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
     })
 
     it('keeps an anyOf with null whose other branch null would not pass, or shares a key', () => {
@@ -561,11 +598,6 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [{ type: 'string', enum: ['a'] }, onlyNull],
         oneOf: [{ minLength: 1 }, { maxLength: 0 }],
       })
-      expect(
-        downgradeSchemaV31ToV30({
-          anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
-        }),
-      ).toEqual({ anyOf: [{ type: 'string' }, onlyNull, onlyNull] })
       // A null branch with more than its type is not only null.
       expect(
         downgradeSchemaV31ToV30({
