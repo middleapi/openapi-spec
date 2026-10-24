@@ -370,10 +370,10 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
   )
 }
 
-// The names a `propertyNames` holding only an `enum` allows, as Zod and
-// Valibot write a record with enum keys, when no other keyword names
-// properties. Each becomes a property of its own, which 3.0 can express. A
-// reusable enum is a `$ref` to it.
+// The names allowed by a `propertyNames` holding only an `enum`, or a `const`
+// for a single name, as Zod and Valibot write a record with enum or literal
+// keys, when no other keyword names properties. Each becomes a property of its
+// own, which 3.0 can express. A reusable enum is a `$ref` to it.
 function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
   const ref = getRef(schema.propertyNames)
   // Followed only alone, since keywords beside it narrow the names further.
@@ -384,21 +384,28 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
     )
       ? resolve(ref, ctx)
       : schema.propertyNames
+  if (!isRecord(names)) {
+    return undefined
+  }
+  // An `enum` beside a `const` allows only the names in both, so both stay as before.
+  const values =
+    names.const === undefined ? names.enum : names.enum === undefined ? [names.const] : undefined
   if (
-    !isRecord(names) ||
-    !Array.isArray(names.enum) ||
+    !Array.isArray(values) ||
     schema.properties !== undefined ||
     schema.patternProperties !== undefined ||
     schema.unevaluatedProperties !== undefined ||
     schema.additionalProperties === false ||
     !Object.entries(names).every(
       ([name, item]) =>
-        item === undefined || name === 'enum' || (name === 'type' && item === 'string'),
+        item === undefined ||
+        ['enum', 'const', 'title', 'description'].includes(name) ||
+        (name === 'type' && item === 'string'),
     )
   ) {
     return undefined
   }
-  return names.enum.filter((name) => typeof name === 'string')
+  return values.filter((name) => typeof name === 'string')
 }
 
 // Whether removing `key` from `schema` lets it accept more values. Property

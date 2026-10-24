@@ -1058,6 +1058,25 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], description: undefined } }),
     ).toEqual({ properties: { a: {} }, additionalProperties: false })
+    // A title or description changes nothing, and a literal key is a const.
+    expect(
+      downgradeSchemaV31ToV30({
+        propertyNames: { enum: ['a'], title: 'Key', description: 'A key' },
+      }),
+    ).toEqual({ properties: { a: {} }, additionalProperties: false })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        propertyNames: { type: 'string', const: 'a' },
+        additionalProperties: value,
+        required: ['a'],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: value },
+      additionalProperties: false,
+      required: ['a'],
+    })
     // Beside other keywords that name properties, or with more than an enum, it is removed.
     expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, properties: { a: value } }),
@@ -1076,6 +1095,10 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ additionalProperties: false })
     expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: 2 } })).toEqual({})
     expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], type: 'number' } })).toEqual({})
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a', 'b'], const: 'a' } })).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { anyOf: [{ const: 'a' }, { const: 'b' }] } }),
+    ).toEqual({})
     // Converted exactly, it keeps an enclosing oneOf.
     expect(
       downgradeSchemaV31ToV30({
@@ -1094,7 +1117,7 @@ describe('downgradeSchemaV31ToV30', () => {
 
   it('turns a propertyNames $ref to an enum, as Zod writes a record keyed by a reusable enum, into one property per name', () => {
     const value = { type: 'number' } as const
-    const Lang = { type: 'string' as const, enum: ['en', 'fr'] }
+    const Lang = { type: 'string' as const, enum: ['en', 'fr'], title: 'Lang' }
     const names = {
       type: 'object',
       properties: { en: value, fr: value },
