@@ -110,9 +110,10 @@ it.each([
   expect(downgradeSpecV32ToV31(rebuild(doc, object))).toStrictEqual(downgradeSpecV32ToV31(doc))
 })
 
-it('converts the 3.1 oRPC document built from null-prototype objects to 3.0 as it converts the plain one', () => {
+it.each([
+  ['built from null-prototype objects', nullPrototype],
+  ['with a key holding undefined in every object', withUndefined],
+])('converts the 3.1 oRPC document %s to 3.0 as it converts the plain one', (_name, object) => {
   const v31 = downgradeSpecV32ToV31(doc)
-  expect(downgradeSpecV31ToV30(rebuild(v31, nullPrototype))).toStrictEqual(
-    downgradeSpecV31ToV30(v31),
-  )
+  expect(downgradeSpecV31ToV30(rebuild(v31, object))).toStrictEqual(downgradeSpecV31ToV30(v31))
 })
