@@ -88,6 +88,8 @@ exports[`matches the 3.0 snapshot 1`] = `
                 "enum": [
                   null,
                 ],
+                "nullable": true,
+                "type": "string",
               },
             ],
           },
@@ -741,6 +743,8 @@ exports[`matches the 3.0 snapshot 1`] = `
                       "enum": [
                         null,
                       ],
+                      "nullable": true,
+                      "type": "string",
                     },
                   ],
                 },

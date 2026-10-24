@@ -443,6 +443,10 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
   }
 }
 
+function isOnlyNull(values: unknown): boolean {
+  return Array.isArray(values) && values.length === 1 && values[0] === null
+}
+
 // 3.0 marks encoded and raw binary strings with `format` instead. A string
 // with a `contentSchema` holds structured text, not bytes.
 function binaryFormat(schema: Record<string, unknown>): string | undefined {
@@ -493,6 +497,15 @@ function finishSchema(
   if (schema.nullable === true && typeof out.type === 'string' && out.nullable !== true) {
     out.nullable = true
     loose = true
+  }
+  // Only null matches it. 3.0 admits null only through `nullable`, which
+  // needs a `type` beside it, and code generators drop a bare `enum: [null]`.
+  // `enum` is set again to follow them.
+  if (out.type === undefined && isOnlyNull(out.enum)) {
+    delete out.enum
+    out.type = 'string'
+    out.nullable = true
+    out.enum = [null]
   }
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}

@@ -42,7 +42,12 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   expect(Planet).not.toHaveProperty('properties.attributes.propertyNames')
   expect(Category).toMatchObject({
     properties: {
-      parent: { anyOf: [{ $ref: '#/components/schemas/Category' }, { enum: [null] }] },
+      parent: {
+        anyOf: [
+          { $ref: '#/components/schemas/Category' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      },
     },
   })
   expect(NotFound).toMatchObject({
