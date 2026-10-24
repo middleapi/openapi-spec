@@ -8,6 +8,7 @@ import {
   defineFields,
   downgrade,
   DROP,
+  find,
   getRef,
   hasType,
   HTTP_METHODS,
@@ -131,9 +132,6 @@ const twoBranchAnyOfs: Record<string, unknown>[] = []
 // A branch with these stays: null can still fail them beside `nullable: true`,
 // and a `nullable` already there was written 3.0-style.
 const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'nullable', 'oneOf']
-
-// `$ref`s kept as written whose targets reject null, for `mergeNullable`.
-const NULL_REJECTING_REFS = new WeakSet<object>()
 
 const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
@@ -280,10 +278,6 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
     const out = { $ref: ref }
-    // The target as written, since a cycle can meet its conversion unfinished.
-    if (rejectsNull(resolvePointer(ref, ctx))) {
-      NULL_REJECTING_REFS.add(out)
-    }
     return isLoose(inline(ref, ctx, convertSchema)) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
@@ -512,7 +506,7 @@ function rejectsNull(schema: unknown): boolean {
 // that stays, such as a `$ref` or an `enum`, makes the pair a `oneOf` when it
 // rejects null, as null then matches one branch only. NSwag reads that
 // `oneOf` as nullable, and the `anyOf` as an empty class.
-function mergeNullable(out: Record<string, unknown>): void {
+function mergeNullable(out: Record<string, unknown>, root: unknown): void {
   const [first, second] = out.anyOf as unknown[]
   const other = isOnlyNullSchema(first) ? second : isOnlyNullSchema(second) ? first : undefined
   if (!isRecord(other)) {
@@ -525,9 +519,13 @@ function mergeNullable(out: Record<string, unknown>): void {
   ) {
     delete out.anyOf
     Object.assign(out, other, { nullable: true })
-  } else if (out.oneOf === undefined && (NULL_REJECTING_REFS.has(other) || rejectsNull(other))) {
-    out.oneOf = out.anyOf
-    delete out.anyOf
+  } else if (out.oneOf === undefined) {
+    // A `$ref` kept as written rejects null when its target does.
+    const ref = getRef(other)
+    if (rejectsNull(ref === undefined ? other : find(root, ref))) {
+      out.oneOf = out.anyOf
+      delete out.anyOf
+    }
   }
 }
 
@@ -790,7 +788,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
   twoBranchAnyOfs.length = 0
   const out = downgrade(root, convert)
   for (const schema of twoBranchAnyOfs.splice(0)) {
-    mergeNullable(schema)
+    mergeNullable(schema, root)
   }
   return out
 }
