@@ -10,6 +10,7 @@ exports[`matches the snapshots of the 3.2 mega document > 3.0 1`] = `
             "enum": [
               "foo",
             ],
+            "type": "string",
           },
         },
         "type": "object",
