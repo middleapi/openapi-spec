@@ -49,6 +49,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   const proto: unknown = Object.getPrototypeOf(value)
   return (
     proto === null ||
+    proto === Object.prototype ||
     (Object.getPrototypeOf(proto) === null && Object.keys(proto as object).length === 0)
   )
 }
@@ -192,7 +193,7 @@ function find(root: unknown, ref: string): unknown {
   }
   let pointer: string
   try {
-    pointer = decodeURIComponent(ref.slice(1))
+    pointer = ref.includes('%') ? decodeURIComponent(ref.slice(1)) : ref.slice(1)
   } catch {
     return undefined
   }
@@ -201,7 +202,7 @@ function find(root: unknown, ref: string): unknown {
   }
   let target = root
   for (const token of pointer.split('/').slice(1)) {
-    const key = token.replaceAll('~1', '/').replaceAll('~0', '~')
+    const key = token.includes('~') ? token.replaceAll('~1', '/').replaceAll('~0', '~') : token
     if (!(isRecord(target) || Array.isArray(target)) || !Object.hasOwn(target, key)) {
       return undefined
     }
