@@ -86,31 +86,31 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 | OAuth [`deviceAuthorization`][3.2-oauth-flows-device-authorization] flow                                                                                                                                        | Removed.                                                                                                |
 | Security Scheme [`oauth2MetadataUrl`][3.2-security-scheme-oauth2-metadata-url] and [`deprecated`][3.2-security-scheme-deprecated]                                                                               | Removed.                                                                                                |
 
-[3.2-self]: https://spec.openapis.org/oas/v3.2.0.html#oas-self
-[3.2-json-schema-dialect]: https://spec.openapis.org/oas/v3.2.0.html#oas-json-schema-dialect
-[3.2-components-media-types]: https://spec.openapis.org/oas/v3.2.0.html#components-media-types
-[3.2-server-name]: https://spec.openapis.org/oas/v3.2.0.html#server-name
-[3.2-tag-summary]: https://spec.openapis.org/oas/v3.2.0.html#tag-summary
-[3.2-tag-parent]: https://spec.openapis.org/oas/v3.2.0.html#tag-parent
-[3.2-tag-kind]: https://spec.openapis.org/oas/v3.2.0.html#tag-kind
-[3.2-path-item-query]: https://spec.openapis.org/oas/v3.2.0.html#path-item-query
-[3.2-path-item-additional-operations]: https://spec.openapis.org/oas/v3.2.0.html#path-item-additional-operations
-[3.2-parameter-locations]: https://spec.openapis.org/oas/v3.2.0.html#parameter-locations
-[3.2-parameter-allow-reserved]: https://spec.openapis.org/oas/v3.2.0.html#parameter-allow-reserved
-[3.2-style-values]: https://spec.openapis.org/oas/v3.2.0.html#style-values
-[3.2-parameter-example]: https://spec.openapis.org/oas/v3.2.0.html#parameter-example
-[3.2-parameter-examples]: https://spec.openapis.org/oas/v3.2.0.html#parameter-examples
+[3.2-self]: https://spec.openapis.org/oas/v3.2.1.html#oas-self
+[3.2-json-schema-dialect]: https://spec.openapis.org/oas/v3.2.1.html#oas-json-schema-dialect
+[3.2-components-media-types]: https://spec.openapis.org/oas/v3.2.1.html#components-media-types
+[3.2-server-name]: https://spec.openapis.org/oas/v3.2.1.html#server-name
+[3.2-tag-summary]: https://spec.openapis.org/oas/v3.2.1.html#tag-summary
+[3.2-tag-parent]: https://spec.openapis.org/oas/v3.2.1.html#tag-parent
+[3.2-tag-kind]: https://spec.openapis.org/oas/v3.2.1.html#tag-kind
+[3.2-path-item-query]: https://spec.openapis.org/oas/v3.2.1.html#path-item-query
+[3.2-path-item-additional-operations]: https://spec.openapis.org/oas/v3.2.1.html#path-item-additional-operations
+[3.2-parameter-locations]: https://spec.openapis.org/oas/v3.2.1.html#parameter-locations
+[3.2-parameter-allow-reserved]: https://spec.openapis.org/oas/v3.2.1.html#parameter-allow-reserved
+[3.2-style-values]: https://spec.openapis.org/oas/v3.2.1.html#style-values
+[3.2-parameter-example]: https://spec.openapis.org/oas/v3.2.1.html#parameter-example
+[3.2-parameter-examples]: https://spec.openapis.org/oas/v3.2.1.html#parameter-examples
 [3.2-schema]: https://spec.openapis.org/oas/3.2/schema/2025-09-17
-[3.2-media-type-item-schema]: https://spec.openapis.org/oas/v3.2.0.html#media-type-item-schema
-[3.2-media-type-prefix-encoding]: https://spec.openapis.org/oas/v3.2.0.html#media-type-prefix-encoding
-[3.2-media-type-item-encoding]: https://spec.openapis.org/oas/v3.2.0.html#media-type-item-encoding
-[3.2-encoding-encoding]: https://spec.openapis.org/oas/v3.2.0.html#encoding-encoding
-[3.2-response-summary]: https://spec.openapis.org/oas/v3.2.0.html#response-summary
-[3.2-example-data-value]: https://spec.openapis.org/oas/v3.2.0.html#example-data-value
-[3.2-example-serialized-value]: https://spec.openapis.org/oas/v3.2.0.html#example-serialized-value
-[3.2-oauth-flows-device-authorization]: https://spec.openapis.org/oas/v3.2.0.html#oauth-flows-device-authorization
-[3.2-security-scheme-oauth2-metadata-url]: https://spec.openapis.org/oas/v3.2.0.html#security-scheme-oauth2-metadata-url
-[3.2-security-scheme-deprecated]: https://spec.openapis.org/oas/v3.2.0.html#security-scheme-deprecated
+[3.2-media-type-item-schema]: https://spec.openapis.org/oas/v3.2.1.html#media-type-item-schema
+[3.2-media-type-prefix-encoding]: https://spec.openapis.org/oas/v3.2.1.html#media-type-prefix-encoding
+[3.2-media-type-item-encoding]: https://spec.openapis.org/oas/v3.2.1.html#media-type-item-encoding
+[3.2-encoding-encoding]: https://spec.openapis.org/oas/v3.2.1.html#encoding-encoding
+[3.2-response-summary]: https://spec.openapis.org/oas/v3.2.1.html#response-summary
+[3.2-example-data-value]: https://spec.openapis.org/oas/v3.2.1.html#example-data-value
+[3.2-example-serialized-value]: https://spec.openapis.org/oas/v3.2.1.html#example-serialized-value
+[3.2-oauth-flows-device-authorization]: https://spec.openapis.org/oas/v3.2.1.html#oauth-flows-device-authorization
+[3.2-security-scheme-oauth2-metadata-url]: https://spec.openapis.org/oas/v3.2.1.html#security-scheme-oauth2-metadata-url
+[3.2-security-scheme-deprecated]: https://spec.openapis.org/oas/v3.2.1.html#security-scheme-deprecated
 
 #### Limitations
 
@@ -127,8 +127,8 @@ Both versions build on JSON Schema 2020-12, so everything not listed here passes
 | XML [`nodeType`][3.2-xml-node-type]                                 | `"attribute"` becomes `attribute: true`, and `"element"` on an array becomes `wrapped: true`. Other values are removed. |
 | Discriminator [`defaultMapping`][3.2-discriminator-default-mapping] | Removed.                                                                                                                |
 
-[3.2-xml-node-type]: https://spec.openapis.org/oas/v3.2.0.html#xml-node-type
-[3.2-discriminator-default-mapping]: https://spec.openapis.org/oas/v3.2.0.html#discriminator-default-mapping
+[3.2-xml-node-type]: https://spec.openapis.org/oas/v3.2.1.html#xml-node-type
+[3.2-discriminator-default-mapping]: https://spec.openapis.org/oas/v3.2.1.html#discriminator-default-mapping
 
 #### Limitations
 
