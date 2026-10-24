@@ -53,7 +53,7 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   expect(Category).toMatchObject({
     properties: {
       parent: {
-        anyOf: [
+        oneOf: [
           { $ref: '#/components/schemas/Category' },
           { type: 'string', nullable: true, enum: [null] },
         ],
