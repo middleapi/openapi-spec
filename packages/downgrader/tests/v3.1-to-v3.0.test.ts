@@ -1036,6 +1036,48 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ type: 'array', items: {} })
   })
 
+  it('turns a propertyNames enum, as Zod writes a record with enum keys, into one property per name', () => {
+    const value = { type: 'number' } as const
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        propertyNames: { type: 'string', enum: ['a', 'b', 1] },
+        additionalProperties: value,
+        required: ['a', 'b'],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: value, b: value },
+      additionalProperties: false,
+      required: ['a', 'b'],
+    })
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] } })).toEqual({
+      properties: { a: {} },
+      additionalProperties: false,
+    })
+    // Beside other keywords that name properties, it is removed.
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, properties: { a: value } }),
+    ).toEqual({ properties: { a: value } })
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, unevaluatedProperties: false }),
+    ).toEqual({ additionalProperties: false })
+    // Converted exactly, it keeps an enclosing oneOf.
+    expect(
+      downgradeSchemaV31ToV30({
+        oneOf: [
+          { type: 'object', propertyNames: { enum: ['a'] }, additionalProperties: value },
+          { type: 'string' },
+        ],
+      }),
+    ).toEqual({
+      oneOf: [
+        { type: 'object', properties: { a: value }, additionalProperties: false },
+        { type: 'string' },
+      ],
+    })
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(

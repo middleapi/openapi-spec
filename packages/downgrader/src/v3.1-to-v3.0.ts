@@ -370,6 +370,28 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
   )
 }
 
+// The names a `propertyNames` holding only an `enum` allows, as Zod and
+// Valibot write a record with enum keys, when no other keyword names
+// properties. Each becomes a property of its own, which 3.0 can express.
+function enumNames(schema: Record<string, unknown>): string[] | undefined {
+  const names = schema.propertyNames
+  if (
+    !isRecord(names) ||
+    !Array.isArray(names.enum) ||
+    schema.properties !== undefined ||
+    schema.patternProperties !== undefined ||
+    schema.unevaluatedProperties !== undefined ||
+    schema.additionalProperties === false ||
+    !Object.entries(names).every(
+      ([name, item]) =>
+        item === undefined || name === 'enum' || (name === 'type' && item === 'string'),
+    )
+  ) {
+    return undefined
+  }
+  return names.enum.filter((name) => typeof name === 'string')
+}
+
 // Whether removing `key` from `schema` lets it accept more values. Property
 // names are strings anyway, and `unevaluatedProperties` does nothing beside
 // `additionalProperties`.
@@ -385,6 +407,7 @@ function losesRestriction(
       const names = schema.propertyNames
       return !(
         names === true ||
+        enumNames(schema) !== undefined ||
         (isRecord(names) &&
           Object.entries(names).every(
             ([name, item]) => item === undefined || (name === 'type' && item === 'string'),
@@ -599,6 +622,12 @@ function finishSchema(
     const additional = schema.unevaluatedProperties
     out.additionalProperties =
       typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
+  }
+  const names = enumNames(schema)
+  if (names !== undefined) {
+    const value = isRecord(out.additionalProperties) ? out.additionalProperties : {}
+    out.properties = Object.fromEntries(names.map((name) => [name, value]))
+    out.additionalProperties = false
   }
   // Before `convertType` moves `items` into an `anyOf` branch.
   // A `const` outside the `enum` beside it matched nothing, and now matches itself.
