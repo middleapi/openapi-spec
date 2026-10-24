@@ -170,7 +170,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 - `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
-- An operation whose only `security` alternatives use mutual TLS loses its `security`, so it falls back to the document's.
+- A `security` list whose alternatives all use only mutual TLS is removed. On an operation it then falls back to the document's `security`, and on the document it leaves none, so no security is required.
 
 ### Schema (`downgradeSchemaV31ToV30`)
 
