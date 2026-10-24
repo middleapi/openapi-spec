@@ -1092,6 +1092,58 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
+  it('turns a propertyNames $ref to an enum, as Zod writes a record keyed by a reusable enum, into one property per name', () => {
+    const value = { type: 'number' } as const
+    const Lang = { type: 'string' as const, enum: ['en', 'fr'] }
+    const names = {
+      type: 'object',
+      properties: { en: value, fr: value },
+      additionalProperties: false,
+    } as const
+    expect(
+      convert({
+        components: {
+          schemas: {
+            Lang,
+            Names: {
+              type: 'object',
+              propertyNames: { $ref: '#/components/schemas/Lang' },
+              additionalProperties: value,
+            },
+          },
+        },
+      }).components?.schemas,
+    ).toEqual({ Lang, Names: names })
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        oneOf: [
+          { type: 'object', propertyNames: { $ref: '#/$defs/Lang' }, additionalProperties: value },
+          { type: 'string' },
+        ],
+      }),
+    ).toEqual({ oneOf: [names, { type: 'string' }] })
+    // A target that is not only an enum, or a $ref with more beside it, is removed as before.
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Short: { type: 'string', maxLength: 2 } },
+        propertyNames: { $ref: '#/$defs/Short' },
+      }),
+    ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', maxLength: 1 },
+      }),
+    ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', description: undefined },
+      }),
+    ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(

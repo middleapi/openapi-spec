@@ -372,9 +372,18 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
 
 // The names a `propertyNames` holding only an `enum` allows, as Zod and
 // Valibot write a record with enum keys, when no other keyword names
-// properties. Each becomes a property of its own, which 3.0 can express.
-function enumNames(schema: Record<string, unknown>): string[] | undefined {
-  const names = schema.propertyNames
+// properties. Each becomes a property of its own, which 3.0 can express. A
+// reusable enum is a `$ref` to it.
+function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
+  const ref = getRef(schema.propertyNames)
+  // Followed only alone, since keywords beside it narrow the names further.
+  const names =
+    ref !== undefined &&
+    Object.entries(schema.propertyNames as Record<string, unknown>).every(
+      ([name, item]) => item === undefined || name === '$ref',
+    )
+      ? resolve(ref, ctx)
+      : schema.propertyNames
   if (
     !isRecord(names) ||
     !Array.isArray(names.enum) ||
@@ -399,6 +408,7 @@ function losesRestriction(
   key: string,
   schema: Record<string, unknown>,
   exactTuple: boolean,
+  ctx: Context,
 ): boolean {
   switch (key) {
     case 'prefixItems':
@@ -407,7 +417,7 @@ function losesRestriction(
       const names = schema.propertyNames
       return !(
         names === true ||
-        enumNames(schema) !== undefined ||
+        enumNames(schema, ctx) !== undefined ||
         (isRecord(names) &&
           Object.entries(names).every(
             ([name, item]) => item === undefined || (name === 'type' && item === 'string'),
@@ -429,13 +439,14 @@ function loosen(
   out: Record<string, unknown>,
   schema: Record<string, unknown>,
   exactTuple: boolean,
+  ctx: Context,
 ): boolean {
   let loose = false
   for (const key in schema) {
     if (
       RESTRICTING_KEYWORDS.has(key) &&
       schema[key] !== undefined &&
-      losesRestriction(key, schema, exactTuple)
+      losesRestriction(key, schema, exactTuple, ctx)
     ) {
       loose = true
     }
@@ -623,7 +634,7 @@ function finishSchema(
     out.additionalProperties =
       typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
   }
-  const names = enumNames(schema)
+  const names = enumNames(schema, ctx)
   if (names !== undefined) {
     const value = isRecord(out.additionalProperties) ? out.additionalProperties : {}
     out.properties = Object.fromEntries(names.map((name) => [name, value]))
@@ -635,7 +646,7 @@ function finishSchema(
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
     !includesJson(schema.enum, schema.const)
-  let loose = loosen(out, schema, exactTuple) || constOutsideEnum
+  let loose = loosen(out, schema, exactTuple, ctx) || constOutsideEnum
   convertType(out, schema.type)
   // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.
   if (schema.nullable === true && typeof out.type === 'string' && out.nullable !== true) {
