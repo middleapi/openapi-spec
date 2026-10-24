@@ -123,6 +123,15 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
+// Converted schemas with an `anyOf` of two branches, for `mergeNullable`. It
+// runs once the whole input is converted, since a cycle can meet a branch
+// before its conversion is done.
+const twoBranchAnyOfs: Record<string, unknown>[] = []
+
+// A branch with these stays: null can still fail them beside `nullable: true`,
+// and a `nullable` already there was written 3.0-style.
+const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'nullable', 'oneOf']
+
 const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -468,6 +477,35 @@ function isOnlyNull(values: unknown): boolean {
   return Array.isArray(values) && values.length === 1 && values[0] === null
 }
 
+function isOnlyNullSchema(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 3 &&
+    value.type === 'string' &&
+    value.nullable === true &&
+    isOnlyNull(value.enum)
+  )
+}
+
+// Zod writes a nullable object, array, or integer as an `anyOf` of it and
+// `{ type: "null" }`. Code generators read that pair in 3.0 as a union or an
+// empty class, so the branch takes its place with `nullable: true`, as 3.0
+// writes it, when the schema around it has none of its keywords.
+function mergeNullable(out: Record<string, unknown>): void {
+  const [first, second] = out.anyOf as unknown[]
+  const other = isOnlyNullSchema(first) ? second : isOnlyNullSchema(second) ? first : undefined
+  if (
+    !isRecord(other) ||
+    typeof other.type !== 'string' ||
+    NOT_NULLABLE_KEYWORDS.some((key) => Object.hasOwn(other, key)) ||
+    Object.keys(other).some((key) => Object.hasOwn(out, key))
+  ) {
+    return
+  }
+  delete out.anyOf
+  Object.assign(out, other, { nullable: true })
+}
+
 // The type of a JSON value other than null.
 function valueType(value: unknown): string | undefined {
   if (Array.isArray(value)) {
@@ -599,6 +637,9 @@ function finishSchema(
       delete out[key]
     }
   }
+  if (Array.isArray(out.anyOf) && out.anyOf.length === 2) {
+    twoBranchAnyOfs.push(out)
+  }
   if (loose) {
     LOOSE.add(out)
   }
@@ -720,14 +761,23 @@ function convertDocument(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, DOCUMENT_FIELDS, finishDocument)
 }
 
+function downgradeV30(root: unknown, convert: Convert): unknown {
+  twoBranchAnyOfs.length = 0
+  const out = downgrade(root, convert)
+  for (const schema of twoBranchAnyOfs.splice(0)) {
+    mergeNullable(schema)
+  }
+  return out
+}
+
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
-  return downgrade(spec, convertDocument) as OpenAPIV3_0.OpenAPIObject
+  return downgradeV30(spec, convertDocument) as OpenAPIV3_0.OpenAPIObject
 }
 
 export function downgradeSchemaV31ToV30<T = unknown>(
   schema: OpenAPIV3_1.SchemaObject<T>,
 ): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
-  return downgrade(schema, convertSchema) as
+  return downgradeV30(schema, convertSchema) as
     | OpenAPIV3_0.ReferenceObject
     | OpenAPIV3_0.SchemaObject<T>
 }

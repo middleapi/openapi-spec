@@ -460,9 +460,6 @@ describe('downgradeSchemaV31ToV30', () => {
 
     it('turns type null into a nullable type that only null matches', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
-      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({
-        anyOf: [{ type: 'string' }, onlyNull],
-      })
       expect(Object.keys(downgradeSchemaV31ToV30({ type: 'null' }))).toEqual([
         'type',
         'nullable',
@@ -475,6 +472,61 @@ describe('downgradeSchemaV31ToV30', () => {
         enum: ['a'],
         allOf: [{ not: {} }],
       })
+    })
+
+    it('merges an anyOf of one type and null into that type with nullable, as Zod writes nullable objects', () => {
+      const object: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a'],
+        additionalProperties: false,
+      }
+      expect(
+        downgradeSchemaV31ToV30({ description: 'A', anyOf: [object, { type: 'null' }] }),
+      ).toEqual({ description: 'A', ...object, nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ const: null }, { type: 'array', items: {} }] }),
+      ).toEqual({ type: 'array', items: {}, nullable: true })
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({
+        type: 'string',
+        nullable: true,
+      })
+    })
+
+    it('keeps an anyOf with null whose other branch null would not pass, or shares a key', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      const branches: OpenAPIV3_1.SchemaObject[] = [
+        { $ref: '#/components/schemas/Pet' },
+        { type: 'string', enum: ['a', 'b'] },
+        { type: 'object', allOf: [{ required: ['a'] }] },
+        { type: 'integer', not: { const: 0 } },
+        { type: 'string', nullable: true },
+        { minLength: 1 },
+      ]
+      for (const branch of branches) {
+        expect(downgradeSchemaV31ToV30({ anyOf: [branch, { type: 'null' }] })).toEqual({
+          anyOf: [downgradeSchemaV31ToV30(branch), onlyNull],
+        })
+      }
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'A',
+          anyOf: [{ type: 'string', description: 'B' }, { type: 'null' }],
+        }),
+      ).toEqual({ description: 'A', anyOf: [{ type: 'string', description: 'B' }, onlyNull] })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
+        }),
+      ).toEqual({ anyOf: [{ type: 'string' }, onlyNull, onlyNull] })
+    })
+
+    it('merges a branch in full where a cycle meets it before its conversion is done', () => {
+      const node: Record<string, any> = { type: 'object', properties: {} }
+      node.properties.parent = { anyOf: [node, { type: 'null' }] }
+      const parent = (downgradeSchemaV31ToV30(node) as Record<string, any>).properties.parent
+      expect(parent).toMatchObject({ type: 'object', nullable: true })
+      expect(parent.properties.parent).toBe(parent)
     })
 
     it('adds the items 3.0 requires on arrays', () => {
