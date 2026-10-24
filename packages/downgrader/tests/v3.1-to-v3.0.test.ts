@@ -414,7 +414,10 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
       // It admits null, which the 3.1 schema did not, so the branches can overlap.
       expect(schema({ oneOf: [{ type: 'string', nullable: true }, { type: 'null' }] })).toEqual({
-        anyOf: [{ type: 'string', nullable: true }, { enum: [null] }],
+        anyOf: [
+          { type: 'string', nullable: true },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
       })
     })
 
@@ -446,11 +449,18 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
-    it('turns type null into enum: [null]', () => {
+    it('turns type null into a nullable type that only null matches', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({
-        anyOf: [{ type: 'string' }, { enum: [null] }],
+        anyOf: [{ type: 'string' }, onlyNull],
       })
-      expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual({ enum: [null] })
+      expect(Object.keys(downgradeSchemaV31ToV30({ type: 'null' }))).toEqual([
+        'type',
+        'nullable',
+        'enum',
+      ])
+      expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual(onlyNull)
+      expect(downgradeSchemaV31ToV30({ enum: [null] })).toEqual(onlyNull)
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
         enum: ['a'],
@@ -468,7 +478,11 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       enum: ['a'],
     })
-    expect(downgradeSchemaV31ToV30({ const: null })).toEqual({ enum: [null] })
+    expect(downgradeSchemaV31ToV30({ const: null })).toEqual({
+      type: 'string',
+      nullable: true,
+      enum: [null],
+    })
   })
 
   it('turns numeric exclusive bounds into boolean ones, keeping the stricter bound', () => {
