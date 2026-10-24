@@ -862,7 +862,7 @@ describe('downgradeSchemaV31ToV30', () => {
         not: { type: 'string', enum: ['a'] },
       })
       expect(downgradeSchemaV31ToV30({ not: { const: { a: 1 }, enum: [{ a: 1 }] } })).toEqual({
-        not: { enum: [{ a: 1 }] },
+        not: { type: 'object', enum: [{ a: 1 }] },
       })
     })
 
