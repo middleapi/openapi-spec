@@ -142,8 +142,9 @@ describe('downgradeSpecV32ToV31', () => {
     expect(out.servers).toEqual([expected])
     expect(out.paths?.['/a']?.servers).toEqual([expected])
     expect(out.paths?.['/a']?.get?.servers).toEqual([expected])
-    expect(out.paths?.['/a']?.get?.responses?.['200']).toMatchObject({
-      links: { self: { server: expected } },
+    expect(out.paths?.['/a']?.get?.responses?.['200']).toEqual({
+      description: 'ok',
+      links: { self: { operationId: 'a', server: expected } },
     })
   })
 
@@ -348,7 +349,7 @@ describe('downgradeSpecV32ToV31', () => {
           },
         },
       })
-      expect(out?.requestBody).toEqual({ content: {} })
+      expect(out?.requestBody).toStrictEqual({ content: {} })
     })
   })
 
@@ -478,17 +479,34 @@ describe('downgradeSpecV32ToV31', () => {
     // Keys an object inherits are not part of it as JSON sees it, so such an object is kept as it is.
     const inherits = Object.create(Object.assign(Object.create(null), { type: 'string' }))
     expect(downgradeSchemaV32ToV31(inherits)).toBe(inherits)
+    expect(
+      downgradeSchemaV32ToV31(
+        Object.assign(Object.create(null), { xml: { nodeType: 'attribute' } }),
+      ),
+    ).toEqual({ xml: { attribute: true } })
   })
 
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {
     const date = new Date(0)
     const out = convertOperation({
       'summary': undefined,
-      'responses': { 200: { summary: 'OK', description: undefined } },
+      'responses': { 200: { summary: 'OK', description: undefined }, 201: undefined },
       'x-date': date,
+      'x-meta': { a: undefined },
     })
-    expect(out).toEqual({ 'responses': { 200: { description: 'OK' } }, 'x-date': date })
+    expect(out).toStrictEqual({
+      'responses': { 200: { description: 'OK' } },
+      'x-date': date,
+      'x-meta': {},
+    })
     expect(out?.['x-date']).toBe(date)
+  })
+
+  it('copies extensions in paths, responses, and callbacks as they are', () => {
+    const extension = { summary: 's', query: {} }
+    const operation = { responses: { 'x-a': extension }, callbacks: { cb: { 'x-a': extension } } }
+    const out = convert({ paths: { 'x-a': extension, '/a': { post: operation } } })
+    expect(out.paths).toEqual({ 'x-a': extension, '/a': { post: operation } })
   })
 })
 
@@ -505,6 +523,7 @@ describe('downgradeSchemaV32ToV31', () => {
             xml: { nodeType: 'element' },
             items: { type: 'string', xml: { nodeType: 'text' } },
           },
+          notes: { type: 'array', xml: { nodeType: 'none' } },
         },
         $defs: { Note: { anyOf: [{ xml: { nodeType: 'cdata' } }] } },
       }),
@@ -514,10 +533,46 @@ describe('downgradeSchemaV32ToV31', () => {
       properties: {
         id: { type: 'string', xml: { attribute: true } },
         tags: { type: 'array', xml: { wrapped: true }, items: { type: 'string', xml: {} } },
+        notes: { type: 'array', xml: {} },
       },
       $defs: { Note: { anyOf: [{ xml: {} }] } },
     })
   })
+
+  const attribute = { xml: { nodeType: 'attribute' } } as const
+  const converted = { xml: { attribute: true } }
+
+  it.each([
+    'additionalProperties',
+    'contains',
+    'contentSchema',
+    'else',
+    'if',
+    'items',
+    'not',
+    'propertyNames',
+    'then',
+    'unevaluatedItems',
+    'unevaluatedProperties',
+  ])('turns XML nodeType into attribute in %s', (key) => {
+    expect(downgradeSchemaV32ToV31({ [key]: attribute })).toEqual({ [key]: converted })
+  })
+
+  it.each(['$defs', 'dependentSchemas', 'patternProperties', 'properties'])(
+    'turns XML nodeType into attribute in each entry of %s',
+    (key) => {
+      expect(downgradeSchemaV32ToV31({ [key]: { a: attribute } })).toEqual({
+        [key]: { a: converted },
+      })
+    },
+  )
+
+  it.each(['allOf', 'anyOf', 'oneOf', 'prefixItems'])(
+    'turns XML nodeType into attribute in each item of %s',
+    (key) => {
+      expect(downgradeSchemaV32ToV31({ [key]: [attribute] })).toEqual({ [key]: [converted] })
+    },
+  )
 
   it('drops discriminator defaultMapping', () => {
     expect(
@@ -541,12 +596,14 @@ describe('downgradeSchemaV32ToV31', () => {
   })
 
   it('keeps a cycle as a cycle, in converted and copied values alike', () => {
-    const schema: Record<string, any> = { type: 'object', properties: {} }
+    const schema: Record<string, any> = { type: 'object', properties: {}, examples: [] }
     schema.properties.self = schema
     schema.default = schema
+    schema.examples.push(schema.examples)
     const out = downgradeSchemaV32ToV31(schema) as Record<string, any>
     expect(out.properties.self).toBe(out)
     expect(out.default.default).toBe(out.default)
+    expect(out.examples[0]).toBe(out.examples)
   })
 })
 
@@ -555,6 +612,18 @@ describe('unusual input', () => {
     expect(
       downgradeSchemaV32ToV31({ type: ['array', 'null'], xml: { nodeType: 'element' } }),
     ).toEqual({ type: ['array', 'null'], xml: { wrapped: true } })
+  })
+
+  it('keeps own __proto__ keys as ordinary keys', () => {
+    const out = downgradeSchemaV32ToV31(
+      JSON.parse('{"__proto__":{"type":"string"},"default":{"__proto__":1}}'),
+    ) as Record<string, any>
+    const own = { configurable: true, enumerable: true, writable: true }
+    expect(Object.getOwnPropertyDescriptor(out, '__proto__')).toEqual({
+      ...own,
+      value: { type: 'string' },
+    })
+    expect(Object.getOwnPropertyDescriptor(out.default, '__proto__')).toEqual({ ...own, value: 1 })
   })
 
   it('tolerates malformed input without throwing', () => {

@@ -11,6 +11,16 @@ function downgradeTwice(spec: OpenAPIV3_2.OpenAPIObject) {
   return downgradeSpecV31ToV30(downgradeSpecV32ToV31(spec))
 }
 
+// Rebuilds every object in `value` from its entries with `object`.
+function rebuild(value: unknown, object: (entries: [string, unknown][]) => object): any {
+  if (Array.isArray(value)) {
+    return value.map((item) => rebuild(item, object))
+  }
+  return typeof value === 'object' && value !== null
+    ? object(Object.entries(value).map(([key, item]) => [key, rebuild(item, object)]))
+    : value
+}
+
 it('converts the oRPC document into a valid 3.1 document', async () => {
   const v31 = await expectValidDowngrade(doc, downgradeSpecV32ToV31, '3.2', '3.1')
   expect(v31.servers).toEqual([{ url: 'https://api.example.com' }])
@@ -84,4 +94,25 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
 
 it('matches the 3.0 snapshot', () => {
   expect(downgradeTwice(doc)).toMatchSnapshot()
+})
+
+const nullPrototype = (entries: [string, unknown][]) =>
+  Object.assign(Object.create(null), Object.fromEntries(entries))
+const withUndefined = (entries: [string, unknown][]) => ({
+  ...Object.fromEntries(entries),
+  missing: undefined,
+})
+
+it.each([
+  ['built from null-prototype objects', nullPrototype],
+  ['with a key holding undefined in every object', withUndefined],
+])('converts the oRPC document %s to 3.1 as it converts the plain one', (_name, object) => {
+  expect(downgradeSpecV32ToV31(rebuild(doc, object))).toStrictEqual(downgradeSpecV32ToV31(doc))
+})
+
+it('converts the 3.1 oRPC document built from null-prototype objects to 3.0 as it converts the plain one', () => {
+  const v31 = downgradeSpecV32ToV31(doc)
+  expect(downgradeSpecV31ToV30(rebuild(v31, nullPrototype))).toStrictEqual(
+    downgradeSpecV31ToV30(v31),
+  )
 })
