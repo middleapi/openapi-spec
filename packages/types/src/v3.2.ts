@@ -37,7 +37,7 @@ export type {
  * In addition to the required fields, at least one of `components`, `paths`,
  * or `webhooks` MUST be present.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#openapi-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#openapi-object}
  */
 export interface OpenAPIObject extends SpecificationExtensions {
   /**
@@ -64,6 +64,7 @@ export interface OpenAPIObject extends SpecificationExtensions {
   /**
    * The default value for the `$schema` keyword within Schema Objects
    * contained within this OAS document. This MUST be in the form of a URI.
+   * See JSON Schema Keywords to determine the default value.
    */
   jsonSchemaDialect?: string | undefined
   /**
@@ -117,7 +118,7 @@ export interface OpenAPIObject extends SpecificationExtensions {
 /**
  * An object representing a Server.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#server-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#server-object}
  */
 export interface ServerObject extends SpecificationExtensions {
   /**
@@ -153,7 +154,7 @@ export interface ServerObject extends SpecificationExtensions {
  * All the fixed fields are objects whose keys MUST match the regular
  * expression `^[a-zA-Z0-9\.\-_]+$`.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#components-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#components-object}
  */
 export interface ComponentsObject extends SpecificationExtensions {
   /**
@@ -212,7 +213,7 @@ export interface ComponentsObject extends SpecificationExtensions {
  * construct the full URL. The Paths Object MAY be empty, due to Access
  * Control List (ACL) constraints.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#paths-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#paths-object}
  */
 export interface PathsObject extends SpecificationExtensions {
   /**
@@ -236,7 +237,7 @@ export interface PathsObject extends SpecificationExtensions {
  * documentation viewer but they will not know which operations and parameters
  * are available.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#path-item-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#path-item-object}
  */
 export interface PathItemObject extends SpecificationExtensions {
   /**
@@ -292,9 +293,7 @@ export interface PathItemObject extends SpecificationExtensions {
    */
   trace?: OperationObject | undefined
   /**
-   * A definition of a QUERY operation, as defined in the most recent IETF
-   * draft of draft-ietf-httpbis-safe-method-w-body, or its RFC successor, on
-   * this path.
+   * A definition of a QUERY operation, as defined in RFC10008, on this path.
    */
   query?: OperationObject | undefined
   /**
@@ -325,7 +324,7 @@ export interface PathItemObject extends SpecificationExtensions {
 /**
  * Describes a single API operation on a path.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#operation-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#operation-object}
  */
 export interface OperationObject extends SpecificationExtensions {
   /**
@@ -412,7 +411,7 @@ export interface OperationObject extends SpecificationExtensions {
  * The location of a parameter. OpenAPI 3.2 adds `"querystring"`, which treats
  * the entire URL query string as a single parameter value.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#parameter-locations}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#parameter-locations}
  */
 export type ParameterLocation = 'cookie' | 'header' | 'path' | 'query' | 'querystring'
 
@@ -435,7 +434,7 @@ export type ParameterLocation = 'cookie' | 'header' | 'path' | 'query' | 'querys
  *   but with name-value pairs separated by `; ` and without percent-encoding
  *   or other escaping applied (`cookie`); new in OpenAPI 3.2.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#style-values}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#style-values}
  */
 export type ParameterStyle =
   | 'cookie'
@@ -461,7 +460,7 @@ export type ParameterStyle =
  * NOT appear in the same operation (or the operation's path item) as any
  * `in: "query"` parameter, and vice versa.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#parameter-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#parameter-object}
  */
 export interface ParameterObject extends SpecificationExtensions {
   /**
@@ -543,14 +542,15 @@ export interface ParameterObject extends SpecificationExtensions {
    * percent-encoding reserved characters that are not allowed by the rules of
    * the `in` destination or media type, or are not allowed in the path by
    * this specification. This field only applies to `in` and `style` values
-   * that automatically percent-encode.
+   * that automatically percent-encode (that is: `in: path`, `in: query`, and
+   * `in: cookie` with `style: form`).
    *
    * @default false
    */
   allowReserved?: boolean | undefined
   /**
-   * The schema defining the type used for the parameter. This field MUST NOT
-   * be used with `in: "querystring"`.
+   * The schema defining the type and other constraints used for the
+   * parameter. This field MUST NOT be used with `in: "querystring"`.
    */
   schema?: SchemaObject | undefined
   /**
@@ -576,7 +576,7 @@ export interface ParameterObject extends SpecificationExtensions {
 /**
  * Describes a single request body.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#request-body-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#request-body-object}
  */
 export interface RequestBodyObject extends SpecificationExtensions {
   /**
@@ -609,7 +609,7 @@ export interface RequestBodyObject extends SpecificationExtensions {
  * mapped to the JSON Schema data model as if their values were in an array in
  * the same order.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#media-type-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#media-type-object}
  */
 export interface MediaTypeObject extends SpecificationExtensions {
   /**
@@ -652,7 +652,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
   /**
    * A map between a property name and its encoding information, as defined
    * under Encoding By Name. The key, being the property name, MUST exist in
-   * the schema as a property (entries with no corresponding schema property
+   * the data instance as a property (entries with no corresponding property
    * SHALL be ignored). The `encoding` field SHALL only apply when the media
    * type is `multipart` or `application/x-www-form-urlencoded`. This field
    * MUST NOT be present if `prefixEncoding` or `itemEncoding` are present.
@@ -689,13 +689,13 @@ export interface MediaTypeObject extends SpecificationExtensions {
  * of a `multipart` array. Implementations MUST support one level of nested
  * encoding and MAY support more.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#encoding-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#encoding-object}
  */
 export interface EncodingObject extends SpecificationExtensions {
   /**
    * The `Content-Type` for encoding a specific value. The value is a
    * comma-separated list, each element of which is either a specific media
-   * type (e.g. `image/png`) or a wildcard media type (e.g. `image/*`).
+   * type (e.g. `image/png`) or a media type range (e.g. `image/*`).
    * Default value depends on the type of the schema the Encoding Object
    * applies to: for a schema with absent `type` – `application/octet-stream`;
    * for `string` with `contentEncoding` present – `application/octet-stream`;
@@ -777,7 +777,7 @@ export interface EncodingObject extends SpecificationExtensions {
  * one response code is provided it SHOULD be the response for a successful
  * operation call.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#responses-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#responses-object}
  */
 export interface ResponsesObject extends SpecificationExtensions {
   /**
@@ -788,14 +788,15 @@ export interface ResponsesObject extends SpecificationExtensions {
   /**
    * Any HTTP status code can be used as the property name, but only one
    * property per code, to describe the expected response for that HTTP status
-   * code. This field MUST be enclosed in quotation marks (for example, "200")
-   * for compatibility between JSON and YAML. Status codes SHOULD be selected
-   * from the IANA Status Code Registry. To define a range of response codes,
-   * this field MAY contain the uppercase wildcard character `X`. For example,
-   * `2XX` represents all response codes between `200` and `299`. Only the
-   * following range definitions are allowed: `1XX`, `2XX`, `3XX`, `4XX`, and
-   * `5XX`. If a response is defined using an explicit code, the explicit code
-   * definition takes precedence over the range definition for that code.
+   * code. This field MUST be represented by a string (for example, `"200"`
+   * enclosed in quotes in YAML) for compatibility between JSON and YAML.
+   * Status codes SHOULD be selected from the IANA Status Code Registry. To
+   * define a range of response codes, this field MAY contain the uppercase
+   * wildcard character `X`. For example, `2XX` represents all response codes
+   * between `200` and `299`. Only the following range definitions are
+   * allowed: `1XX`, `2XX`, `3XX`, `4XX`, and `5XX`. If a response is defined
+   * using an explicit code, the explicit code definition takes precedence
+   * over the range definition for that code.
    */
   [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject
 }
@@ -804,7 +805,7 @@ export interface ResponsesObject extends SpecificationExtensions {
  * Describes a single response from an API operation, including design-time,
  * static `links` to operations based on the response.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#response-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#response-object}
  */
 export interface ResponseObject extends SpecificationExtensions {
   /**
@@ -849,7 +850,7 @@ export interface ResponseObject extends SpecificationExtensions {
  * prefixed fields), which cannot be represented in TypeScript alongside the
  * arbitrary runtime-expression keys.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#callback-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#callback-object}
  */
 export interface CallbackObject {
   /**
@@ -876,7 +877,7 @@ export interface CallbackObject {
  * associated value; tooling MAY validate compatibility and reject
  * incompatible examples.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#example-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#example-object}
  */
 export interface ExampleObject extends SpecificationExtensions {
   /**
@@ -930,7 +931,7 @@ export interface ExampleObject extends SpecificationExtensions {
  * A linked operation MUST be identified using either an `operationRef` or
  * `operationId` (mutually exclusive).
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#link-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#link-object}
  */
 export interface LinkObject extends SpecificationExtensions {
   /**
@@ -987,7 +988,7 @@ export interface LinkObject extends SpecificationExtensions {
  * When serializing with `schema`, URI percent-encoding MUST NOT be applied
  * and header values MUST be passed through unchanged (no automatic quoting).
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#header-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#header-object}
  */
 export interface HeaderObject extends SpecificationExtensions {
   /**
@@ -1051,7 +1052,7 @@ export interface HeaderObject extends SpecificationExtensions {
  * not mandatory to have a Tag Object per tag defined in the Operation Object
  * instances.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#tag-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#tag-object}
  */
 export interface TagObject extends SpecificationExtensions {
   /**
@@ -1100,7 +1101,7 @@ export interface TagObject extends SpecificationExtensions {
  * to the `enum`, `const`, `default`, `examples`, and `example` fields.
  * Defaults to `unknown`; subschema positions (`properties`, `items`, ...) are
  * not parameterized.
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#schema-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#schema-object}
  */
 export interface SchemaObjectFields<T = unknown> {
   /**
@@ -1496,7 +1497,7 @@ export interface SchemaObjectFields<T = unknown> {
  * @template T The type of the data instances this schema describes, applied
  * to the `enum`, `const`, `default`, `examples`, and `example` fields.
  * Defaults to `unknown`.
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#schema-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#schema-object}
  */
 export type SchemaObject<T = unknown> = boolean | SchemaObjectFields<T>
 
@@ -1510,7 +1511,7 @@ export type SchemaObject<T = unknown> = boolean | SchemaObjectFields<T>
  * keywords `oneOf`, `anyOf`, `allOf`. Note that `discriminator` MUST NOT
  * change the validation outcome of the schema.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#discriminator-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#discriminator-object}
  */
 export interface DiscriminatorObject extends SpecificationExtensions {
   /**
@@ -1552,7 +1553,7 @@ export interface DiscriminatorObject extends SpecificationExtensions {
  * - `"none"` — no corresponding node; nodes from subschemas are included
  *   directly under the parent schema's node.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#xml-node-types}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#xml-node-types}
  */
 export type XMLNodeType = 'attribute' | 'cdata' | 'element' | 'none' | 'text'
 
@@ -1562,7 +1563,7 @@ export type XMLNodeType = 'attribute' | 'cdata' | 'element' | 'none' | 'text'
  * When using arrays, XML element names are not inferred (for singular/plural
  * forms) and the `name` field SHOULD be used to add that information.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#xml-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#xml-object}
  */
 export interface XMLObject extends SpecificationExtensions {
   /**
@@ -1617,7 +1618,7 @@ export interface XMLObject extends SpecificationExtensions {
  * Defines an API key security scheme that can be used by the operations. The
  * API key can be sent via a header, cookie, or query parameter.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1651,7 +1652,7 @@ export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
  * Defines an HTTP authentication security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export interface HttpSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1690,7 +1691,7 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
  * Defines a mutual TLS security scheme (use of a client certificate) that can
  * be used by the operations. There are no additional configuration fields.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1717,7 +1718,7 @@ export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
  * authorization code) as defined in RFC6749, and the Device Authorization
  * flow as defined in RFC8628.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1752,7 +1753,7 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
  * Defines an OpenID Connect security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1787,7 +1788,7 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  * Device Authorization flow as defined in RFC8628, and OpenID Connect
  * Discovery.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
 export type SecuritySchemeObject =
   | ApiKeySecuritySchemeObject
@@ -1799,7 +1800,7 @@ export type SecuritySchemeObject =
 /**
  * Allows configuration of the supported OAuth Flows.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#oauth-flows-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#oauth-flows-object}
  */
 export interface OAuthFlowsObject extends SpecificationExtensions {
   /**
@@ -1829,7 +1830,7 @@ export interface OAuthFlowsObject extends SpecificationExtensions {
 /**
  * Configuration details for the OAuth Device Authorization flow (RFC8628).
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#oauth-flow-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#oauth-flow-object}
  */
 export interface DeviceAuthorizationOAuthFlowObject extends OAuthFlowObjectBase {
   /**
@@ -1848,7 +1849,7 @@ export interface DeviceAuthorizationOAuthFlowObject extends OAuthFlowObjectBase 
 /**
  * Configuration details for a supported OAuth Flow.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#oauth-flow-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#oauth-flow-object}
  */
 export type OAuthFlowObject =
   | AuthorizationCodeOAuthFlowObject
@@ -1868,7 +1869,7 @@ export type OAuthFlowObject =
  * the list needs to be satisfied to authorize the request. An empty Security
  * Requirement Object (`{}`) indicates anonymous access is supported.
  *
- * @see {@link https://spec.openapis.org/oas/v3.2.0.html#security-requirement-object}
+ * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-requirement-object}
  */
 export interface SecurityRequirementObject {
   /**

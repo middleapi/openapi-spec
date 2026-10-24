@@ -29,7 +29,7 @@ Each version module targets the latest patch release of its minor line:
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------ |
 | `@openapi-spec/types/v3.0` | [OpenAPI 3.0.4](https://spec.openapis.org/oas/v3.0.4.html) |                                                  |
 | `@openapi-spec/types/v3.1` | [OpenAPI 3.1.2](https://spec.openapis.org/oas/v3.1.2.html) | Reuses 3.0 types for objects that did not change |
-| `@openapi-spec/types/v3.2` | [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html) | Reuses 3.1 types for objects that did not change |
+| `@openapi-spec/types/v3.2` | [OpenAPI 3.2.1](https://spec.openapis.org/oas/v3.2.1.html) | Reuses 3.1 types for objects that did not change |
 
 ## Usage
 
