@@ -3,6 +3,7 @@
   "extends": "uncheck/tsconfig/middleapi",
   "compilerOptions": {
     "lib": ["ES2024"],
+    "exactOptionalPropertyTypes": true,
     "types": ["node", "vitest/globals"]
   },
   "include": [

@@ -156,3 +156,34 @@ export type V3_2Members = [
   OpenAPIV3_2.XMLNodeType,
   OpenAPIV3_2.XMLObject,
 ]
+
+// Optional fields that reject `undefined` under the root tsconfig's
+// `exactOptionalPropertyTypes`, which needs `field?: T | undefined` to accept
+// it. Assigning `{}` fails and names the field when this is not `never`.
+type RejectsUndefined<T> = T extends object
+  ? {
+      [K in keyof T]-?: {} extends Record<K, unknown>
+        ? never // an index signature, not a field
+        : {} extends Pick<T, K>
+          ? { [P in K]: undefined } extends Pick<T, K>
+            ? never
+            : K
+          : never
+    }[keyof T]
+  : never
+
+// @ts-expect-error: `exactOptionalPropertyTypes` is on, so `field?: string` rejects undefined.
+export const exactOptional: Record<RejectsUndefined<{ field?: string }>, never> = {}
+
+export const v3_0Optional: Record<
+  RejectsUndefined<V3_0Members[number] | OpenAPIV3_0.SchemaObject<string>>,
+  never
+> = {}
+export const v3_1Optional: Record<
+  RejectsUndefined<V3_1Members[number] | OpenAPIV3_1.SchemaObject<string>>,
+  never
+> = {}
+export const v3_2Optional: Record<
+  RejectsUndefined<V3_2Members[number] | OpenAPIV3_2.SchemaObject<string>>,
+  never
+> = {}
