@@ -517,7 +517,10 @@ function finishSchema(
   }
   const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
-    out.format ??= format
+    // A `format` that only repeats the encoding, as Zod writes, gives way.
+    if (out.format === undefined || out.format === schema.contentEncoding) {
+      out.format = format
+    }
     if (schema.type === undefined) {
       out.type = 'string'
     }

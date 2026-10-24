@@ -543,6 +543,13 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       format: 'byte',
     })
+    // Zod's `z.base64()` repeats the encoding as the format.
+    expect(
+      downgradeSchemaV31ToV30({ type: 'string', format: 'base64', contentEncoding: 'base64' }),
+    ).toEqual({ type: 'string', format: 'byte' })
+    expect(
+      downgradeSchemaV31ToV30({ type: 'string', format: 'email', contentEncoding: 'base64' }),
+    ).toEqual({ type: 'string', format: 'email' })
     expect(downgradeSchemaV31ToV30({ type: 'string', contentMediaType: 'image/png' })).toEqual({
       type: 'string',
       format: 'binary',
