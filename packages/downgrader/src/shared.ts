@@ -8,6 +8,10 @@ export interface Context {
   readonly targets: Map<string, unknown>
   /** The output of each object converted so far, per field table, so a shared object is converted once and a cycle ends. */
   readonly seen: Map<Fields, Map<object, Record<string, unknown>>>
+  /** The `seen` outside any inlined target, which each keeps its own. */
+  readonly shared: Context['seen']
+  /** The `seen` of each target inlined so far. */
+  readonly apart: Map<unknown, Context['seen']>
   /** The targets of the `$ref`s being inlined, so a reference back into one stops there. */
   readonly inlining: Set<unknown>
 }
@@ -239,19 +243,36 @@ export function resolve(ref: string, ctx: Context): unknown {
 /**
  * Converts the target of `ref` to stand in for the reference. Returns `DROP`
  * when the target is missing, or when it is already being inlined around
- * this point, where inlining it again would never end.
+ * this point, where inlining it again would never end. Each target keeps its
+ * own outputs, so a `$ref` into part of one being inlined, or around it,
+ * never reaches an output still being filled, which would then hold itself.
+ * With `shared`, for a caller that only reads the output, the target gets the
+ * one it has outside any inlined target.
  */
-export function inline(ref: string, ctx: Context, convert: Convert): unknown {
+export function inline(ref: string, ctx: Context, convert: Convert, shared = false): unknown {
   const target = resolvePointer(ref, ctx)
   if (target === undefined || ctx.inlining.has(target)) {
     return DROP
   }
+  let seen = shared ? ctx.shared : ctx.apart.get(target)
+  if (seen === undefined) {
+    seen = new Map()
+    ctx.apart.set(target, seen)
+  }
   ctx.inlining.add(target)
-  const out = convert(target, ctx)
+  const out = convert(target, seen === ctx.seen ? ctx : { ...ctx, seen })
   ctx.inlining.delete(target)
   return out
 }
 
 export function downgrade(root: unknown, convert: Convert): unknown {
-  return convert(root, { inlining: new Set(), root, seen: new Map(), targets: new Map() })
+  const seen: Context['seen'] = new Map()
+  return convert(root, {
+    apart: new Map(),
+    inlining: new Set(),
+    root,
+    seen,
+    shared: seen,
+    targets: new Map(),
+  })
 }

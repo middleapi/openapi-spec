@@ -239,6 +239,34 @@ describe('downgradeSpecV31ToV30', () => {
         { in: 'query', name: 'q', schema: { type: 'integer', enum: [1] } },
       ])
     })
+
+    it('inlines a $ref into part of a webhook from inside it, cutting recursion with {}', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          next: { $ref: '#/webhooks/hook/post/requestBody/content/application~1json/schema' },
+        },
+      } as const
+      const out = convert({
+        paths: { '/a': { $ref: '#/webhooks/hook' } },
+        webhooks: {
+          hook: {
+            post: { requestBody: { content: { 'application/json': { schema } } }, responses },
+          },
+        },
+      })
+      expect(out.paths['/a']?.post?.requestBody).toEqual({
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: { next: { type: 'object', properties: { next: {} } } },
+            },
+          },
+        },
+      })
+      expect(() => JSON.stringify(out)).not.toThrow()
+    })
   })
 
   describe('mutual TLS', () => {
@@ -823,6 +851,96 @@ describe('downgradeSchemaV31ToV30', () => {
           root: { description: 'kept', allOf: [{ $ref: '#' }] },
         },
       })
+    })
+
+    it('inlines a $ref into part of a $defs entry from inside it, cutting recursion with {}', () => {
+      const out = downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: { a: { $ref: '#/$defs/A' } },
+        $defs: {
+          A: {
+            type: 'object',
+            properties: {
+              child: {
+                type: 'object',
+                properties: { next: { $ref: '#/$defs/A/properties/child' } },
+              },
+            },
+          },
+        },
+      })
+      expect(out).toEqual({
+        type: 'object',
+        properties: {
+          a: {
+            type: 'object',
+            properties: {
+              child: {
+                type: 'object',
+                properties: { next: { type: 'object', properties: { next: {} } } },
+              },
+            },
+          },
+        },
+      })
+      expect(() => JSON.stringify(out)).not.toThrow()
+    })
+
+    it('inlines a $ref into part of a $defs entry from another entry inlined inside it', () => {
+      const out = downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: { a: { $ref: '#/$defs/A' } },
+        $defs: {
+          A: {
+            type: 'object',
+            properties: { c: { type: 'object', properties: { go: { $ref: '#/$defs/B' } } } },
+          },
+          B: { type: 'object', properties: { back: { $ref: '#/$defs/A/properties/c' } } },
+        },
+      })
+      const back = { type: 'object', properties: { go: {} } }
+      expect(out).toEqual({
+        type: 'object',
+        properties: {
+          a: {
+            type: 'object',
+            properties: {
+              c: {
+                type: 'object',
+                properties: { go: { type: 'object', properties: { back } } },
+              },
+            },
+          },
+        },
+      })
+      expect(() => JSON.stringify(out)).not.toThrow()
+    })
+
+    it('inlines a $ref to the $defs entry around a part being inlined', () => {
+      const out = downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: { p: { $ref: '#/$defs/A/properties/c' }, q: { $ref: '#/$defs/A' } },
+        $defs: {
+          A: {
+            type: 'object',
+            properties: {
+              c: {
+                type: 'object',
+                properties: { n: { $ref: '#/$defs/A/properties/c' }, up: { $ref: '#/$defs/A' } },
+              },
+            },
+          },
+        },
+      })
+      const a = {
+        type: 'object',
+        properties: { c: { type: 'object', properties: { n: {}, up: {} } } },
+      }
+      expect(out).toEqual({
+        type: 'object',
+        properties: { p: { type: 'object', properties: { n: {}, up: a } }, q: a },
+      })
+      expect(() => JSON.stringify(out)).not.toThrow()
     })
 
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
