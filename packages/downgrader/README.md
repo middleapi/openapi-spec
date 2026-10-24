@@ -254,7 +254,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 ## Performance
 
-Each object is converted once, however many `$ref`s or shared references reach it, so the work grows with the size of the document, not with the number of paths through it. A cycle of objects in the input, as a dereferencing parser leaves, becomes the same cycle in the output.
+Each object is converted once (inside an inlined `$ref` target, once per target), however many `$ref`s or shared references reach it, so the work grows with the size of the document, not with the number of paths through it. A cycle of objects in the input, as a dereferencing parser leaves, becomes the same cycle in the output.
 
 Two shapes no generator emits fall outside this. A chain of `$ref`s that point at `$ref`s is followed again from each place that reaches it, so its cost grows with the square of its length. And conversion is recursive, so input nested, or chained through `$ref`s, more than about a thousand levels deep can throw a `RangeError`. If you convert untrusted documents, limit their size and depth first.
 

@@ -288,7 +288,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
     const out = { $ref: ref }
-    return isLoose(inline(ref, ctx, convertSchema)) ? loosened(out) : out
+    return isLoose(inline(ref, ctx, convertSchema, true)) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
