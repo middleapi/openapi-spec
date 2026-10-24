@@ -131,7 +131,7 @@ const twoBranchAnyOfs: [schema: Record<string, unknown>, input: object][] = []
 
 // Input schemas whose `anyOf` a `$ref` kept as written points into. They keep
 // it, so the `$ref` still resolves.
-const anyOfTargets = new Set<object>()
+const anyOfTargets = new Set<unknown>()
 
 // A branch with these stays: null can still fail them beside `nullable: true`,
 // and a `nullable` already there was written 3.0-style.
@@ -280,10 +280,7 @@ function refOr(convert: Convert): Convert {
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
     for (let at = ref.indexOf('/anyOf/'); at !== -1; at = ref.indexOf('/anyOf/', at + 1)) {
-      const holder = resolvePointer(ref.slice(0, at), ctx)
-      if (isRecord(holder)) {
-        anyOfTargets.add(holder)
-      }
+      anyOfTargets.add(resolvePointer(ref.slice(0, at), ctx))
     }
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
