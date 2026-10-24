@@ -1115,10 +1115,11 @@ export interface SchemaObjectFields<T = unknown> {
   /**
    * The URI of the dialect (meta-schema) this schema conforms to. MAY be
    * present in any schema resource root, and if present MUST be used to
-   * determine the dialect. Tooling MUST support the OAS dialect schema id
-   * `https://spec.openapis.org/oas/3.1/dialect/base`, and MAY support
-   * additional values. The OpenAPI Object's `jsonSchemaDialect` field sets
-   * the default; if it is also unset, the OAS dialect schema id MUST be used.
+   * determine the dialect. Tooling MUST support the OAS dialect schema id (a
+   * URI of the form `https://spec.openapis.org/oas/3.2/dialect/YYYY-MM-DD`),
+   * and MAY support additional values. The OpenAPI Object's
+   * `jsonSchemaDialect` field sets the default; if it is also unset, the OAS
+   * dialect schema id MUST be used.
    */
   $schema?: string | undefined
   /**
@@ -1480,19 +1481,20 @@ export interface SchemaObjectFields<T = unknown> {
 
 /**
  * The Schema Object allows the definition of input and output data types.
- * These types can be objects, but also primitives and arrays. This object is
- * a superset of the JSON Schema Specification Draft 2020-12.
+ * These types can be objects, but also primitives and arrays. By default,
+ * this object is a superset of the JSON Schema Specification Draft 2020-12.
  *
  * The empty schema (which allows any instance to validate) MAY be represented
  * by the boolean value `true`, and a schema which allows no instance to
  * validate MAY be represented by the boolean value `false`.
  *
  * Unless stated otherwise, the keyword definitions follow those of JSON
- * Schema and do not add any additional semantics. The OpenAPI Schema Object
- * dialect is identified by the URI `https://spec.openapis.org/oas/3.1/dialect/base`
- * (the "OAS dialect schema id"), and requires the OAS base vocabulary
- * (`discriminator`, `xml`, `externalDocs`, `example`) in addition to the
- * vocabularies of the JSON Schema Draft 2020-12 general-purpose meta-schema.
+ * Schema and do not add any additional semantics. The default OpenAPI Schema
+ * Object dialect is identified by the URI of the form
+ * `https://spec.openapis.org/oas/3.2/dialect/YYYY-MM-DD` (the "OAS dialect
+ * schema id"), and requires the OAS base vocabulary (`discriminator`, `xml`,
+ * `externalDocs`, `example`) in addition to the vocabularies of the JSON
+ * Schema Draft 2020-12 general-purpose meta-schema.
  *
  * @template T The type of the data instances this schema describes, applied
  * to the `enum`, `const`, `default`, `examples`, and `example` fields.
