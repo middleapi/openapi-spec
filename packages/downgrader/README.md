@@ -246,7 +246,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 - `patternProperties` that matches every name, as TypeBox emits for a record, is removed with its value schema rather than turned into `additionalProperties`.
 - An untyped schema that gains a `format` from `contentEncoding` or `contentMediaType` also gains `type: "string"`, as 3.0 binary strings need, so it rejects non-string values it accepted. 3.0 tools find file uploads only by `type: "string"` with `format: "binary"`.
 - OpenAPI Generator merges the `"null"` branch beside a `$ref` to a string enum into a new enum, so the reference is lost. Pass `--openapi-normalizer SIMPLIFY_ONEOF_ANYOF_ENUM=false` to keep it.
-- Kiota reads the `"null"` branch's `type: "string"` as a real type, so array items that may be null, and a union of several types with null, come out as strings. Kiota reads 3.1 too, which types them correctly.
+- Kiota reads the `"null"` branch's `type: "string"` as a real type, so array items that may be null, and a union of several types with null, come out as strings. Kiota reads 3.1 too, which keeps their types.
 
 ## Performance
 
