@@ -844,6 +844,40 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ properties: { a: { type: 'string', nullable: true } } })
     })
 
+    it('keeps an anyOf of a branch and null that a $ref points into, so the $ref still resolves', () => {
+      const address = { type: 'object', properties: { city: { type: 'string' } } } as const
+      expect(
+        downgradeSchemaV31ToV30({
+          type: 'object',
+          properties: {
+            home: { anyOf: [address, { type: 'null' }] },
+            work: { anyOf: [{ $ref: '#/properties/home/anyOf/0' }, { type: 'null' }] },
+          },
+        }),
+      ).toEqual({
+        type: 'object',
+        properties: {
+          home: { anyOf: [address, { type: 'string', nullable: true, enum: [null] }] },
+          work: {
+            oneOf: [
+              { $ref: '#/properties/home/anyOf/0' },
+              { type: 'string', nullable: true, enum: [null] },
+            ],
+          },
+        },
+      })
+    })
+
+    it('keeps an anyOf of a branch and null that a $ref inside it points into', () => {
+      const node = {
+        type: 'object',
+        properties: { children: { type: 'array', items: { $ref: '#/anyOf/0' } } },
+      } as const
+      const out = downgradeSchemaV31ToV30({ anyOf: [node, { type: 'null' }] })
+      expect(out).toEqual({ anyOf: [node, { type: 'string', nullable: true, enum: [null] }] })
+      expect(() => JSON.stringify(out)).not.toThrow()
+    })
+
     it('leaves a $ref into $defs that does not resolve as written', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',
