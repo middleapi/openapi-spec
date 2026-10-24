@@ -806,10 +806,12 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
   return out
 }
 
+/** Downgrades an OpenAPI 3.1 document to 3.0, setting `openapi` to `3.0.4`. The input is never changed. */
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
   return downgradeV30(spec, convertDocument) as OpenAPIV3_0.OpenAPIObject
 }
 
+/** Downgrades a 3.1 Schema Object to 3.0. Local `$ref`s resolve against the schema itself. The input is never changed. */
 export function downgradeSchemaV31ToV30<T = unknown>(
   schema: OpenAPIV3_1.SchemaObject<T>,
 ): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {
