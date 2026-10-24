@@ -577,15 +577,6 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: false }),
     ).toEqual({ type: 'array', items: { type: 'string' }, maxItems: 1 })
-    // As ArkType emits a tuple with an optional item.
-    expect(
-      downgradeSchemaV31ToV30({
-        type: 'array',
-        minItems: 1,
-        prefixItems: [...prefixItems],
-        items: false,
-      }),
-    ).toEqual({ type: 'array', minItems: 1, items: { anyOf: prefixItems }, maxItems: 2 })
     expect(downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }] })).toEqual({
       type: 'array',
       items: {},
@@ -612,6 +603,34 @@ describe('downgradeSchemaV31ToV30', () => {
       }),
     ).toEqual({ type: 'array', items: { type: 'number' }, maxItems: 2 })
   })
+
+  it.each<[OpenAPIV3_1.SchemaObjectFields, OpenAPIV3_0.SchemaObject]>([
+    // As ArkType emits a tuple with an optional item.
+    [
+      { items: false, minItems: 1 },
+      { minItems: 1, maxItems: 2 },
+    ],
+    [{ items: false, maxItems: 1 }, { maxItems: 1 }],
+    [{ items: false, maxItems: 3 }, { maxItems: 2 }],
+    [{ items: true }, { items: {} }],
+    [
+      { items: { type: 'boolean' }, maxItems: 3 },
+      {
+        items: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+        maxItems: 3,
+      },
+    ],
+  ])(
+    'turns a tuple beside %o into an array, bounded by its length when items is false',
+    (fields, expected) => {
+      expect(
+        downgradeSchemaV31ToV30({
+          prefixItems: [{ type: 'string' }, { type: 'number' }],
+          ...fields,
+        }),
+      ).toEqual({ items: { anyOf: [{ type: 'string' }, { type: 'number' }] }, ...expected })
+    },
+  )
 
   it('marks binary strings with format', () => {
     expect(downgradeSchemaV31ToV30({ type: 'string', contentEncoding: 'base64' })).toEqual({
@@ -736,6 +755,8 @@ describe('downgradeSchemaV31ToV30', () => {
         $anchor: 'pet',
         $comment: 'c',
         $dynamicAnchor: 'node',
+        $dynamicRef: '#node',
+        $vocabulary: { 'https://json-schema.org/draft/2020-12/vocab/core': true },
         type: 'object',
         if: { required: ['a'] },
         then: { required: ['b'] },
@@ -1157,8 +1178,19 @@ describe('unusual input', () => {
   })
 
   it('resolves only local JSON Pointers, leaving other $refs as written', () => {
-    for (const ref of ['./other.json#/$defs/A', '#/$defs/%E0%A4%A']) {
-      expect(downgradeSchemaV31ToV30({ $ref: ref })).toEqual({ $ref: ref })
+    for (const ref of [
+      './other.json#/$defs/A',
+      'x/$defs/A',
+      '#x/$defs/A',
+      '#/$defs/%E0%A4%A',
+      '#/$defs/constructor',
+    ]) {
+      expect(
+        downgradeSchemaV31ToV30({
+          properties: { a: { $ref: ref } },
+          $defs: { A: { type: 'string' } },
+        }),
+      ).toEqual({ properties: { a: { $ref: ref } } })
     }
     const out = convert({
       security: [{ anchor: ['a'], loop: ['b'], missing: ['c'] }],
@@ -1185,7 +1217,10 @@ describe('unusual input', () => {
       security: 'all',
       paths: { '/a': { get: { security: [null, 'x'], parameters: 'none', responses: [] } } },
       components: {
-        schemas: { S: { properties: 'none', allOf: {}, example: { a: 1, b: undefined } } },
+        schemas: {
+          S: { properties: 'none', allOf: {}, example: { a: 1, b: undefined } },
+          R: { $ref: 1 },
+        },
       },
     }
     const out = downgradeSpecV31ToV30(doc as any)
@@ -1195,6 +1230,9 @@ describe('unusual input', () => {
       parameters: 'none',
       responses: [],
     })
-    expect(out.components?.schemas?.S).toEqual({ properties: 'none', allOf: {}, example: { a: 1 } })
+    expect(out.components?.schemas).toEqual({
+      S: { properties: 'none', allOf: {}, example: { a: 1 } },
+      R: {},
+    })
   })
 })

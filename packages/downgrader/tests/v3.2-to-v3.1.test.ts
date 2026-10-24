@@ -142,8 +142,9 @@ describe('downgradeSpecV32ToV31', () => {
     expect(out.servers).toEqual([expected])
     expect(out.paths?.['/a']?.servers).toEqual([expected])
     expect(out.paths?.['/a']?.get?.servers).toEqual([expected])
-    expect(out.paths?.['/a']?.get?.responses?.['200']).toMatchObject({
-      links: { self: { server: expected } },
+    expect(out.paths?.['/a']?.get?.responses?.['200']).toEqual({
+      description: 'ok',
+      links: { self: { operationId: 'a', server: expected } },
     })
   })
 
@@ -348,7 +349,7 @@ describe('downgradeSpecV32ToV31', () => {
           },
         },
       })
-      expect(out?.requestBody).toEqual({ content: {} })
+      expect(out?.requestBody).toStrictEqual({ content: {} })
     })
   })
 
@@ -478,6 +479,11 @@ describe('downgradeSpecV32ToV31', () => {
     // Keys an object inherits are not part of it as JSON sees it, so such an object is kept as it is.
     const inherits = Object.create(Object.assign(Object.create(null), { type: 'string' }))
     expect(downgradeSchemaV32ToV31(inherits)).toBe(inherits)
+    expect(
+      downgradeSchemaV32ToV31(
+        Object.assign(Object.create(null), { xml: { nodeType: 'attribute' } }),
+      ),
+    ).toEqual({ xml: { attribute: true } })
   })
 
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {
@@ -517,6 +523,7 @@ describe('downgradeSchemaV32ToV31', () => {
             xml: { nodeType: 'element' },
             items: { type: 'string', xml: { nodeType: 'text' } },
           },
+          notes: { type: 'array', xml: { nodeType: 'none' } },
         },
         $defs: { Note: { anyOf: [{ xml: { nodeType: 'cdata' } }] } },
       }),
@@ -526,6 +533,7 @@ describe('downgradeSchemaV32ToV31', () => {
       properties: {
         id: { type: 'string', xml: { attribute: true } },
         tags: { type: 'array', xml: { wrapped: true }, items: { type: 'string', xml: {} } },
+        notes: { type: 'array', xml: {} },
       },
       $defs: { Note: { anyOf: [{ xml: {} }] } },
     })
