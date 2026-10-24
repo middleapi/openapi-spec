@@ -508,6 +508,8 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ const: 'a', nullable: true } as OpenAPIV3_1.SchemaObject),
     ).toEqual({ type: 'string', enum: ['a'] })
+    // A non-plain value, such as a Date js-yaml loads, has no JSON type to give.
+    expect(downgradeSchemaV31ToV30({ const: new Date(0) })).toEqual({ enum: [new Date(0)] })
   })
 
   it('turns numeric exclusive bounds into boolean ones, keeping the stricter bound', () => {

@@ -475,7 +475,7 @@ function valueType(value: unknown): string | undefined {
     case 'number':
       return Number.isInteger(value) ? 'integer' : 'number'
     case 'object':
-      return value === null ? undefined : 'object'
+      return isRecord(value) ? 'object' : undefined
     default:
       return undefined
   }
