@@ -304,10 +304,12 @@ function convertDocument(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, DOCUMENT_FIELDS, finishDocument)
 }
 
+/** Downgrades an OpenAPI 3.2 document to 3.1, setting `openapi` to `3.1.2`. The input is never changed. */
 export function downgradeSpecV32ToV31(spec: OpenAPIV3_2.OpenAPIObject): OpenAPIV3_1.OpenAPIObject {
   return downgrade(spec, convertDocument) as OpenAPIV3_1.OpenAPIObject
 }
 
+/** Downgrades a 3.2 Schema Object to 3.1. The input is never changed. */
 export function downgradeSchemaV32ToV31<T = unknown>(
   schema: OpenAPIV3_2.SchemaObject<T>,
 ): OpenAPIV3_1.SchemaObject<T> {
