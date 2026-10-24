@@ -42,25 +42,41 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   expect(Planet).not.toHaveProperty('properties.attributes.propertyNames')
   expect(Category).toMatchObject({
     properties: {
-      parent: { anyOf: [{ $ref: '#/components/schemas/Category' }, { enum: [null] }] },
+      parent: {
+        anyOf: [
+          { $ref: '#/components/schemas/Category' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      },
     },
   })
   expect(NotFound).toMatchObject({
-    properties: { defined: { enum: [true] }, code: { enum: ['NOT_FOUND'] } },
+    properties: {
+      defined: { type: 'boolean', enum: [true] },
+      code: { type: 'string', enum: ['NOT_FOUND'] },
+    },
   })
 
   const upload = v30.paths['/planets/{id}/image']?.put?.requestBody
   expect(upload).toMatchObject({
     content: {
       'multipart/form-data': {
-        schema: { properties: { image: { type: 'string', format: 'binary' } } },
+        schema: {
+          properties: {
+            image: { type: 'string', format: 'binary' },
+            thumbnail: { type: 'string', format: 'binary' },
+          },
+        },
       },
     },
   })
+  expect(upload).not.toHaveProperty('content.multipart/form-data.schema.properties.thumbnail.anyOf')
   expect(v30.paths['/planets/events']?.get?.responses['200']).toMatchObject({
     content: {
       'text/event-stream': {
-        schema: { oneOf: [{ properties: { event: { enum: ['message'] } } }, {}, {}] },
+        schema: {
+          oneOf: [{ properties: { event: { type: 'string', enum: ['message'] } } }, {}, {}],
+        },
       },
     },
   })

@@ -10,6 +10,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               "BAD_REQUEST",
             ],
+            "type": "string",
           },
           "data": {
             "additionalProperties": false,
@@ -53,6 +54,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               true,
             ],
+            "type": "boolean",
           },
           "message": {
             "type": "string",
@@ -88,6 +90,8 @@ exports[`matches the 3.0 snapshot 1`] = `
                 "enum": [
                   null,
                 ],
+                "nullable": true,
+                "type": "string",
               },
             ],
           },
@@ -105,12 +109,14 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               "CONFLICT",
             ],
+            "type": "string",
           },
           "data": {},
           "defined": {
             "enum": [
               true,
             ],
+            "type": "boolean",
           },
           "message": {
             "type": "string",
@@ -130,6 +136,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               "NOT_FOUND",
             ],
+            "type": "string",
           },
           "data": {
             "additionalProperties": false,
@@ -147,6 +154,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               true,
             ],
+            "type": "boolean",
           },
           "message": {
             "type": "string",
@@ -276,6 +284,7 @@ exports[`matches the 3.0 snapshot 1`] = `
             "enum": [
               false,
             ],
+            "type": "boolean",
           },
           "message": {
             "type": "string",
@@ -627,6 +636,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                           "enum": [
                             "message",
                           ],
+                          "type": "string",
                         },
                         "id": {
                           "type": "string",
@@ -659,6 +669,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                           "enum": [
                             "close",
                           ],
+                          "type": "string",
                         },
                         "id": {
                           "type": "string",
@@ -680,6 +691,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                           "enum": [
                             "error",
                           ],
+                          "type": "string",
                         },
                         "id": {
                           "type": "string",
@@ -741,6 +753,8 @@ exports[`matches the 3.0 snapshot 1`] = `
                       "enum": [
                         null,
                       ],
+                      "nullable": true,
+                      "type": "string",
                     },
                   ],
                 },
@@ -993,6 +1007,10 @@ exports[`matches the 3.0 snapshot 1`] = `
                     "type": "string",
                   },
                   "image": {
+                    "format": "binary",
+                    "type": "string",
+                  },
+                  "thumbnail": {
                     "format": "binary",
                     "type": "string",
                   },

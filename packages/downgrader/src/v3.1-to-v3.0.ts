@@ -64,7 +64,6 @@ const REMOVED_KEYWORDS = [
   'exclusiveMaximum',
   'exclusiveMinimum',
   'nullable',
-  'type',
 ]
 
 // The only keywords a 3.0 Schema Object allows, besides extensions.
@@ -124,6 +123,7 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
+const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
@@ -138,7 +138,11 @@ const SCHEMA_FIELDS = defineFields({
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
   },
   allOf: list(convertSchema),
-  anyOf: list(convertSchema),
+  // Zod writes a file with several media types as an `anyOf` of branches
+  // that hold only `contentMediaType`, an annotation, so it matches every
+  // value. Its branches would each become a binary string in 3.0.
+  anyOf: (item, ctx) =>
+    Array.isArray(item) && item.some(isMediaTypeOnly) ? DROP : convertAnyOf(item, ctx),
   // An empty one rejects every value, which `finishSchema` keeps another way.
   enum: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.
@@ -149,6 +153,9 @@ const SCHEMA_FIELDS = defineFields({
   properties: map(convertSchema),
   // 3.0 requires at least one entry.
   required: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
+  // Kept in place when it names one type besides `null`. `convertType`
+  // rewrites any other.
+  type: (item) => singleType(item) ?? DROP,
 })
 
 const PARAMETER_FIELDS = defineFields({
@@ -258,7 +265,10 @@ function refOr(convert: Convert): Convert {
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
-    return { $ref: ref }
+    // A `$ref` kept as written loses what its target loses. Converting the
+    // target here reuses the copy the components get, and stops at a cycle.
+    const out = { $ref: ref }
+    return isLoose(inline(ref, ctx, convertSchema)) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
@@ -407,17 +417,25 @@ function loosen(
   )
 }
 
-// 3.0 takes one type, and marks null with `nullable` instead.
+// The one type besides `null` that `type` names, which 3.0 keeps as it is.
+function singleType(type: unknown): string | undefined {
+  if (!Array.isArray(type)) {
+    return typeof type === 'string' && type !== 'null' ? type : undefined
+  }
+  const rest = type.filter((item) => typeof item === 'string' && item !== 'null')
+  return rest.length === 1 ? rest[0] : undefined
+}
+
+// 3.0 takes one type, which `SCHEMA_FIELDS` keeps, and marks null with
+// `nullable` instead.
 function convertType(out: Record<string, unknown>, type: unknown): void {
   if (typeof type === 'string' && type !== 'null') {
-    out.type = type
     return
   }
   const types = (Array.isArray(type) ? type : [type]).filter((item) => typeof item === 'string')
   const nullable = types.includes('null')
   const rest = types.filter((item) => item !== 'null')
   if (rest.length === 1) {
-    out.type = rest[0]
     if (nullable) {
       out.nullable = true
     }
@@ -439,6 +457,34 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
       out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
     }
   }
+}
+
+function isOnlyNull(values: unknown): boolean {
+  return Array.isArray(values) && values.length === 1 && values[0] === null
+}
+
+// The type of a JSON value other than null.
+function valueType(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return 'array'
+  }
+  switch (typeof value) {
+    case 'boolean':
+    case 'string':
+      return typeof value
+    case 'number':
+      return Number.isInteger(value) ? 'integer' : 'number'
+    case 'object':
+      return value === null ? undefined : 'object'
+    default:
+      return undefined
+  }
+}
+
+function isMediaTypeOnly(value: unknown): boolean {
+  return (
+    isRecord(value) && Object.keys(value).length === 1 && typeof value.contentMediaType === 'string'
+  )
 }
 
 // 3.0 marks encoded and raw binary strings with `format` instead. A string
@@ -492,6 +538,24 @@ function finishSchema(
     out.nullable = true
     loose = true
   }
+  // Only null matches it. 3.0 admits null only through `nullable`, which
+  // needs a `type` beside it, and code generators drop a bare `enum: [null]`.
+  // `enum` is set again to follow them.
+  if (out.type === undefined && isOnlyNull(out.enum)) {
+    delete out.enum
+    out.type = 'string'
+    out.nullable = true
+    out.enum = [null]
+  }
+  // Code generators drop or leave untyped an `enum` with no `type`, as a
+  // `const` becomes, so it gets the type of its value.
+  const constType = out.type === undefined ? valueType(schema.const) : undefined
+  if (constType !== undefined) {
+    const values = out.enum
+    delete out.enum
+    out.type = constType
+    out.enum = values
+  }
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}
   }
@@ -515,7 +579,10 @@ function finishSchema(
   }
   const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
-    out.format ??= format
+    // A `format` that only repeats the encoding, as Zod writes, gives way.
+    if (out.format === undefined || out.format === schema.contentEncoding) {
+      out.format = format
+    }
     if (schema.type === undefined) {
       out.type = 'string'
     }

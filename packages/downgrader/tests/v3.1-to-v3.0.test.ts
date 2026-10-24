@@ -235,7 +235,7 @@ describe('downgradeSpecV31ToV30', () => {
         },
       })
       expect(out.paths['/a']?.get?.parameters).toEqual([
-        { in: 'query', name: 'q', schema: { enum: [1] } },
+        { in: 'query', name: 'q', schema: { type: 'integer', enum: [1] } },
       ])
     })
   })
@@ -391,6 +391,21 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ type: 'integer' })).toEqual({ type: 'integer' })
     })
 
+    it('keeps a single type where it was written', () => {
+      const keys = (schema: OpenAPIV3_1.SchemaObject) =>
+        Object.keys(downgradeSchemaV31ToV30(schema))
+      expect(keys({ type: 'string', minLength: 1, const: 'a' })).toEqual([
+        'type',
+        'minLength',
+        'enum',
+      ])
+      expect(keys({ type: ['object', 'null'], properties: {} })).toEqual([
+        'type',
+        'properties',
+        'nullable',
+      ])
+    })
+
     it('keeps a 3.0-style nullable written beside a type, which only 3.0 gives meaning', () => {
       const schema = (fields: Record<string, unknown>) =>
         downgradeSchemaV31ToV30(fields as OpenAPIV3_1.SchemaObject)
@@ -399,7 +414,10 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
       // It admits null, which the 3.1 schema did not, so the branches can overlap.
       expect(schema({ oneOf: [{ type: 'string', nullable: true }, { type: 'null' }] })).toEqual({
-        anyOf: [{ type: 'string', nullable: true }, { enum: [null] }],
+        anyOf: [
+          { type: 'string', nullable: true },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
       })
     })
 
@@ -431,11 +449,18 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
-    it('turns type null into enum: [null]', () => {
+    it('turns type null into a nullable type that only null matches', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({
-        anyOf: [{ type: 'string' }, { enum: [null] }],
+        anyOf: [{ type: 'string' }, onlyNull],
       })
-      expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual({ enum: [null] })
+      expect(Object.keys(downgradeSchemaV31ToV30({ type: 'null' }))).toEqual([
+        'type',
+        'nullable',
+        'enum',
+      ])
+      expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual(onlyNull)
+      expect(downgradeSchemaV31ToV30({ enum: [null] })).toEqual(onlyNull)
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
         enum: ['a'],
@@ -453,7 +478,36 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       enum: ['a'],
     })
-    expect(downgradeSchemaV31ToV30({ const: null })).toEqual({ enum: [null] })
+    expect(downgradeSchemaV31ToV30({ const: null })).toEqual({
+      type: 'string',
+      nullable: true,
+      enum: [null],
+    })
+  })
+
+  it('types a const with no type after its value', () => {
+    expect(downgradeSchemaV31ToV30({ const: true })).toEqual({ type: 'boolean', enum: [true] })
+    expect(downgradeSchemaV31ToV30({ const: 'a' })).toEqual({ type: 'string', enum: ['a'] })
+    expect(downgradeSchemaV31ToV30({ const: 1 })).toEqual({ type: 'integer', enum: [1] })
+    expect(downgradeSchemaV31ToV30({ const: 1.5 })).toEqual({ type: 'number', enum: [1.5] })
+    expect(downgradeSchemaV31ToV30({ const: { a: 1 } })).toEqual({
+      type: 'object',
+      enum: [{ a: 1 }],
+    })
+    expect(downgradeSchemaV31ToV30({ const: [1] })).toEqual({
+      type: 'array',
+      enum: [[1]],
+      items: {},
+    })
+    expect(Object.keys(downgradeSchemaV31ToV30({ description: 'd', const: true }))).toEqual([
+      'description',
+      'type',
+      'enum',
+    ])
+    // A 3.0-style nullable means nothing in 3.1, so null stays out.
+    expect(
+      downgradeSchemaV31ToV30({ const: 'a', nullable: true } as OpenAPIV3_1.SchemaObject),
+    ).toEqual({ type: 'string', enum: ['a'] })
   })
 
   it('turns numeric exclusive bounds into boolean ones, keeping the stricter bound', () => {
@@ -528,6 +582,13 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       format: 'byte',
     })
+    // Zod's `z.base64()` repeats the encoding as the format.
+    expect(
+      downgradeSchemaV31ToV30({ type: 'string', format: 'base64', contentEncoding: 'base64' }),
+    ).toEqual({ type: 'string', format: 'byte' })
+    expect(
+      downgradeSchemaV31ToV30({ type: 'string', format: 'email', contentEncoding: 'base64' }),
+    ).toEqual({ type: 'string', format: 'email' })
     expect(downgradeSchemaV31ToV30({ type: 'string', contentMediaType: 'image/png' })).toEqual({
       type: 'string',
       format: 'binary',
@@ -552,6 +613,26 @@ describe('downgradeSchemaV31ToV30', () => {
         contentSchema: { type: 'object' },
       }),
     ).toEqual({ type: 'string' })
+  })
+
+  it('drops an anyOf whose branch holds only contentMediaType, which matches every value', () => {
+    // Zod's `z.file().mime(['image/png', 'image/jpeg'])`.
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'string',
+        format: 'binary',
+        contentEncoding: 'binary',
+        anyOf: [{ contentMediaType: 'image/png' }, { contentMediaType: 'image/jpeg' }],
+      }),
+    ).toEqual({ type: 'string', format: 'binary' })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [
+          { contentMediaType: 'image/png' },
+          { type: 'string', contentMediaType: 'text/plain' },
+        ],
+      }),
+    ).toEqual({})
   })
 
   describe('$ref', () => {
@@ -778,7 +859,7 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['b'] } })).toEqual({})
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: [] } })).toEqual({})
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['a', 'b'] } })).toEqual({
-        not: { enum: ['a'] },
+        not: { type: 'string', enum: ['a'] },
       })
       expect(downgradeSchemaV31ToV30({ not: { const: { a: 1 }, enum: [{ a: 1 }] } })).toEqual({
         not: { enum: [{ a: 1 }] },
@@ -792,6 +873,65 @@ describe('downgradeSchemaV31ToV30', () => {
           $defs: { Tree: { type: 'object', properties: { child: { $ref: '#/$defs/Tree' } } } },
         }),
       ).toEqual({})
+    })
+
+    it('includes the target of a $ref kept in the output', () => {
+      // As zod emits z.xor over tuples registered as components.
+      const tuple = (
+        a: OpenAPIV3_1.SchemaObjectType,
+        b: OpenAPIV3_1.SchemaObjectType,
+      ): OpenAPIV3_1.SchemaObject => ({
+        type: 'array',
+        prefixItems: [{ type: a }, { type: b }],
+        items: false,
+      })
+      const schemas = convert({
+        components: {
+          schemas: {
+            StrNum: tuple('string', 'number'),
+            NumStr: tuple('number', 'string'),
+            Point: tuple('number', 'number'),
+            Alias: { $ref: '#/components/schemas/StrNum' },
+            A: { $ref: '#/components/schemas/B' },
+            B: { $ref: '#/components/schemas/A' },
+            Xor: {
+              oneOf: [
+                { $ref: '#/components/schemas/StrNum' },
+                { $ref: '#/components/schemas/NumStr' },
+              ],
+            },
+            Not: { not: { $ref: '#/components/schemas/StrNum' } },
+            Exact: { oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }] },
+            ViaAlias: { oneOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }] },
+            Nested: {
+              oneOf: [
+                { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
+                { type: 'string' },
+              ],
+            },
+            Cycle: { oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }] },
+          },
+        },
+      }).components?.schemas
+      expect(schemas?.Xor).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/StrNum' }, { $ref: '#/components/schemas/NumStr' }],
+      })
+      expect(schemas?.Not).toEqual({})
+      expect(schemas?.Exact).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }],
+      })
+      expect(schemas?.ViaAlias).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }],
+      })
+      expect(schemas?.Nested).toEqual({
+        anyOf: [
+          { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
+          { type: 'string' },
+        ],
+      })
+      expect(schemas?.Cycle).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }],
+      })
     })
   })
 
