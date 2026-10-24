@@ -55,7 +55,7 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * relative, it is resolved against the next possible base URI source (e.g.
    * the retrieval URI).
    */
-  $self?: string
+  $self?: string | undefined
   /**
    * REQUIRED. Provides metadata about the API. The metadata MAY be used by
    * tooling as required.
@@ -65,18 +65,18 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * The default value for the `$schema` keyword within Schema Objects
    * contained within this OAS document. This MUST be in the form of a URI.
    */
-  jsonSchemaDialect?: string
+  jsonSchemaDialect?: string | undefined
   /**
    * An array of Server Objects, which provide connectivity information to a
    * target server. If the `servers` field is not provided, or is an empty
    * array, the default value is an array consisting of a single Server Object
    * with a `url` value of `/`.
    */
-  servers?: ServerObject[]
+  servers?: ServerObject[] | undefined
   /**
    * The available paths and operations for the API.
    */
-  paths?: PathsObject
+  paths?: PathsObject | undefined
   /**
    * The incoming webhooks that MAY be received as part of this API and that
    * the API consumer MAY choose to implement. Closely related to the
@@ -86,11 +86,11 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * referenced) Path Item Object describes a request that may be initiated by
    * the API provider and the expected responses.
    */
-  webhooks?: Record<string, PathItemObject>
+  webhooks?: Record<string, PathItemObject> | undefined
   /**
    * An element to hold various Objects for the OpenAPI Description.
    */
-  components?: ComponentsObject
+  components?: ComponentsObject | undefined
   /**
    * A declaration of which security mechanisms can be used across the API.
    * The list of values includes alternative Security Requirement Objects;
@@ -99,7 +99,7 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * to being empty or absent. To make security explicitly optional, an empty
    * security requirement (`{}`) can be included in the array.
    */
-  security?: SecurityRequirementObject[]
+  security?: SecurityRequirementObject[] | undefined
   /**
    * A list of tags used by the OpenAPI Description with additional metadata.
    * The order of the tags can be used to reflect on their order by the
@@ -107,11 +107,11 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * declared; undeclared tags MAY be organized randomly or based on the
    * tools' logic. Each tag name in the list MUST be unique.
    */
-  tags?: TagObject[]
+  tags?: TagObject[] | undefined
   /**
    * Additional external documentation.
    */
-  externalDocs?: ExternalDocumentationObject
+  externalDocs?: ExternalDocumentationObject | undefined
 }
 
 /**
@@ -133,16 +133,16 @@ export interface ServerObject extends SpecificationExtensions {
    * An optional string describing the host designated by the URL. CommonMark
    * syntax MAY be used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * An optional unique string to refer to the host designated by the URL.
    */
-  name?: string
+  name?: string | undefined
   /**
    * A map between a variable name and its value. The value is used for
    * substitution in the server's URL template.
    */
-  variables?: Record<string, ServerVariableObject>
+  variables?: Record<string, ServerVariableObject> | undefined
 }
 
 /**
@@ -161,49 +161,49 @@ export interface ComponentsObject extends SpecificationExtensions {
    * unioned with the Reference Object: `$ref` is a JSON Schema keyword of the
    * Schema Object itself.
    */
-  schemas?: Record<string, SchemaObject>
+  schemas?: Record<string, SchemaObject> | undefined
   /**
    * An object to hold reusable Response Objects.
    */
-  responses?: Record<string, ResponseObject | ReferenceObject>
+  responses?: Record<string, ResponseObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Parameter Objects.
    */
-  parameters?: Record<string, ParameterObject | ReferenceObject>
+  parameters?: Record<string, ParameterObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Example Objects.
    */
-  examples?: Record<string, ExampleObject | ReferenceObject>
+  examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Request Body Objects.
    */
-  requestBodies?: Record<string, RequestBodyObject | ReferenceObject>
+  requestBodies?: Record<string, RequestBodyObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Header Objects.
    */
-  headers?: Record<string, HeaderObject | ReferenceObject>
+  headers?: Record<string, HeaderObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Media Type Objects.
    */
-  mediaTypes?: Record<string, MediaTypeObject | ReferenceObject>
+  mediaTypes?: Record<string, MediaTypeObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Security Scheme Objects.
    */
-  securitySchemes?: Record<string, SecuritySchemeObject | ReferenceObject>
+  securitySchemes?: Record<string, SecuritySchemeObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Link Objects.
    */
-  links?: Record<string, LinkObject | ReferenceObject>
+  links?: Record<string, LinkObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Callback Objects.
    */
-  callbacks?: Record<string, CallbackObject | ReferenceObject>
+  callbacks?: Record<string, CallbackObject | ReferenceObject> | undefined
   /**
    * An object to hold reusable Path Item Objects. Note that the values are
    * not unioned with the Reference Object: the Path Item Object has its own
    * `$ref` field.
    */
-  pathItems?: Record<string, PathItemObject>
+  pathItems?: Record<string, PathItemObject> | undefined
 }
 
 /**
@@ -248,55 +248,55 @@ export interface PathItemObject extends SpecificationExtensions {
    * in future versions of this specification to bring it into closer
    * alignment with the behavior of the Reference Object.
    */
-  $ref?: string
+  $ref?: string | undefined
   /**
    * An optional string summary, intended to apply to all operations in this
    * path.
    */
-  summary?: string
+  summary?: string | undefined
   /**
    * An optional string description, intended to apply to all operations in
    * this path. CommonMark syntax MAY be used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * A definition of a GET operation on this path.
    */
-  get?: OperationObject
+  get?: OperationObject | undefined
   /**
    * A definition of a PUT operation on this path.
    */
-  put?: OperationObject
+  put?: OperationObject | undefined
   /**
    * A definition of a POST operation on this path.
    */
-  post?: OperationObject
+  post?: OperationObject | undefined
   /**
    * A definition of a DELETE operation on this path.
    */
-  delete?: OperationObject
+  delete?: OperationObject | undefined
   /**
    * A definition of an OPTIONS operation on this path.
    */
-  options?: OperationObject
+  options?: OperationObject | undefined
   /**
    * A definition of a HEAD operation on this path.
    */
-  head?: OperationObject
+  head?: OperationObject | undefined
   /**
    * A definition of a PATCH operation on this path.
    */
-  patch?: OperationObject
+  patch?: OperationObject | undefined
   /**
    * A definition of a TRACE operation on this path.
    */
-  trace?: OperationObject
+  trace?: OperationObject | undefined
   /**
    * A definition of a QUERY operation, as defined in the most recent IETF
    * draft of draft-ietf-httpbis-safe-method-w-body, or its RFC successor, on
    * this path.
    */
-  query?: OperationObject
+  query?: OperationObject | undefined
   /**
    * A map of additional operations on this path. The map key is the HTTP
    * method with the same capitalization that is to be sent in the request.
@@ -304,13 +304,13 @@ export interface PathItemObject extends SpecificationExtensions {
    * by the other fixed fields with Operation Object values (e.g. no `POST`
    * entry, as the `post` field is used for that method).
    */
-  additionalOperations?: Record<string, OperationObject>
+  additionalOperations?: Record<string, OperationObject> | undefined
   /**
    * An alternative `servers` array to service all operations in this path.
    * If a `servers` array is specified at the OpenAPI Object level, it will be
    * overridden by this value.
    */
-  servers?: ServerObject[]
+  servers?: ServerObject[] | undefined
   /**
    * A list of parameters that are applicable for all the operations described
    * under this path. These parameters can be overridden at the operation
@@ -319,7 +319,7 @@ export interface PathItemObject extends SpecificationExtensions {
    * location. The list can use the Reference Object to link to parameters
    * defined in the Components Object's `parameters`.
    */
-  parameters?: (ParameterObject | ReferenceObject)[]
+  parameters?: (ParameterObject | ReferenceObject)[] | undefined
 }
 
 /**
@@ -332,20 +332,20 @@ export interface OperationObject extends SpecificationExtensions {
    * A list of tags for API documentation control. Tags can be used for
    * logical grouping of operations by resources or any other qualifier.
    */
-  tags?: string[]
+  tags?: string[] | undefined
   /**
    * A short summary of what the operation does.
    */
-  summary?: string
+  summary?: string | undefined
   /**
    * A verbose explanation of the operation behavior. CommonMark syntax MAY be
    * used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Additional external documentation for this operation.
    */
-  externalDocs?: ExternalDocumentationObject
+  externalDocs?: ExternalDocumentationObject | undefined
   /**
    * Unique string used to identify the operation. The id MUST be unique among
    * all operations described in the API. The `operationId` value is
@@ -353,7 +353,7 @@ export interface OperationObject extends SpecificationExtensions {
    * identify an operation, therefore, it is RECOMMENDED to follow common
    * programming naming conventions.
    */
-  operationId?: string
+  operationId?: string | undefined
   /**
    * A list of parameters that are applicable for this operation. If a
    * parameter is already defined in the Path Item, the new definition will
@@ -362,7 +362,7 @@ export interface OperationObject extends SpecificationExtensions {
    * location. The list can use the Reference Object to link to parameters
    * defined in the Components Object's `parameters`.
    */
-  parameters?: (ParameterObject | ReferenceObject)[]
+  parameters?: (ParameterObject | ReferenceObject)[] | undefined
   /**
    * The request body applicable for this operation. The `requestBody` is
    * fully supported in HTTP methods where the HTTP 1.1 specification RFC9110
@@ -371,26 +371,26 @@ export interface OperationObject extends SpecificationExtensions {
    * `requestBody` is permitted but does not have well-defined semantics and
    * SHOULD be avoided if possible.
    */
-  requestBody?: RequestBodyObject | ReferenceObject
+  requestBody?: RequestBodyObject | ReferenceObject | undefined
   /**
    * The list of possible responses as they are returned from executing this
    * operation.
    */
-  responses?: ResponsesObject
+  responses?: ResponsesObject | undefined
   /**
    * A map of possible out-of band callbacks related to the parent operation.
    * The key is a unique identifier for the Callback Object. Each value in the
    * map is a Callback Object that describes a request that may be initiated
    * by the API provider and the expected responses.
    */
-  callbacks?: Record<string, CallbackObject | ReferenceObject>
+  callbacks?: Record<string, CallbackObject | ReferenceObject> | undefined
   /**
    * Declares this operation to be deprecated. Consumers SHOULD refrain from
    * usage of the declared operation.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * A declaration of which security mechanisms can be used for this
    * operation. Only one of the Security Requirement Objects needs to be
@@ -399,13 +399,13 @@ export interface OperationObject extends SpecificationExtensions {
    * overrides any declared top-level `security`. To remove a top-level
    * security declaration, an empty array can be used.
    */
-  security?: SecurityRequirementObject[]
+  security?: SecurityRequirementObject[] | undefined
   /**
    * An alternative `servers` array to service this operation. If a `servers`
    * array is specified at the Path Item Object or OpenAPI Object level, it
    * will be overridden by this value.
    */
-  servers?: ServerObject[]
+  servers?: ServerObject[] | undefined
 }
 
 /**
@@ -489,7 +489,7 @@ export interface ParameterObject extends SpecificationExtensions {
    * A brief description of the parameter. This could contain examples of use.
    * CommonMark syntax MAY be used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Determines whether this parameter is mandatory. If the parameter location
    * is `"path"`, this field is REQUIRED and its value MUST be `true`.
@@ -497,14 +497,14 @@ export interface ParameterObject extends SpecificationExtensions {
    *
    * @default false
    */
-  required?: boolean
+  required?: boolean | undefined
   /**
    * Specifies that a parameter is deprecated and SHOULD be transitioned out
    * of usage.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * If `true`, clients MAY pass a zero-length string value in place of
    * parameters that would otherwise be omitted entirely, which the server
@@ -517,7 +517,7 @@ export interface ParameterObject extends SpecificationExtensions {
    * @deprecated Use of this field is NOT RECOMMENDED, and it is likely to be
    * removed in a later revision.
    */
-  allowEmptyValue?: boolean
+  allowEmptyValue?: boolean | undefined
   /**
    * Describes how the parameter value will be serialized depending on the
    * type of the parameter value. Default values (based on value of `in`): for
@@ -525,7 +525,7 @@ export interface ParameterObject extends SpecificationExtensions {
    * `"simple"`; for `"cookie"` - `"form"` (for compatibility; `"cookie"`
    * SHOULD be used). This field MUST NOT be used with `in: "querystring"`.
    */
-  style?: ParameterStyle
+  style?: ParameterStyle | undefined
   /**
    * When true, parameter values of type `array` or `object` generate separate
    * parameters for each value of the array or key-value pair of the map. For
@@ -533,7 +533,7 @@ export interface ParameterObject extends SpecificationExtensions {
    * has no effect. When `style` is `"form"` or `"cookie"`, the default value
    * is `true`; for all other styles, the default value is `false`.
    */
-  explode?: boolean
+  explode?: boolean | undefined
   /**
    * When true, parameter values are serialized using reserved expansion, as
    * defined by RFC6570, which allows RFC3986's reserved character set, as
@@ -547,12 +547,12 @@ export interface ParameterObject extends SpecificationExtensions {
    *
    * @default false
    */
-  allowReserved?: boolean
+  allowReserved?: boolean | undefined
   /**
    * The schema defining the type used for the parameter. This field MUST NOT
    * be used with `in: "querystring"`.
    */
-  schema?: SchemaObject
+  schema?: SchemaObject | undefined
   /**
    * Example of the parameter's potential value. The `example` field is
    * mutually exclusive of the `examples` field.
@@ -563,14 +563,14 @@ export interface ParameterObject extends SpecificationExtensions {
    * a value in the correct format as specified in the parameter encoding. The
    * `examples` field is mutually exclusive of the `example` field.
    */
-  examples?: Record<string, ExampleObject | ReferenceObject>
+  examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
    * A map containing the representations for the parameter. The key is the
    * media type and the value describes it. The map MUST only contain one
    * entry. An `in: "querystring"` parameter is most often defined with the
    * `application/x-www-form-urlencoded` media type.
    */
-  content?: Record<string, MediaTypeObject | ReferenceObject>
+  content?: Record<string, MediaTypeObject | ReferenceObject> | undefined
 }
 
 /**
@@ -583,7 +583,7 @@ export interface RequestBodyObject extends SpecificationExtensions {
    * A brief description of the request body. This could contain examples of
    * use. CommonMark syntax MAY be used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * REQUIRED. The content of the request body. The key is a media type or
    * media type range and the value describes it. For requests that match
@@ -597,7 +597,7 @@ export interface RequestBodyObject extends SpecificationExtensions {
    *
    * @default false
    */
-  required?: boolean
+  required?: boolean | undefined
 }
 
 /**
@@ -620,12 +620,12 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * @see {@link https://spec.openapis.org/oas/3.2/schema/2025-09-17}
    * @see {@link https://github.com/OAI/OpenAPI-Specification/pull/4728}
    */
-  description?: string
+  description?: string | undefined
   /**
    * A schema describing the complete content of the request, response,
    * parameter, or header.
    */
-  schema?: SchemaObject
+  schema?: SchemaObject | undefined
   /**
    * A schema describing each item within a sequential media type. Unlike
    * `schema`, which would be applied to the complete content treated as an
@@ -634,7 +634,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * stream. Both `schema` and `itemSchema` MAY be used in the same Media Type
    * Object.
    */
-  itemSchema?: SchemaObject
+  itemSchema?: SchemaObject | undefined
   /**
    * Example of the media type. The example SHOULD match the specified schema
    * and be in the correct format as specified by the media type and its
@@ -648,7 +648,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * its encoding. The `examples` field is mutually exclusive of the `example`
    * field.
    */
-  examples?: Record<string, ExampleObject | ReferenceObject>
+  examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
    * A map between a property name and its encoding information, as defined
    * under Encoding By Name. The key, being the property name, MUST exist in
@@ -657,7 +657,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * type is `multipart` or `application/x-www-form-urlencoded`. This field
    * MUST NOT be present if `prefixEncoding` or `itemEncoding` are present.
    */
-  encoding?: Record<string, EncodingObject>
+  encoding?: Record<string, EncodingObject> | undefined
   /**
    * An array of positional encoding information, as defined under Encoding By
    * Position (analogous to `prefixItems`): each Encoding Object applies to
@@ -665,7 +665,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * field SHALL only apply when the media type is `multipart`. This field
    * MUST NOT be present if `encoding` is present.
    */
-  prefixEncoding?: EncodingObject[]
+  prefixEncoding?: EncodingObject[] | undefined
   /**
    * A single Encoding Object that provides encoding information for multiple
    * array items, as defined under Encoding By Position (analogous to
@@ -674,7 +674,7 @@ export interface MediaTypeObject extends SpecificationExtensions {
    * content. The `itemEncoding` field SHALL only apply when the media type is
    * `multipart`. This field MUST NOT be present if `encoding` is present.
    */
-  itemEncoding?: EncodingObject
+  itemEncoding?: EncodingObject | undefined
 }
 
 /**
@@ -705,29 +705,29 @@ export interface EncodingObject extends SpecificationExtensions {
    * is applied per array item, so this row only applies to array values
    * nested inside a top-level array).
    */
-  contentType?: string
+  contentType?: string | undefined
   /**
    * A map allowing additional information to be provided as headers.
    * `Content-Type` is described separately and SHALL be ignored in this
    * section. This field SHALL be ignored if the media type is not a
    * `multipart`.
    */
-  headers?: Record<string, HeaderObject | ReferenceObject>
+  headers?: Record<string, HeaderObject | ReferenceObject> | undefined
   /**
    * Applies nested Encoding Objects in the same manner as the Media Type
    * Object's `encoding` field.
    */
-  encoding?: Record<string, EncodingObject>
+  encoding?: Record<string, EncodingObject> | undefined
   /**
    * Applies nested Encoding Objects in the same manner as the Media Type
    * Object's `prefixEncoding` field.
    */
-  prefixEncoding?: EncodingObject[]
+  prefixEncoding?: EncodingObject[] | undefined
   /**
    * Applies nested Encoding Objects in the same manner as the Media Type
    * Object's `itemEncoding` field.
    */
-  itemEncoding?: EncodingObject
+  itemEncoding?: EncodingObject | undefined
   /**
    * Describes how a specific value will be serialized depending on its type.
    * See Parameter Object for details on the `style` field. The behavior
@@ -740,7 +740,7 @@ export interface EncodingObject extends SpecificationExtensions {
    * `multipart/form-data`. If a value is explicitly defined, then the value
    * of `contentType` (implicit or explicit) SHALL be ignored.
    */
-  style?: QueryParameterStyle
+  style?: QueryParameterStyle | undefined
   /**
    * When true, values of type `array` or `object` generate separate
    * parameters for each value of the array, or key-value-pair of the map. For
@@ -751,7 +751,7 @@ export interface EncodingObject extends SpecificationExtensions {
    * `multipart/form-data`. If a value is explicitly defined, then the value
    * of `contentType` (implicit or explicit) SHALL be ignored.
    */
-  explode?: boolean
+  explode?: boolean | undefined
   /**
    * When true, values are serialized using reserved expansion, as defined by
    * RFC6570, which allows RFC3986's reserved character set, as well as
@@ -766,7 +766,7 @@ export interface EncodingObject extends SpecificationExtensions {
    *
    * @default false
    */
-  allowReserved?: boolean
+  allowReserved?: boolean | undefined
 }
 
 /**
@@ -784,7 +784,7 @@ export interface ResponsesObject extends SpecificationExtensions {
    * The documentation of responses other than the ones declared for specific
    * HTTP response codes. Use this field to cover undeclared responses.
    */
-  default?: ResponseObject | ReferenceObject
+  default?: ResponseObject | ReferenceObject | undefined
   /**
    * Any HTTP status code can be used as the property name, but only one
    * property per code, to describe the expected response for that HTTP status
@@ -810,32 +810,32 @@ export interface ResponseObject extends SpecificationExtensions {
   /**
    * A short summary of the meaning of the response.
    */
-  summary?: string
+  summary?: string | undefined
   /**
    * A description of the response. CommonMark syntax MAY be used for rich
    * text representation. Note that unlike earlier versions, this field is no
    * longer REQUIRED.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Maps a header name to its definition. RFC9110 states header names are
    * case insensitive. If a response header is defined with the name
    * `"Content-Type"`, it SHALL be ignored.
    */
-  headers?: Record<string, HeaderObject | ReferenceObject>
+  headers?: Record<string, HeaderObject | ReferenceObject> | undefined
   /**
    * A map containing descriptions of potential response payloads. The key is
    * a media type or media type range and the value describes it. For
    * responses that match multiple keys, only the most specific key is
    * applicable, e.g. `"text/plain"` overrides `"text/*"`.
    */
-  content?: Record<string, MediaTypeObject | ReferenceObject>
+  content?: Record<string, MediaTypeObject | ReferenceObject> | undefined
   /**
    * A map of operations links that can be followed from the response. The key
    * of the map is a short name for the link, following the naming constraints
    * of the names for Component Objects (`^[a-zA-Z0-9\.\-_]+$`).
    */
-  links?: Record<string, LinkObject | ReferenceObject>
+  links?: Record<string, LinkObject | ReferenceObject> | undefined
 }
 
 /**
@@ -882,12 +882,12 @@ export interface ExampleObject extends SpecificationExtensions {
   /**
    * Short description for the example.
    */
-  summary?: string
+  summary?: string | undefined
   /**
    * Long description for the example. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * An example of the data structure that MUST be valid according to the
    * relevant Schema Object. If this field is present, `value` MUST be absent.
@@ -900,7 +900,7 @@ export interface ExampleObject extends SpecificationExtensions {
    * serialization format is JSON, as the data form is easier to work with. If
    * this field is present, `value` and `externalValue` MUST be absent.
    */
-  serializedValue?: string
+  serializedValue?: string | undefined
   /**
    * A URI that identifies the serialized example in a separate document,
    * which allows for values not easily or readably expressed as a Unicode
@@ -908,7 +908,7 @@ export interface ExampleObject extends SpecificationExtensions {
    * serialization of the given data. If this field is present,
    * `serializedValue` and `value` MUST be absent.
    */
-  externalValue?: string
+  externalValue?: string | undefined
   /**
    * Embedded literal example. The `value` field and `externalValue` field are
    * mutually exclusive. To represent examples of media types that cannot
@@ -939,13 +939,13 @@ export interface LinkObject extends SpecificationExtensions {
    * `operationRef` values MAY be used to locate an existing Operation Object
    * in the OpenAPI Description.
    */
-  operationRef?: string
+  operationRef?: string | undefined
   /**
    * The name of an existing, resolvable OAS operation, as defined with a
    * unique `operationId`. This field is mutually exclusive of the
    * `operationRef` field.
    */
-  operationId?: string
+  operationId?: string | undefined
   /**
    * A map representing parameters to pass to an operation as specified with
    * `operationId` or identified via `operationRef`. The key is the parameter
@@ -954,7 +954,7 @@ export interface LinkObject extends SpecificationExtensions {
    * constant or a runtime expression to be evaluated and passed to the linked
    * operation.
    */
-  parameters?: Record<string, unknown>
+  parameters?: Record<string, unknown> | undefined
   /**
    * A literal value or runtime expression to use as a request body when
    * calling the target operation.
@@ -964,11 +964,11 @@ export interface LinkObject extends SpecificationExtensions {
    * A description of the link. CommonMark syntax MAY be used for rich text
    * representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * A server object to be used by the target operation.
    */
-  server?: ServerObject
+  server?: ServerObject | undefined
 }
 
 /**
@@ -994,27 +994,27 @@ export interface HeaderObject extends SpecificationExtensions {
    * A brief description of the header. This could contain examples of use.
    * CommonMark syntax MAY be used for rich text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Determines whether this header is mandatory.
    *
    * @default false
    */
-  required?: boolean
+  required?: boolean | undefined
   /**
    * Specifies that the header is deprecated and SHOULD be transitioned out of
    * usage.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * Describes how the header value will be serialized. The default (and only
    * legal value for headers) is `"simple"`.
    *
    * @default "simple"
    */
-  style?: 'simple'
+  style?: 'simple' | undefined
   /**
    * When true, header values of type `array` or `object` generate a single
    * header whose value is a comma-separated list of the array items or
@@ -1023,11 +1023,11 @@ export interface HeaderObject extends SpecificationExtensions {
    *
    * @default false
    */
-  explode?: boolean
+  explode?: boolean | undefined
   /**
    * The schema defining the type used for the header.
    */
-  schema?: SchemaObject
+  schema?: SchemaObject | undefined
   /**
    * Example of the header's potential value. The `example` field is mutually
    * exclusive of the `examples` field.
@@ -1038,12 +1038,12 @@ export interface HeaderObject extends SpecificationExtensions {
    * value in the correct format as specified in the header encoding. The
    * `examples` field is mutually exclusive of the `example` field.
    */
-  examples?: Record<string, ExampleObject | ReferenceObject>
+  examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
    * A map containing the representations for the header. The key is the media
    * type and the value describes it. The map MUST only contain one entry.
    */
-  content?: Record<string, MediaTypeObject | ReferenceObject>
+  content?: Record<string, MediaTypeObject | ReferenceObject> | undefined
 }
 
 /**
@@ -1062,29 +1062,29 @@ export interface TagObject extends SpecificationExtensions {
   /**
    * A short summary of the tag, used for display purposes.
    */
-  summary?: string
+  summary?: string | undefined
   /**
    * A description for the tag. CommonMark syntax MAY be used for rich text
    * representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Additional external documentation for this tag.
    */
-  externalDocs?: ExternalDocumentationObject
+  externalDocs?: ExternalDocumentationObject | undefined
   /**
    * The `name` of a tag that this tag is nested under. The named tag MUST
    * exist in the API description, and circular references between parent and
    * child tags MUST NOT be used.
    */
-  parent?: string
+  parent?: string | undefined
   /**
    * A machine-readable string to categorize what sort of tag it is. Any
    * string value can be used; common uses are `nav` for Navigation, `badge`
    * for visible badges, and `audience` for APIs used by different groups. A
    * registry of the most commonly used values is available.
    */
-  kind?: string
+  kind?: string | undefined
 }
 
 /**
@@ -1119,12 +1119,12 @@ export interface SchemaObjectFields<T = unknown> {
    * additional values. The OpenAPI Object's `jsonSchemaDialect` field sets
    * the default; if it is also unset, the OAS dialect schema id MUST be used.
    */
-  $schema?: string
+  $schema?: string | undefined
   /**
    * A URI identifying the schema resource. The nearest parent `$id` serves as
    * the base URI for relative references within the schema.
    */
-  $id?: string
+  $id?: string | undefined
   /**
    * A URI reference to a schema to apply at this location. Unlike the
    * Reference Object, `$ref` here is a plain JSON Schema keyword: adjacent
@@ -1132,38 +1132,38 @@ export interface SchemaObjectFields<T = unknown> {
    * for serialization purposes (e.g. XML or sequential media types),
    * implementations MUST follow `$ref` and `allOf`.
    */
-  $ref?: string
+  $ref?: string | undefined
   /**
    * A plain-name fragment identifier for the enclosing schema, usable as a
    * `$ref` target.
    */
-  $anchor?: string
+  $anchor?: string | undefined
   /**
    * A URI reference that, together with `$dynamicAnchor`, MAY be used to
    * implement generic or template data structures: `$dynamicRef` resolves to
    * the first matching `$dynamicAnchor` in the dynamic scope from the schema
    * entry point. Implementations SHOULD support these keywords.
    */
-  $dynamicRef?: string
+  $dynamicRef?: string | undefined
   /**
    * A plain-name fragment identifier that is a candidate target for
    * `$dynamicRef` resolution.
    */
-  $dynamicAnchor?: string
+  $dynamicAnchor?: string | undefined
   /**
    * A map of vocabulary URIs to booleans declaring which vocabularies are
    * required (`true`) or optional (`false`) to process the schema. Only
    * meaningful in a meta-schema.
    */
-  $vocabulary?: Record<string, boolean>
+  $vocabulary?: Record<string, boolean> | undefined
   /**
    * Reusable subschema definitions, addressable via `$ref`.
    */
-  $defs?: Record<string, SchemaObject>
+  $defs?: Record<string, SchemaObject> | undefined
   /**
    * A comment for schema maintainers, carrying no validation semantics.
    */
-  $comment?: string
+  $comment?: string | undefined
 
   /**
    * An instance is valid against this keyword if it is valid against all
@@ -1171,87 +1171,87 @@ export interface SchemaObjectFields<T = unknown> {
    * `discriminator`, polymorphism. When inspecting schemas for serialization
    * purposes, implementations MUST follow `$ref` and `allOf`.
    */
-  allOf?: SchemaObject[]
+  allOf?: SchemaObject[] | undefined
   /**
    * An instance is valid against this keyword if it is valid against exactly
    * one subschema in this array.
    */
-  oneOf?: SchemaObject[]
+  oneOf?: SchemaObject[] | undefined
   /**
    * An instance is valid against this keyword if it is valid against at least
    * one subschema in this array.
    */
-  anyOf?: SchemaObject[]
+  anyOf?: SchemaObject[] | undefined
   /**
    * An instance is valid against this keyword if it is not valid against the
    * given subschema.
    */
-  not?: SchemaObject
+  not?: SchemaObject | undefined
   /**
    * If the instance validates against this subschema, it must also validate
    * against `then` (if present); otherwise against `else` (if present).
    */
-  if?: SchemaObject
+  if?: SchemaObject | undefined
   /**
    * Applied when the instance validates against `if`.
    */
-  then?: SchemaObject
+  then?: SchemaObject | undefined
   /**
    * Applied when the instance fails validation against `if`.
    */
-  else?: SchemaObject
+  else?: SchemaObject | undefined
   /**
    * A map of property names to subschemas that the whole instance must
    * validate against when the named property is present.
    */
-  dependentSchemas?: Record<string, SchemaObject>
+  dependentSchemas?: Record<string, SchemaObject> | undefined
   /**
    * An array of subschemas applied positionally to the first items of an
    * array instance (tuple validation). Also used to control XML node ordering
    * and to correlate with `prefixEncoding` for positional multipart encoding.
    */
-  prefixItems?: SchemaObject[]
+  prefixItems?: SchemaObject[] | undefined
   /**
    * A subschema applied to all array items not covered by `prefixItems`.
    */
-  items?: SchemaObject
+  items?: SchemaObject | undefined
   /**
    * An array instance is valid if at least one item (subject to
    * `minContains`/`maxContains`) validates against this subschema.
    */
-  contains?: SchemaObject
+  contains?: SchemaObject | undefined
   /**
    * A map of property names to subschemas validating the corresponding
    * property values of an object instance.
    */
-  properties?: Record<string, SchemaObject>
+  properties?: Record<string, SchemaObject> | undefined
   /**
    * A map of ECMA-262 regular expressions to subschemas validating the values
    * of all properties whose names match each expression.
    */
-  patternProperties?: Record<string, SchemaObject>
+  patternProperties?: Record<string, SchemaObject> | undefined
   /**
    * A subschema applied to the values of all object properties not covered by
    * `properties` or `patternProperties`.
    */
-  additionalProperties?: SchemaObject
+  additionalProperties?: SchemaObject | undefined
   /**
    * A subschema every property name of an object instance must validate
    * against.
    */
-  propertyNames?: SchemaObject
+  propertyNames?: SchemaObject | undefined
 
   /**
    * A subschema applied to array items not successfully evaluated by any
    * `prefixItems`, `items`, or `contains` in this schema or its subschemas.
    */
-  unevaluatedItems?: SchemaObject
+  unevaluatedItems?: SchemaObject | undefined
   /**
    * A subschema applied to object properties not successfully evaluated by
    * any `properties`, `patternProperties`, or `additionalProperties` in this
    * schema or its subschemas.
    */
-  unevaluatedProperties?: SchemaObject
+  unevaluatedProperties?: SchemaObject | undefined
 
   /**
    * The data type of the schema: a string or an array of unique strings.
@@ -1261,7 +1261,7 @@ export interface SchemaObjectFields<T = unknown> {
    * types during schema inspection: raw binary content omits `type`, while
    * encoded binary uses `type: "string"` with `contentEncoding`.
    */
-  type?: SchemaObjectType | SchemaObjectType[]
+  type?: SchemaObjectType | SchemaObjectType[] | undefined
   /**
    * The instance is valid only if its value equals one of the elements in
    * this array. `enum` cannot carry per-value annotations; implementations
@@ -1269,32 +1269,32 @@ export interface SchemaObjectFields<T = unknown> {
    * plus annotations (e.g. `title`, `description`) as an annotated
    * enumeration.
    */
-  enum?: T[]
+  enum?: T[] | undefined
   /**
    * The instance is valid only if its value equals this value.
    */
-  const?: T
+  const?: T | undefined
   /**
    * A numeric instance is valid only if division by this keyword's value
    * results in an integer. MUST be a number strictly greater than 0.
    */
-  multipleOf?: number
+  multipleOf?: number | undefined
   /**
    * An inclusive upper limit for a numeric instance.
    */
-  maximum?: number
+  maximum?: number | undefined
   /**
    * An exclusive upper limit for a numeric instance.
    */
-  exclusiveMaximum?: number
+  exclusiveMaximum?: number | undefined
   /**
    * An inclusive lower limit for a numeric instance.
    */
-  minimum?: number
+  minimum?: number | undefined
   /**
    * An exclusive lower limit for a numeric instance.
    */
-  exclusiveMinimum?: number
+  exclusiveMinimum?: number | undefined
   /**
    * The maximum length of a string instance. MUST be a non-negative integer.
    * MAY be used to set an expected upper bound on the length of a streaming
@@ -1302,92 +1302,92 @@ export interface SchemaObjectFields<T = unknown> {
    * number of octets); for that use it MAY be implemented outside of regular
    * JSON Schema evaluation.
    */
-  maxLength?: number
+  maxLength?: number | undefined
   /**
    * The minimum length of a string instance. MUST be a non-negative integer.
    *
    * @default 0
    */
-  minLength?: number
+  minLength?: number | undefined
   /**
    * A string instance is valid if the ECMA-262 regular expression matches it.
    */
-  pattern?: string
+  pattern?: string | undefined
   /**
    * The maximum number of items in an array instance. MUST be a non-negative
    * integer.
    */
-  maxItems?: number
+  maxItems?: number | undefined
   /**
    * The minimum number of items in an array instance. MUST be a non-negative
    * integer.
    *
    * @default 0
    */
-  minItems?: number
+  minItems?: number | undefined
   /**
    * If `true`, all items in an array instance must be unique.
    *
    * @default false
    */
-  uniqueItems?: boolean
+  uniqueItems?: boolean | undefined
   /**
    * The maximum number of items matching `contains`. MUST be a non-negative
    * integer.
    */
-  maxContains?: number
+  maxContains?: number | undefined
   /**
    * The minimum number of items matching `contains`. MUST be a non-negative
    * integer.
    *
    * @default 1
    */
-  minContains?: number
+  minContains?: number | undefined
   /**
    * The maximum number of properties of an object instance. MUST be a
    * non-negative integer.
    */
-  maxProperties?: number
+  maxProperties?: number | undefined
   /**
    * The minimum number of properties of an object instance. MUST be a
    * non-negative integer.
    *
    * @default 0
    */
-  minProperties?: number
+  minProperties?: number | undefined
   /**
    * Property names that must be present in an object instance. Elements MUST
    * be unique.
    */
-  required?: string[]
+  required?: string[] | undefined
   /**
    * A map of property names to arrays of property names that must also be
    * present when the key property is present.
    */
-  dependentRequired?: Record<string, string[]>
+  dependentRequired?: Record<string, string[]> | undefined
 
   /**
    * A short title for the schema.
    */
-  title?: string
+  title?: string | undefined
   /**
    * A description of the schema. CommonMark syntax MAY be used for rich text
    * representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * A default value associated with the schema, as an annotation for
    * documenting the receiver's behavior; it is not inserted into the data
    * (contrast with the Server Variable Object's `default`).
    */
-  default?: T
+  default?: T | undefined
   /**
    * Indicates that applications SHOULD refrain from using the described
    * value(s).
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * Indicates the value is managed by the owning authority: it MAY be sent in
    * a response but SHOULD NOT be sent in a request. Per JSON Schema
@@ -1396,20 +1396,20 @@ export interface SchemaObjectFields<T = unknown> {
    *
    * @default false
    */
-  readOnly?: boolean
+  readOnly?: boolean | undefined
   /**
    * Indicates the value may be sent in a request but SHOULD NOT be included
    * in a response.
    *
    * @default false
    */
-  writeOnly?: boolean
+  writeOnly?: boolean | undefined
   /**
    * An array of example values associated with the schema. This is the
    * preferred, JSON-Schema-native way to include examples in a Schema Object,
    * replacing the OAS-specific singular `example`.
    */
-  examples?: T[]
+  examples?: T[] | undefined
 
   /**
    * The format of the data type. While relying on JSON Schema's defined
@@ -1420,7 +1420,7 @@ export interface SchemaObjectFields<T = unknown> {
    * recognize a format MAY default back to `type` alone. Support for any
    * format registered in the OpenAPI Format Registry is strictly OPTIONAL.
    */
-  format?: string
+  format?: string | undefined
 
   /**
    * The encoding (`base64`, `base64url`, or another encoding) used to
@@ -1429,7 +1429,7 @@ export interface SchemaObjectFields<T = unknown> {
    * is equivalent to requiring a `Content-Transfer-Encoding` header. Treated
    * as an annotation rather than validated directly.
    */
-  contentEncoding?: string
+  contentEncoding?: string | undefined
   /**
    * The media type of the content of a string instance (or of raw binary
    * data). Redundant if the media type is already set as the Media Type
@@ -1437,13 +1437,13 @@ export interface SchemaObjectFields<T = unknown> {
    * ignored if it contradicts them. Treated as an annotation rather than
    * validated directly.
    */
-  contentMediaType?: string
+  contentMediaType?: string | undefined
   /**
    * A subschema describing the structure of the string's decoded content
    * (e.g. JSON in a `text/event-stream` `data` field). Treated as an
    * annotation rather than validated directly.
    */
-  contentSchema?: SchemaObject
+  contentSchema?: SchemaObject | undefined
 
   /**
    * Provides a hint about which of a set of schemas a payload is expected to
@@ -1453,17 +1453,17 @@ export interface SchemaObjectFields<T = unknown> {
    * outcome. When the discriminating property is optional, the Discriminator
    * Object MUST include a `defaultMapping` field.
    */
-  discriminator?: DiscriminatorObject
+  discriminator?: DiscriminatorObject | undefined
   /**
    * Adds additional metadata to describe the XML representation of this
    * schema. Note that unlike earlier versions, OpenAPI 3.2 does not restrict
    * `xml` to property schemas.
    */
-  xml?: XMLObject
+  xml?: XMLObject | undefined
   /**
    * Additional external documentation for this schema.
    */
-  externalDocs?: ExternalDocumentationObject
+  externalDocs?: ExternalDocumentationObject | undefined
   /**
    * A free-form field to include an example of an instance for this schema.
    * To represent examples that cannot be naturally represented in JSON or
@@ -1474,7 +1474,7 @@ export interface SchemaObjectFields<T = unknown> {
    * Schema `examples` keyword. Use of `example` is discouraged, and later
    * versions of this specification may remove it.
    */
-  example?: T
+  example?: T | undefined
 }
 
 /**
@@ -1529,7 +1529,7 @@ export interface DiscriminatorObject extends SpecificationExtensions {
    * with the `"."` path segment (e.g. `"./foo"`). Mapping keys MUST be string
    * values.
    */
-  mapping?: Record<string, string>
+  mapping?: Record<string, string> | undefined
   /**
    * The schema name or URI reference to a schema that is expected to validate
    * the structure of the model when the discriminating property is not
@@ -1537,7 +1537,7 @@ export interface DiscriminatorObject extends SpecificationExtensions {
    * explicit or implicit mapping. REQUIRED when the discriminating property
    * is defined as optional.
    */
-  defaultMapping?: string
+  defaultMapping?: string | undefined
 }
 
 /**
@@ -1572,7 +1572,7 @@ export interface XMLObject extends SpecificationExtensions {
    * an explicit `nodeType: "element"` on an array schema to produce a
    * wrapping element.
    */
-  nodeType?: XMLNodeType
+  nodeType?: XMLNodeType | undefined
   /**
    * Sets the name of the element/attribute corresponding to the schema,
    * replacing the inferred name (a component schema's name, or the parent
@@ -1581,16 +1581,16 @@ export interface XMLObject extends SpecificationExtensions {
    * field SHALL be ignored if `nodeType` is `"text"`, `"cdata"`, or
    * `"none"`.
    */
-  name?: string
+  name?: string | undefined
   /**
    * The IRI (RFC3987) of the namespace definition. Value MUST be in the form
    * of a non-relative IRI.
    */
-  namespace?: string
+  namespace?: string | undefined
   /**
    * The prefix to be used for the name.
    */
-  prefix?: string
+  prefix?: string | undefined
   /**
    * Declares whether the property definition translates to an attribute
    * instead of an element. This field MUST NOT be present if `nodeType` is
@@ -1599,7 +1599,7 @@ export interface XMLObject extends SpecificationExtensions {
    * @default false
    * @deprecated Use `nodeType: "attribute"` instead of `attribute: true`.
    */
-  attribute?: boolean
+  attribute?: boolean | undefined
   /**
    * MAY be used only for an array definition. Signifies whether the array is
    * wrapped (e.g. `<books><book/><book/></books>`) or unwrapped
@@ -1610,7 +1610,7 @@ export interface XMLObject extends SpecificationExtensions {
    * @default false
    * @deprecated Use `nodeType: "element"` instead of `wrapped: true`.
    */
-  wrapped?: boolean
+  wrapped?: boolean | undefined
 }
 
 /**
@@ -1628,14 +1628,14 @@ export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
    * A description for security scheme. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * REQUIRED. The name of the header, query or cookie parameter to be used.
    */
@@ -1662,14 +1662,14 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
    * A description for security scheme. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * REQUIRED. The name of the HTTP Authentication scheme to be used in the
    * Authorization header as defined in RFC9110. The values used SHOULD be
@@ -1683,7 +1683,7 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
    * information is primarily for documentation purposes. Applies to `http`
    * schemes with a `"bearer"` scheme value.
    */
-  bearerFormat?: string
+  bearerFormat?: string | undefined
 }
 
 /**
@@ -1701,14 +1701,14 @@ export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
    * A description for security scheme. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
 }
 
 /**
@@ -1728,14 +1728,14 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
    * A description for security scheme. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * REQUIRED. An object containing configuration information for the flow
    * types supported.
@@ -1745,7 +1745,7 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
    * URL to the OAuth2 authorization server metadata (RFC8414). TLS is
    * required.
    */
-  oauth2MetadataUrl?: string
+  oauth2MetadataUrl?: string | undefined
 }
 
 /**
@@ -1763,14 +1763,14 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
    * A description for security scheme. CommonMark syntax MAY be used for rich
    * text representation.
    */
-  description?: string
+  description?: string | undefined
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
    *
    * @default false
    */
-  deprecated?: boolean
+  deprecated?: boolean | undefined
   /**
    * REQUIRED. Well-known URL to discover the OpenID Connect Discovery
    * provider metadata.
@@ -1805,25 +1805,25 @@ export interface OAuthFlowsObject extends SpecificationExtensions {
   /**
    * Configuration for the OAuth Implicit flow.
    */
-  implicit?: ImplicitOAuthFlowObject
+  implicit?: ImplicitOAuthFlowObject | undefined
   /**
    * Configuration for the OAuth Resource Owner Password flow.
    */
-  password?: PasswordOAuthFlowObject
+  password?: PasswordOAuthFlowObject | undefined
   /**
    * Configuration for the OAuth Client Credentials flow. Previously called
    * `application` in OpenAPI 2.0.
    */
-  clientCredentials?: ClientCredentialsOAuthFlowObject
+  clientCredentials?: ClientCredentialsOAuthFlowObject | undefined
   /**
    * Configuration for the OAuth Authorization Code flow. Previously called
    * `accessCode` in OpenAPI 2.0.
    */
-  authorizationCode?: AuthorizationCodeOAuthFlowObject
+  authorizationCode?: AuthorizationCodeOAuthFlowObject | undefined
   /**
    * Configuration for the OAuth Device Authorization flow.
    */
-  deviceAuthorization?: DeviceAuthorizationOAuthFlowObject
+  deviceAuthorization?: DeviceAuthorizationOAuthFlowObject | undefined
 }
 
 /**
