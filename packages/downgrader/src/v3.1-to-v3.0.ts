@@ -144,9 +144,9 @@ const convertReference = refOr(clone)
 
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
-  // A schema would reject the properties that `patternProperties` allowed.
+  // It would reject the properties that `patternProperties` allowed.
   additionalProperties: (item, ctx, schema) => {
-    if (schema.patternProperties !== undefined && item !== true) {
+    if (schema.patternProperties !== undefined) {
       return DROP
     }
     return typeof item === 'boolean' ? item : convertSchema(item, ctx)
@@ -647,6 +647,12 @@ function finishSchema(
   }
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
+  }
+  // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
+  // dropped, as it would reject the properties `patternProperties` allowed.
+  // Code generators read a missing one as allowing no other properties.
+  if (schema.patternProperties !== undefined) {
+    out.additionalProperties = true
   }
   const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
