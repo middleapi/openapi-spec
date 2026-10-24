@@ -500,6 +500,7 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'string', enum: ['a', 'b'] },
         { type: 'object', allOf: [{ required: ['a'] }] },
         { type: 'integer', not: { const: 0 } },
+        { type: 'string', oneOf: [{ minLength: 1 }, { maxLength: 0 }] },
       ]
       for (const branch of typed) {
         expect(downgradeSchemaV31ToV30({ anyOf: [branch, { type: 'null' }] })).toEqual({
@@ -536,6 +537,12 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
         }),
       ).toEqual({ anyOf: [{ type: 'string' }, onlyNull, onlyNull] })
+      // A null branch with more than its type is not only null.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'object' }, { type: 'null', description: 'd' }],
+        }),
+      ).toEqual({ anyOf: [{ type: 'object' }, { ...onlyNull, description: 'd' }] })
     })
 
     it('makes an anyOf of a $ref and null a oneOf when the target rejects null', () => {
@@ -552,7 +559,13 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ type: 'object' })).toEqual({
         oneOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
+      expect(pet({ type: ['object', 'string'] })).toEqual({
+        oneOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
       expect(pet({ type: ['object', 'null'] })).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
+      expect(pet({ type: 'null' })).toEqual({
         anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
       expect(pet({ type: 'object', nullable: true } as OpenAPIV3_1.SchemaObject)).toEqual({
