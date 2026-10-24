@@ -1055,13 +1055,27 @@ describe('downgradeSchemaV31ToV30', () => {
       properties: { a: {} },
       additionalProperties: false,
     })
-    // Beside other keywords that name properties, it is removed.
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], description: undefined } }),
+    ).toEqual({ properties: { a: {} }, additionalProperties: false })
+    // Beside other keywords that name properties, or with more than an enum, it is removed.
     expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, properties: { a: value } }),
     ).toEqual({ properties: { a: value } })
     expect(
+      downgradeSchemaV31ToV30({
+        propertyNames: { enum: ['a'] },
+        patternProperties: { '^a$': value },
+      }),
+    ).toEqual({})
+    expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, unevaluatedProperties: false }),
     ).toEqual({ additionalProperties: false })
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, additionalProperties: false }),
+    ).toEqual({ additionalProperties: false })
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: 2 } })).toEqual({})
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], type: 'number' } })).toEqual({})
     // Converted exactly, it keeps an enclosing oneOf.
     expect(
       downgradeSchemaV31ToV30({
