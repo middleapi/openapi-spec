@@ -1411,13 +1411,15 @@ describe('unusual input', () => {
   it('keeps own __proto__ keys as keys', () => {
     const out = downgradeSchemaV31ToV30(
       JSON.parse(
-        '{"type":"object","properties":{"__proto__":{"type":["string","null"]}},"example":{"__proto__":1}}',
+        '{"type":"object","properties":{"__proto__":{"type":["string","null"]},"1":{}},"example":{"__proto__":1}}',
       ),
     ) as Record<string, any>
     expect(Object.getOwnPropertyDescriptor(out.properties, '__proto__')?.value).toEqual({
       type: 'string',
       nullable: true,
     })
+    expect(Object.keys(out.properties)).toEqual(['1', '__proto__'])
+    expect(Object.getPrototypeOf(out.properties)).toBe(Object.prototype)
     expect(Object.getOwnPropertyDescriptor(out.example, '__proto__')?.value).toBe(1)
     expect(Object.getPrototypeOf(out.example)).toBe(Object.prototype)
   })
