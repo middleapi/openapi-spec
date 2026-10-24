@@ -440,14 +440,11 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
       out.nullable = true
     }
   } else if (rest.length > 1) {
-    addAnyOf(
-      out,
-      rest.map((item) => ({
-        type: item,
-        ...(item === 'array' && { items: out.items ?? {} }),
-        ...(nullable && { nullable: true }),
-      })),
-    )
+    // Code generators ignore `nullable` inside an `anyOf` branch, so null gets its own.
+    addAnyOf(out, [
+      ...rest.map((item) => ({ type: item, ...(item === 'array' && { items: out.items ?? {} }) })),
+      ...(nullable ? [onlyNull()] : []),
+    ])
     delete out.items
   } else if (nullable) {
     // 3.0 has no null type, so only null may match, and an `enum` without it matches nothing.
@@ -457,6 +454,12 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
       out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
     }
   }
+}
+
+// Only null matches it. 3.0 admits null only through `nullable`, which
+// needs a `type` beside it, and code generators drop a bare `enum: [null]`.
+function onlyNull(): Record<string, unknown> {
+  return { type: 'string', nullable: true, enum: [null] }
 }
 
 function isOnlyNull(values: unknown): boolean {
@@ -538,14 +541,10 @@ function finishSchema(
     out.nullable = true
     loose = true
   }
-  // Only null matches it. 3.0 admits null only through `nullable`, which
-  // needs a `type` beside it, and code generators drop a bare `enum: [null]`.
-  // `enum` is set again to follow them.
+  // Only null matches it. `enum` is set again to follow `type` and `nullable`.
   if (out.type === undefined && isOnlyNull(out.enum)) {
     delete out.enum
-    out.type = 'string'
-    out.nullable = true
-    out.enum = [null]
+    Object.assign(out, onlyNull())
   }
   // Code generators drop or leave untyped an `enum` with no `type`, as a
   // `const` becomes, so it gets the type of its value.

@@ -431,8 +431,9 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({
         maxLength: 3,
         anyOf: [
-          { type: 'array', items: { type: 'number' }, nullable: true },
-          { type: 'string', nullable: true },
+          { type: 'array', items: { type: 'number' } },
+          { type: 'string' },
+          { type: 'string', nullable: true, enum: [null] },
         ],
       })
     })
