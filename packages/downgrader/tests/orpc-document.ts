@@ -787,6 +787,19 @@ export const doc: OpenAPIV3_2.OpenAPIObject = {
                     contentEncoding: 'binary',
                     contentMediaType: 'image/png',
                   },
+                  thumbnail: {
+                    type: 'string',
+                    format: 'binary',
+                    contentEncoding: 'binary',
+                    anyOf: [
+                      {
+                        contentMediaType: 'image/png',
+                      },
+                      {
+                        contentMediaType: 'image/jpeg',
+                      },
+                    ],
+                  },
                   caption: {
                     type: 'string',
                   },

@@ -58,10 +58,16 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
   expect(upload).toMatchObject({
     content: {
       'multipart/form-data': {
-        schema: { properties: { image: { type: 'string', format: 'binary' } } },
+        schema: {
+          properties: {
+            image: { type: 'string', format: 'binary' },
+            thumbnail: { type: 'string', format: 'binary' },
+          },
+        },
       },
     },
   })
+  expect(upload).not.toHaveProperty('content.multipart/form-data.schema.properties.thumbnail.anyOf')
   expect(v30.paths['/planets/events']?.get?.responses['200']).toMatchObject({
     content: {
       'text/event-stream': {
