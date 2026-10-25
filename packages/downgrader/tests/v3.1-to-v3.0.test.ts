@@ -1174,6 +1174,29 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
   })
 
+  it('replaces a $ref into the value schema of a record keyed by an enum with its target', () => {
+    // zod-to-json-schema points a reused schema at its first use.
+    const value = { type: 'number' } as const
+    expect(
+      downgradeSchemaV31ToV30({
+        properties: {
+          a: { propertyNames: { enum: ['x'] }, additionalProperties: value },
+          b: { $ref: '#/properties/a/additionalProperties' },
+        },
+      }),
+    ).toEqual({
+      properties: { a: { properties: { x: value }, additionalProperties: false }, b: value },
+    })
+    // A record keyed by any string keeps its additionalProperties, and so the $ref.
+    const map = {
+      properties: {
+        a: { additionalProperties: value },
+        b: { $ref: '#/properties/a/additionalProperties' },
+      },
+    } as const
+    expect(downgradeSchemaV31ToV30(map)).toEqual(map)
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(

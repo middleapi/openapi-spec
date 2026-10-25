@@ -254,15 +254,31 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: DROP,
 })
 
-// A `$ref` into a removed part, `$defs`, or `definitions` is replaced by its
-// target, unless it already dangles.
+// A `$ref` into a removed part, `$defs`, or `definitions`, or into the
+// `additionalProperties` of a record keyed by an enum, which becomes `false`,
+// is replaced by its target, unless it already dangles.
 function isInlined(ref: string, ctx: Context): boolean {
   return (
     (ref.includes('/$defs/') ||
       ref.includes('/definitions/') ||
-      REMOVED_PARTS.some((prefix) => ref.startsWith(prefix))) &&
+      REMOVED_PARTS.some((prefix) => ref.startsWith(prefix)) ||
+      isIntoNamedValue(ref, ctx)) &&
     resolvePointer(ref, ctx) !== undefined
   )
+}
+
+function isIntoNamedValue(ref: string, ctx: Context): boolean {
+  for (
+    let at = ref.indexOf('/additionalProperties');
+    at !== -1;
+    at = ref.indexOf('/additionalProperties', at + 1)
+  ) {
+    const holder = resolvePointer(ref.slice(0, at), ctx)
+    if (isRecord(holder) && enumNames(holder, ctx) !== undefined) {
+      return true
+    }
+  }
+  return false
 }
 
 /** A 3.0 Reference Object holds only `$ref`. */
