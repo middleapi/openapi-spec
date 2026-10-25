@@ -827,6 +827,81 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ const: new Date(0) })).toEqual({ enum: [new Date(0)] })
   })
 
+  it('types a union of consts of one type, as Zod writes a union of literals and OpenSearch a documented enum', () => {
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [{ type: 'string', const: 'a' }, { const: 'b' }] }),
+    ).toEqual({
+      anyOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'string', enum: ['b'] },
+      ],
+      type: 'string',
+    })
+    // Zod nests a union for each `.or()`.
+    const ab: OpenAPIV3_1.SchemaObject = { anyOf: [{ const: 'a' }, { const: 'b' }] }
+    expect(downgradeSchemaV31ToV30({ anyOf: [ab, { const: 'c' }] })).toEqual({
+      anyOf: [
+        {
+          anyOf: [
+            { type: 'string', enum: ['a'] },
+            { type: 'string', enum: ['b'] },
+          ],
+          type: 'string',
+        },
+        { type: 'string', enum: ['c'] },
+      ],
+      type: 'string',
+    })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string', anyOf: [{ minLength: 1 }, { pattern: 'a' }] }, { const: 'c' }],
+      }),
+    ).not.toHaveProperty('type')
+    expect(
+      downgradeSchemaV31ToV30({
+        oneOf: [
+          { type: 'integer', enum: [1, 2], description: 'A' },
+          { type: 'integer', const: 3 },
+        ],
+      }),
+    ).toEqual({
+      oneOf: [
+        { type: 'integer', enum: [1, 2], description: 'A' },
+        { type: 'integer', enum: [3] },
+      ],
+      type: 'integer',
+    })
+    // Null matches a branch that admits it, which a `type` beside it would reject.
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ const: 'a' }, { type: ['string', 'null'], enum: ['b', null] }],
+      }),
+    ).toEqual({
+      anyOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'string', enum: ['b', null], nullable: true },
+      ],
+    })
+    const unions: OpenAPIV3_1.SchemaObject[][] = [
+      [{ const: 'a' }],
+      [{ const: 'a' }, { const: 1 }],
+      [{ const: 'a' }, { type: 'string' }],
+      [{ const: 'a' }, {}],
+    ]
+    for (const anyOf of unions) {
+      expect(downgradeSchemaV31ToV30({ anyOf })).not.toHaveProperty('type')
+    }
+    expect(
+      downgradeSchemaV31ToV30({ type: 'number', anyOf: [{ const: 1 }, { const: 2 }] }),
+    ).toEqual({
+      type: 'number',
+      anyOf: [
+        { type: 'integer', enum: [1] },
+        { type: 'integer', enum: [2] },
+      ],
+    })
+  })
+
   it.each<[OpenAPIV3_1.SchemaObject, OpenAPIV3_0.SchemaObject]>([
     [
       { exclusiveMinimum: 0, exclusiveMaximum: 10 },
