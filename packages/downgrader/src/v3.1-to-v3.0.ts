@@ -596,6 +596,14 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   if (others.length !== 1 || !isRecord(other)) {
     return
   }
+  // A branch that accepts every value, as Zod writes for a nullable unknown and
+  // Pydantic for `Optional[Any]`, makes the `anyOf` accept every value too.
+  // Code generators read the pair as a union with a string, or as a type they
+  // never define.
+  if (key === 'anyOf' && acceptsAll(other)) {
+    delete out.anyOf
+    return
+  }
   if (
     typeof other.type === 'string' &&
     !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(other, name)) &&
