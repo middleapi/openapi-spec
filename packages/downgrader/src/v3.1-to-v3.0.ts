@@ -360,7 +360,14 @@ function convertTuple(
     }
   }
   const [first, ...rest] = variants.values()
-  out.items = rest.length === 0 ? first : { anyOf: [first, ...rest] }
+  if (rest.length === 0) {
+    out.items = first
+  } else {
+    // Merged like any other `anyOf` once the whole input is converted.
+    const union = { anyOf: [first, ...rest] }
+    nullableUnions.push([union, prefixItems, 'anyOf'])
+    out.items = union
+  }
   return closed && rest.length === 0 && !isLoose(first)
 }
 
@@ -777,10 +784,12 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
 const SCALAR_TYPES = new Set(['boolean', 'integer', 'number', 'string'])
 
 // Zod writes a union of scalars as a `type` list, which becomes an `anyOf`,
-// and ArkType, Valibot and Pydantic as an `anyOf` of them. No value has two of
-// these types but an integer, which is a number too, so a `oneOf` means the
-// same, which NSwag reads as the first type and the OpenAPI Generator
-// TypeScript client as a union, but the `anyOf` as an empty class. NSwag
+// ArkType, Valibot and Pydantic as an `anyOf` of them, and Effect a number as
+// an `anyOf` of it and the strings it writes for NaN and the infinities. No
+// value has two of these types but an integer, which is a number too, so a
+// `oneOf` of branches of different types, which only a null branch lets null
+// match, means the same. NSwag reads it as the first branch and the OpenAPI
+// Generator TypeScript client as a union, but the `anyOf` as an empty class. NSwag
 // reads an `enum` beside the `anyOf` only, and gives a property a type it
 // never defines when an `allOf` holds a `$ref` to the `oneOf`, as a `$ref`
 // with siblings becomes, so a schema a `$ref` points to keeps it.
@@ -798,7 +807,7 @@ function scalarOneOf(out: Record<string, unknown>): void {
       isRecord(branch) &&
       SCALAR_TYPES.has(branch.type as string) &&
       !types.has(branch.type) &&
-      Object.keys(branch).length === 1
+      branch.nullable !== true
     ) {
       types.add(branch.type)
     } else {

@@ -502,15 +502,32 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'number' }, { type: 'string' }] })).toEqual({
         oneOf: [{ type: 'number' }, { type: 'string' }],
       })
+      // As Effect writes a number.
+      const effectNumber: OpenAPIV3_1.SchemaObject[] = [
+        { type: 'number' },
+        { type: 'string', enum: ['Infinity', '-Infinity', 'NaN'] },
+      ]
+      expect(downgradeSchemaV31ToV30({ anyOf: effectNumber })).toEqual({ oneOf: effectNumber })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }, { type: 'boolean' }],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', minLength: 1 },
+          { type: 'string', nullable: true, enum: [null] },
+          { type: 'boolean' },
+        ],
+      })
       // An integer is a number too, null twice matches two branches, NSwag
       // reads an `enum` only beside an `anyOf`, and a `oneOf` with a type twice
       // would match no value of it.
       const kept: OpenAPIV3_1.SchemaObject[] = [
         { type: ['integer', 'number'] },
         { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }, { type: 'null' }] },
+        { anyOf: [{ type: ['string', 'null'] }, { type: ['number', 'null'] }] },
         { type: ['string', 'integer'], enum: ['a', 1] },
         { anyOf: [{ type: 'string' }, { type: 'string' }] },
-        { anyOf: [{ type: 'string', minLength: 1 }, { type: 'number' }] },
         { anyOf: [{ type: 'string' }, { type: 'object' }] },
       ]
       for (const schema of kept) {
@@ -1161,14 +1178,14 @@ describe('downgradeSchemaV31ToV30', () => {
         minItems: 2,
         maxItems: 2,
       }),
-    ).toEqual({ type: 'array', items: { anyOf: prefixItems }, minItems: 2, maxItems: 2 })
+    ).toEqual({ type: 'array', items: { oneOf: prefixItems }, minItems: 2, maxItems: 2 })
     expect(
       downgradeSchemaV31ToV30({
         type: 'array',
         prefixItems: [{ type: 'string' }],
         items: { type: 'number' },
       }),
-    ).toEqual({ type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'number' }] } })
+    ).toEqual({ type: 'array', items: { oneOf: [{ type: 'string' }, { type: 'number' }] } })
     expect(
       downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: false }),
     ).toEqual({ type: 'array', items: { type: 'string' }, maxItems: 1 })
@@ -1204,7 +1221,7 @@ describe('downgradeSchemaV31ToV30', () => {
       }),
     ).toEqual({
       type: 'array',
-      items: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+      items: { oneOf: [{ type: 'string' }, { type: 'number' }] },
       minItems: 2,
       maxItems: 2,
     })
@@ -1215,6 +1232,34 @@ describe('downgradeSchemaV31ToV30', () => {
         items: false,
       }),
     ).toEqual({ type: 'array', items: { type: 'number' }, maxItems: 2 })
+  })
+
+  it('merges the items of a tuple like any other anyOf', () => {
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'array',
+        prefixItems: [{ type: 'string' }, { type: 'null' }],
+        items: false,
+      }),
+    ).toEqual({ type: 'array', items: { type: 'string', nullable: true }, maxItems: 2 })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'array',
+        prefixItems: [{ const: 'a' }, { const: 'b' }],
+        items: false,
+      }),
+    ).toEqual({ type: 'array', items: { type: 'string', enum: ['a', 'b'] }, maxItems: 2 })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'array',
+        prefixItems: [{ type: 'string' }, { type: 'object' }],
+        items: false,
+      }),
+    ).toEqual({
+      type: 'array',
+      items: { anyOf: [{ type: 'string' }, { type: 'object' }] },
+      maxItems: 2,
+    })
   })
 
   it.each<[OpenAPIV3_1.SchemaObjectFields, OpenAPIV3_0.SchemaObject]>([
@@ -1229,7 +1274,7 @@ describe('downgradeSchemaV31ToV30', () => {
     [
       { items: { type: 'boolean' }, maxItems: 3 },
       {
-        items: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+        items: { oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
         maxItems: 3,
       },
     ],
@@ -1241,7 +1286,7 @@ describe('downgradeSchemaV31ToV30', () => {
           prefixItems: [{ type: 'string' }, { type: 'number' }],
           ...fields,
         }),
-      ).toEqual({ items: { anyOf: [{ type: 'string' }, { type: 'number' }] }, ...expected })
+      ).toEqual({ items: { oneOf: [{ type: 'string' }, { type: 'number' }] }, ...expected })
     },
   )
 
@@ -1309,7 +1354,7 @@ describe('downgradeSchemaV31ToV30', () => {
       downgradeSchemaV31ToV30({
         anyOf: [{ type: 'string', contentMediaType: 'image/png' }, { type: 'integer' }],
       }),
-    ).toEqual({ anyOf: [{ type: 'string', format: 'binary' }, { type: 'integer' }] })
+    ).toEqual({ oneOf: [{ type: 'string', format: 'binary' }, { type: 'integer' }] })
   })
 
   describe('$ref', () => {
