@@ -246,7 +246,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 - A `not` or `oneOf` inside a cycle of schemas, over a `$ref` back into that cycle to a schema that lost a restriction, can still reject values the original accepts.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
-- An `anyOf` of `{ type: "null" }` and a branch that a `$ref` points into stays as written, so the `$ref` still resolves, and code generators read it as a union.
+- An `anyOf` or `oneOf` of `{ type: "null" }` and a branch that a `$ref` points into stays as written, so the `$ref` still resolves, and code generators read it as a union.
 - `$ref`s into a keyword 3.0 removes, such as `prefixItems/0` or `propertyNames`, or into a `oneOf` that becomes `anyOf`, are left as written and dangle.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner.
 - Older drafts are not supported. `definitions` is read as `$defs`, but other keywords that only draft-07 or 2019-09 define, such as `dependencies` and `additionalItems`, become extensions unconverted, so `$ref`s into them dangle, and array-form `items` passes through. Convert such schemas to 2020-12 first.
