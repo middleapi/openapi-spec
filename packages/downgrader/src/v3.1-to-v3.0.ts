@@ -124,14 +124,15 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Converted schemas with an `anyOf` of several branches, for `mergeNullable`.
-// It runs once the whole input is converted, since a cycle can meet a branch
-// before its conversion is done.
-const nullableAnyOfs: [schema: Record<string, unknown>, input: object][] = []
+// Converted schemas with an `anyOf` of several branches, or a `oneOf` of two,
+// for `mergeNullable`. It runs once the whole input is converted, since a
+// cycle can meet a branch before its conversion is done.
+const nullableUnions: [schema: Record<string, unknown>, input: object, key: 'anyOf' | 'oneOf'][] =
+  []
 
-// Input schemas whose `anyOf` a `$ref` kept as written points into. They keep
-// it, so the `$ref` still resolves.
-const anyOfTargets = new Set<unknown>()
+// Input schemas whose `anyOf` or `oneOf` a `$ref` kept as written points
+// into. They keep it, so the `$ref` still resolves.
+const unionTargets = new Set<unknown>()
 
 // A branch with these stays: null can still fail them beside `nullable: true`,
 // and a `nullable` already there was written 3.0-style.
@@ -295,8 +296,10 @@ function refOr(convert: Convert): Convert {
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
   if (!isInlined(ref, ctx)) {
-    for (let at = ref.indexOf('/anyOf/'); at !== -1; at = ref.indexOf('/anyOf/', at + 1)) {
-      anyOfTargets.add(resolvePointer(ref.slice(0, at), ctx))
+    for (const key of ['/anyOf/', '/oneOf/']) {
+      for (let at = ref.indexOf(key); at !== -1; at = ref.indexOf(key, at + 1)) {
+        unionTargets.add(resolvePointer(ref.slice(0, at), ctx))
+      }
     }
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
@@ -570,9 +573,11 @@ function rejectsNull(schema: unknown): boolean {
 // writes it, when the schema around it has none of its keywords. A branch
 // that stays, such as a `$ref` or an `enum`, makes the pair a `oneOf` when it
 // rejects null, as null then matches one branch only. NSwag reads that
-// `oneOf` as nullable, and the `anyOf` as an empty class.
-function mergeNullable(out: Record<string, unknown>, root: unknown): void {
-  const branches = out.anyOf as unknown[]
+// `oneOf` as nullable, and the `anyOf` as an empty class. typia and Litestar
+// write the pair as a `oneOf`, which means the same when the other branch
+// takes `nullable`, and oapi-codegen reads it as a union.
+function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf' | 'oneOf'): void {
+  const branches = out[key] as unknown[]
   // Effect writes null twice for a nullish value, once for `undefined`.
   const others = branches.filter((branch) => !isOnlyNullSchema(branch))
   const [other] = others
@@ -581,12 +586,12 @@ function mergeNullable(out: Record<string, unknown>, root: unknown): void {
   }
   if (
     typeof other.type === 'string' &&
-    !NOT_NULLABLE_KEYWORDS.some((key) => Object.hasOwn(other, key)) &&
-    !Object.keys(other).some((key) => Object.hasOwn(out, key))
+    !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(other, name)) &&
+    !Object.keys(other).some((name) => Object.hasOwn(out, name))
   ) {
-    delete out.anyOf
+    delete out[key]
     Object.assign(out, other, { nullable: true })
-  } else if (out.oneOf === undefined) {
+  } else if (key === 'anyOf' && out.oneOf === undefined) {
     // A `$ref` kept as written rejects null when its target does.
     const ref = getRef(other)
     if (rejectsNull(ref === undefined ? other : find(root, ref))) {
@@ -742,7 +747,11 @@ function finishSchema(
     }
   }
   if (Array.isArray(out.anyOf) && out.anyOf.length > 1) {
-    nullableAnyOfs.push([out, schema])
+    nullableUnions.push([out, schema, 'anyOf'])
+  }
+  // A `oneOf` with null twice rejects null, so only a pair can merge.
+  if (Array.isArray(out.oneOf) && out.oneOf.length === 2) {
+    nullableUnions.push([out, schema, 'oneOf'])
   }
   if (loose) {
     LOOSE.add(out)
@@ -870,16 +879,16 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
     const out = downgrade(root, convert)
-    for (const [schema, input] of nullableAnyOfs) {
-      if (!anyOfTargets.has(input)) {
-        mergeNullable(schema, root)
+    for (const [schema, input, key] of nullableUnions) {
+      if (!unionTargets.has(input)) {
+        mergeNullable(schema, root, key)
       }
     }
     return out
   } finally {
     // Cleared even when conversion throws, so nothing keeps the input alive.
-    nullableAnyOfs.length = 0
-    anyOfTargets.clear()
+    nullableUnions.length = 0
+    unionTargets.clear()
   }
 }
 

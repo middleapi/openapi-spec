@@ -563,6 +563,52 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('merges a oneOf of one type and null into that type with nullable, as typia and Litestar write it', () => {
+      const object: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a'],
+      }
+      expect(downgradeSchemaV31ToV30({ oneOf: [{ type: 'null' }, { type: 'string' }] })).toEqual({
+        type: 'string',
+        nullable: true,
+      })
+      expect(
+        downgradeSchemaV31ToV30({ description: 'A', oneOf: [object, { type: 'null' }] }),
+      ).toEqual({ description: 'A', ...object, nullable: true })
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      // Null twice matches two branches, so the oneOf rejects it.
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
+        }),
+      ).toEqual({ oneOf: [{ type: 'string' }, onlyNull, onlyNull] })
+      // A branch that takes null too, or that nullable would not let null through, stays.
+      for (const branch of [
+        { type: ['string', 'null'] },
+        { type: 'string', enum: ['a'] },
+        { $ref: '#/components/schemas/Pet' },
+      ] as OpenAPIV3_1.SchemaObject[]) {
+        expect(downgradeSchemaV31ToV30({ oneOf: [branch, { type: 'null' }] })).toEqual({
+          oneOf: [downgradeSchemaV31ToV30(branch), onlyNull],
+        })
+      }
+      // Kept for a $ref that points into it.
+      expect(
+        downgradeSchemaV31ToV30({
+          properties: {
+            a: { oneOf: [{ type: 'null' }, object] },
+            b: { $ref: '#/properties/a/oneOf/1' },
+          },
+        }),
+      ).toEqual({
+        properties: {
+          a: { oneOf: [onlyNull, object] },
+          b: { $ref: '#/properties/a/oneOf/1' },
+        },
+      })
+    })
+
     it('keeps an anyOf with null whose other branch null would not pass, or shares a key', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null matches only the null branch here, so it becomes a oneOf.
