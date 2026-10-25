@@ -1152,14 +1152,17 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
-  it('drops additionalProperties beside patternProperties, which it would contradict', () => {
+  it('makes additionalProperties beside patternProperties true, which allows what patternProperties did', () => {
+    const patternProperties = { '^x-': { type: 'string' } } as const
+    // As Zod writes a loose record, and Effect a record with number keys.
+    for (const additionalProperties of [undefined, true, false, { type: 'number' }] as const) {
+      expect(
+        downgradeSchemaV31ToV30({ type: 'object', patternProperties, additionalProperties }),
+      ).toEqual({ type: 'object', additionalProperties: true })
+    }
     expect(
-      downgradeSchemaV31ToV30({
-        type: 'object',
-        patternProperties: { '^x-': { type: 'string' } },
-        additionalProperties: false,
-      }),
-    ).toEqual({ type: 'object' })
+      downgradeSchemaV31ToV30({ properties: { a: { type: 'string' } }, patternProperties }),
+    ).toEqual({ properties: { a: { type: 'string' } }, additionalProperties: true })
   })
 
   describe('a schema that lost a restriction', () => {

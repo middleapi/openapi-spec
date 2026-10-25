@@ -652,6 +652,12 @@ function finishSchema(
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
   }
+  // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
+  // dropped, as it would reject the properties `patternProperties` allowed.
+  // Code generators read a missing one as allowing no other properties.
+  if (schema.patternProperties !== undefined) {
+    out.additionalProperties = true
+  }
   const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
     // A `format` that only repeats the encoding, as Zod writes, gives way.
