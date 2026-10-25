@@ -124,9 +124,9 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Converted schemas with an `anyOf` of several branches, or a `oneOf` of two,
-// for `mergeNullable`. It runs once the whole input is converted, since a
-// cycle can meet a branch before its conversion is done.
+// Converted schemas with an `anyOf` or `oneOf` of several branches, for
+// `mergeEnums` and `mergeNullable`. They run once the whole input is converted,
+// since a cycle can meet a branch before its conversion is done.
 const nullableUnions: [schema: Record<string, unknown>, input: object, key: 'anyOf' | 'oneOf'][] =
   []
 
@@ -675,10 +675,8 @@ function valueType(value: unknown): string | undefined {
       return typeof value
     case 'number':
       return Number.isInteger(value) ? 'integer' : 'number'
-    case 'object':
-      return isRecord(value) ? 'object' : undefined
     default:
-      return undefined
+      return isRecord(value) ? 'object' : undefined
   }
 }
 
@@ -701,6 +699,48 @@ function enumUnionType(branches: unknown): string | undefined {
     )
     ? type
     : undefined
+}
+
+// Zod, Valibot and GrowthBook write a union of literals as an `anyOf` of
+// `const`s, GitHub as a `oneOf`, and ArkType a nullable one with null beside
+// them. Code generators read the union of one-value enums this becomes as a
+// string or as a union of one-value types, so the enums become one, which
+// they read as an enum. A `oneOf` rejects a value that two branches share.
+function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void {
+  const branches = out[key] as unknown[]
+  const enums = branches.filter((branch) => !isOnlyNullSchema(branch))
+  const type = enumUnionType(enums)
+  if (
+    type === undefined ||
+    (out.type !== undefined && out.type !== type) ||
+    out.enum !== undefined
+  ) {
+    return
+  }
+  const values: unknown[] = []
+  const seen = new Set<unknown>()
+  for (const branch of enums as Record<string, unknown>[]) {
+    if (Object.keys(branch).length !== 2 || !Array.isArray(branch.enum)) {
+      return
+    }
+    for (const value of branch.enum) {
+      const valueKey = jsonKey(value)
+      if (!seen.has(valueKey)) {
+        seen.add(valueKey)
+        values.push(value)
+      } else if (key === 'oneOf') {
+        return
+      }
+    }
+  }
+  const merged = { type, enum: values }
+  if (enums.length < branches.length) {
+    const nulls = branches.filter(isOnlyNullSchema)
+    out[key] = isOnlyNullSchema(branches[0]) ? [...nulls, merged] : [merged, ...nulls]
+  } else {
+    delete out[key]
+    Object.assign(out, merged)
+  }
 }
 
 // The type of every value in a list, when they all have the same one.
@@ -853,12 +893,11 @@ function finishSchema(
       delete out[key]
     }
   }
-  if (Array.isArray(out.anyOf) && out.anyOf.length > 1) {
-    nullableUnions.push([out, schema, 'anyOf'])
-  }
-  // A `oneOf` with null twice rejects null, so only a pair can merge.
-  if (Array.isArray(out.oneOf) && out.oneOf.length === 2) {
-    nullableUnions.push([out, schema, 'oneOf'])
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    const branches = out[key]
+    if (Array.isArray(branches) && branches.length > 1) {
+      nullableUnions.push([out, schema, key])
+    }
   }
   if (loose) {
     LOOSE.add(out)
@@ -988,7 +1027,12 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     const out = downgrade(root, convert)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input)) {
-        mergeNullable(schema, root, key)
+        mergeEnums(schema, key)
+        const branches = schema[key]
+        // A `oneOf` with null twice rejects null, so only a pair can merge.
+        if (Array.isArray(branches) && (key === 'anyOf' || branches.length === 2)) {
+          mergeNullable(schema, root, key)
+        }
       }
     }
     return out

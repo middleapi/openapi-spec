@@ -828,23 +828,27 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ const: new Date(0) })).toEqual({ enum: [new Date(0)] })
   })
 
-  it('types a union of consts of one type, as Zod writes a union of literals and OpenSearch a documented enum', () => {
+  it('types a union of consts of one type, as OpenSearch writes a documented enum', () => {
     expect(
-      downgradeSchemaV31ToV30({ anyOf: [{ type: 'string', const: 'a' }, { const: 'b' }] }),
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string', const: 'a', description: 'A' }, { const: 'b' }],
+      }),
     ).toEqual({
       anyOf: [
-        { type: 'string', enum: ['a'] },
+        { type: 'string', enum: ['a'], description: 'A' },
         { type: 'string', enum: ['b'] },
       ],
       type: 'string',
     })
     // Zod nests a union for each `.or()`.
-    const ab: OpenAPIV3_1.SchemaObject = { anyOf: [{ const: 'a' }, { const: 'b' }] }
+    const ab: OpenAPIV3_1.SchemaObject = {
+      anyOf: [{ const: 'a', description: 'A' }, { const: 'b' }],
+    }
     expect(downgradeSchemaV31ToV30({ anyOf: [ab, { const: 'c' }] })).toEqual({
       anyOf: [
         {
           anyOf: [
-            { type: 'string', enum: ['a'] },
+            { type: 'string', enum: ['a'], description: 'A' },
             { type: 'string', enum: ['b'] },
           ],
           type: 'string',
@@ -900,6 +904,69 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'integer', enum: [1] },
         { type: 'integer', enum: [2] },
       ],
+    })
+  })
+
+  it('merges a union of consts into one enum, as Zod writes a union of literals', () => {
+    expect(downgradeSchemaV31ToV30({ anyOf: [{ const: 'a' }, { const: 'b' }] })).toEqual({
+      type: 'string',
+      enum: ['a', 'b'],
+    })
+    // Zod nests a union for each `.or()`, and GrowthBook types each `const`.
+    const ab: OpenAPIV3_1.SchemaObject = { anyOf: [{ const: 'a' }, { const: 'b' }] }
+    expect(
+      downgradeSchemaV31ToV30({ description: 'D', anyOf: [ab, { type: 'string', const: 'c' }] }),
+    ).toEqual({ description: 'D', type: 'string', enum: ['a', 'b', 'c'] })
+    // GitHub writes a `oneOf`, and an `anyOf` may repeat a value.
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ const: 1 }, { const: 2 }, { enum: [3, 4] }] }),
+    ).toEqual({ type: 'integer', enum: [1, 2, 3, 4] })
+    expect(downgradeSchemaV31ToV30({ anyOf: [{ enum: ['a', 'b'] }, { const: 'b' }] })).toEqual({
+      type: 'string',
+      enum: ['a', 'b'],
+    })
+    // ArkType writes a nullable union of literals with null beside the `const`s.
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [{ const: 'a' }, { const: 'b' }, { type: 'null' }] }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', enum: ['a', 'b'] },
+        { type: 'string', nullable: true, enum: [null] },
+      ],
+    })
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ type: 'null' }, { const: 'a' }, { const: 'b' }] }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', nullable: true, enum: [null] },
+        { type: 'string', enum: ['a', 'b'] },
+      ],
+    })
+    // A `oneOf` rejects a value two branches share, and an `enum` beside the
+    // union, or another `type`, matches only some of its values.
+    const kept: [OpenAPIV3_1.SchemaObject, string][] = [
+      [{ oneOf: [{ const: 'a' }, { enum: ['a', 'b'] }] }, 'oneOf'],
+      [{ enum: ['a', 'c'], anyOf: [{ const: 'a' }, { const: 'b' }] }, 'anyOf'],
+      [{ type: 'number', anyOf: [{ const: 1 }, { const: 2 }] }, 'anyOf'],
+    ]
+    for (const [schema, key] of kept) {
+      expect(downgradeSchemaV31ToV30(schema)).toHaveProperty(key)
+    }
+    // A `$ref` into the union still resolves.
+    const doc = convert({
+      components: {
+        schemas: {
+          AB: { anyOf: [{ const: 'a' }, { const: 'b' }] },
+          A: { $ref: '#/components/schemas/AB/anyOf/0' },
+        },
+      },
+    })
+    expect(doc.components?.schemas?.AB).toEqual({
+      anyOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'string', enum: ['b'] },
+      ],
+      type: 'string',
     })
   })
 
