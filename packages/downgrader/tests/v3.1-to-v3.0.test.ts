@@ -809,6 +809,13 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({
         type: 'array',
+        prefixItems: [{ type: 'string' }],
+        items: { description: undefined },
+      }),
+    ).toEqual({ type: 'array', items: {} })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'array',
         prefixItems: [{}, { type: 'string' }],
         items: false,
       }),
@@ -1470,9 +1477,21 @@ describe('downgradeSchemaV31ToV30', () => {
         minItems: 2,
         maxItems: 2,
       }
+      // As zod emits z.tuple([z.any(), z.unknown()]).
+      const anyPair: OpenAPIV3_1.SchemaObject = {
+        type: 'array',
+        prefixItems: [{}, {}],
+        items: false,
+        minItems: 2,
+        maxItems: 2,
+      }
       expect(
         downgradeSchemaV31ToV30({
-          oneOf: [{ properties: { meta: record } }, { properties: { point: tuple } }],
+          oneOf: [
+            { properties: { meta: record } },
+            { properties: { point: tuple } },
+            { properties: { pair: anyPair } },
+          ],
         }),
       ).toEqual({
         oneOf: [
@@ -1482,6 +1501,7 @@ describe('downgradeSchemaV31ToV30', () => {
               point: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
             },
           },
+          { properties: { pair: { type: 'array', items: {}, minItems: 2, maxItems: 2 } } },
         ],
       })
     })
