@@ -703,6 +703,15 @@ function enumUnionType(branches: unknown): string | undefined {
     : undefined
 }
 
+// The type of every value in a list, when they all have the same one.
+function sharedType(values: unknown): string | undefined {
+  if (!Array.isArray(values)) {
+    return undefined
+  }
+  const type = valueType(values[0])
+  return values.every((value) => valueType(value) === type) ? type : undefined
+}
+
 function isMediaTypeOnly(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -774,12 +783,13 @@ function finishSchema(
     Object.assign(out, onlyNull())
   }
   // Code generators drop or leave untyped an `enum` with no `type`, as a
-  // `const` becomes, so it gets the type of its value.
-  const constType = out.type === undefined ? valueType(schema.const) : undefined
-  if (constType !== undefined) {
+  // `const` becomes and ArkType writes a union of literals, so it gets the
+  // type its values share.
+  const enumType = out.type === undefined ? sharedType(out.enum) : undefined
+  if (enumType !== undefined) {
     const values = out.enum
     delete out.enum
-    out.type = constType
+    out.type = enumType
     out.enum = values
   }
   // NSwag reads a union of enums with no `type` beside it, as Zod writes a

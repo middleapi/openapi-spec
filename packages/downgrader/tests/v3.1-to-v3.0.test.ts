@@ -497,8 +497,9 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ enum: [null, 'a'] })).toEqual({ enum: [null, 'a'] })
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
-        enum: ['a'],
         allOf: [{ not: {} }],
+        type: 'string',
+        enum: ['a'],
       })
     })
 
@@ -900,6 +901,22 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'integer', enum: [2] },
       ],
     })
+  })
+
+  it('types an enum with no type after its values, as ArkType writes a union of literals', () => {
+    expect(downgradeSchemaV31ToV30({ enum: ['a', 'b'] })).toEqual({
+      type: 'string',
+      enum: ['a', 'b'],
+    })
+    expect(downgradeSchemaV31ToV30({ enum: [1, 2] })).toEqual({ type: 'integer', enum: [1, 2] })
+    expect(downgradeSchemaV31ToV30({ not: { enum: [true] } })).toEqual({
+      not: { type: 'boolean', enum: [true] },
+    })
+    // Values of different types, or with null, share no type to give.
+    const lists: unknown[][] = [['a', 1], [1, 1.5], ['a', null], [new Date(0)], []]
+    for (const values of lists) {
+      expect(downgradeSchemaV31ToV30({ enum: values })).not.toHaveProperty('type')
+    }
   })
 
   it.each<[OpenAPIV3_1.SchemaObject, OpenAPIV3_0.SchemaObject]>([
@@ -1904,7 +1921,7 @@ describe('unusual input', () => {
     })
     expect(
       downgradeSchemaV31ToV30({ type: 'null', enum: ['a'], allOf: [{ minLength: 1 }] }),
-    ).toEqual({ enum: ['a'], allOf: [{ minLength: 1 }, { not: {} }] })
+    ).toEqual({ allOf: [{ minLength: 1 }, { not: {} }], type: 'string', enum: ['a'] })
     expect(downgradeSchemaV31ToV30({ enum: [], allOf: [{ minimum: 0 }] })).toEqual({
       allOf: [{ minimum: 0 }, { not: {} }],
     })
