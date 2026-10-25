@@ -124,10 +124,10 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Converted schemas with an `anyOf` of two branches, for `mergeNullable`. It
-// runs once the whole input is converted, since a cycle can meet a branch
+// Converted schemas with an `anyOf` of several branches, for `mergeNullable`.
+// It runs once the whole input is converted, since a cycle can meet a branch
 // before its conversion is done.
-const twoBranchAnyOfs: [schema: Record<string, unknown>, input: object][] = []
+const nullableAnyOfs: [schema: Record<string, unknown>, input: object][] = []
 
 // Input schemas whose `anyOf` a `$ref` kept as written points into. They keep
 // it, so the `$ref` still resolves.
@@ -514,9 +514,11 @@ function rejectsNull(schema: unknown): boolean {
 // rejects null, as null then matches one branch only. NSwag reads that
 // `oneOf` as nullable, and the `anyOf` as an empty class.
 function mergeNullable(out: Record<string, unknown>, root: unknown): void {
-  const [first, second] = out.anyOf as unknown[]
-  const other = isOnlyNullSchema(first) ? second : isOnlyNullSchema(second) ? first : undefined
-  if (!isRecord(other)) {
+  const branches = out.anyOf as unknown[]
+  // Effect writes null twice for a nullish value, once for `undefined`.
+  const others = branches.filter((branch) => !isOnlyNullSchema(branch))
+  const [other] = others
+  if (others.length !== 1 || !isRecord(other)) {
     return
   }
   if (
@@ -530,7 +532,9 @@ function mergeNullable(out: Record<string, unknown>, root: unknown): void {
     // A `$ref` kept as written rejects null when its target does.
     const ref = getRef(other)
     if (rejectsNull(ref === undefined ? other : find(root, ref))) {
-      out.oneOf = out.anyOf
+      // Null once, since `oneOf` rejects a value that matches two branches.
+      const nullBranch = branches.find(isOnlyNullSchema)
+      out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
     }
   }
@@ -667,8 +671,8 @@ function finishSchema(
       delete out[key]
     }
   }
-  if (Array.isArray(out.anyOf) && out.anyOf.length === 2) {
-    twoBranchAnyOfs.push([out, schema])
+  if (Array.isArray(out.anyOf) && out.anyOf.length > 1) {
+    nullableAnyOfs.push([out, schema])
   }
   if (loose) {
     LOOSE.add(out)
@@ -796,7 +800,7 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
     const out = downgrade(root, convert)
-    for (const [schema, input] of twoBranchAnyOfs) {
+    for (const [schema, input] of nullableAnyOfs) {
       if (!anyOfTargets.has(input)) {
         mergeNullable(schema, root)
       }
@@ -804,7 +808,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     return out
   } finally {
     // Cleared even when conversion throws, so nothing keeps the input alive.
-    twoBranchAnyOfs.length = 0
+    nullableAnyOfs.length = 0
     anyOfTargets.clear()
   }
 }
