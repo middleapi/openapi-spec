@@ -55,6 +55,8 @@ downgradeSchemaV31ToV30({ type: ['string', 'null'] })
 
 Each step can also be imported on its own from `@openapi-spec/downgrader/v3.2-to-v3.1` or `@openapi-spec/downgrader/v3.1-to-v3.0`. All types come from [`@openapi-spec/types`](https://github.com/middleapi/openapi-spec/blob/main/packages/types/README.md).
 
+The output `openapi` is the latest patch release, `3.1.2` from `downgradeSpecV32ToV31` and `3.0.4` from `downgradeSpecV31ToV30`. Set it afterwards for another patch release, as oRPC does.
+
 The input is never changed, and the output shares no plain objects or arrays with it. Input is read as JSON would see it: an object counts whatever realm it comes from or null prototype it has, as in a document oRPC returns, and a key holding `undefined`, as spreading options often leaves, counts as missing. Other values, such as a `Date`, are kept as they are.
 
 External `$ref`s are left as written, except in a 3.2 `content` map, where 3.1 allows none and the entry is removed. The files they point at are not converted, so bundle a multi-file document into one first.
