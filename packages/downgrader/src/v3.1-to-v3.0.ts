@@ -124,10 +124,10 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Converted schemas with an `anyOf` of two branches, for `mergeNullable`. It
-// runs once the whole input is converted, since a cycle can meet a branch
+// Converted schemas with an `anyOf` of several branches, for `mergeNullable`.
+// It runs once the whole input is converted, since a cycle can meet a branch
 // before its conversion is done.
-const twoBranchAnyOfs: [schema: Record<string, unknown>, input: object][] = []
+const nullableAnyOfs: [schema: Record<string, unknown>, input: object][] = []
 
 // Input schemas whose `anyOf` a `$ref` kept as written points into. They keep
 // it, so the `$ref` still resolves.
@@ -572,9 +572,11 @@ function rejectsNull(schema: unknown): boolean {
 // rejects null, as null then matches one branch only. NSwag reads that
 // `oneOf` as nullable, and the `anyOf` as an empty class.
 function mergeNullable(out: Record<string, unknown>, root: unknown): void {
-  const [first, second] = out.anyOf as unknown[]
-  const other = isOnlyNullSchema(first) ? second : isOnlyNullSchema(second) ? first : undefined
-  if (!isRecord(other)) {
+  const branches = out.anyOf as unknown[]
+  // Effect writes null twice for a nullish value, once for `undefined`.
+  const others = branches.filter((branch) => !isOnlyNullSchema(branch))
+  const [other] = others
+  if (others.length !== 1 || !isRecord(other)) {
     return
   }
   if (
@@ -588,7 +590,9 @@ function mergeNullable(out: Record<string, unknown>, root: unknown): void {
     // A `$ref` kept as written rejects null when its target does.
     const ref = getRef(other)
     if (rejectsNull(ref === undefined ? other : find(root, ref))) {
-      out.oneOf = out.anyOf
+      // Null once, since `oneOf` rejects a value that matches two branches.
+      const nullBranch = branches.find(isOnlyNullSchema)
+      out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
     }
   }
@@ -712,6 +716,12 @@ function finishSchema(
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
   }
+  // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
+  // dropped, as it would reject the properties `patternProperties` allowed.
+  // Code generators read a missing one as allowing no other properties.
+  if (schema.patternProperties !== undefined) {
+    out.additionalProperties = true
+  }
   const format = binaryFormat(schema)
   if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
     // A `format` that only repeats the encoding, as Zod writes, gives way.
@@ -731,8 +741,8 @@ function finishSchema(
       delete out[key]
     }
   }
-  if (Array.isArray(out.anyOf) && out.anyOf.length === 2) {
-    twoBranchAnyOfs.push([out, schema])
+  if (Array.isArray(out.anyOf) && out.anyOf.length > 1) {
+    nullableAnyOfs.push([out, schema])
   }
   if (loose) {
     LOOSE.add(out)
@@ -858,22 +868,27 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 }
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
-  twoBranchAnyOfs.length = 0
-  anyOfTargets.clear()
-  const out = downgrade(root, convert)
-  for (const [schema, input] of twoBranchAnyOfs.splice(0)) {
-    if (!anyOfTargets.has(input)) {
-      mergeNullable(schema, root)
+  try {
+    const out = downgrade(root, convert)
+    for (const [schema, input] of nullableAnyOfs) {
+      if (!anyOfTargets.has(input)) {
+        mergeNullable(schema, root)
+      }
     }
+    return out
+  } finally {
+    // Cleared even when conversion throws, so nothing keeps the input alive.
+    nullableAnyOfs.length = 0
+    anyOfTargets.clear()
   }
-  anyOfTargets.clear()
-  return out
 }
 
+/** Downgrades an OpenAPI 3.1 document to 3.0, setting `openapi` to `3.0.4`. The input is never changed. */
 export function downgradeSpecV31ToV30(spec: OpenAPIV3_1.OpenAPIObject): OpenAPIV3_0.OpenAPIObject {
   return downgradeV30(spec, convertDocument) as OpenAPIV3_0.OpenAPIObject
 }
 
+/** Downgrades a 3.1 Schema Object to 3.0. Local `$ref`s resolve against the schema itself. The input is never changed. */
 export function downgradeSchemaV31ToV30<T = unknown>(
   schema: OpenAPIV3_1.SchemaObject<T>,
 ): OpenAPIV3_0.ReferenceObject | OpenAPIV3_0.SchemaObject<T> {

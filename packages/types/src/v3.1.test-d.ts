@@ -5,6 +5,7 @@ import type {
   ParameterObject,
   PathItemObject,
   ResponseObject,
+  ResponsesObject,
   SchemaObject,
 } from './v3.1'
 
@@ -309,3 +310,8 @@ export const noDeviceAuthorizationFlow = {
   info: { title: 'API', version: '1.0.0' },
   openapi: '3.1.2',
 } satisfies OpenAPIObject
+
+export const numericStatusCode = {
+  // @ts-expect-error: A numeric status code key is checked like a quoted one.
+  200: { descripton: 'misspelled' },
+} satisfies ResponsesObject

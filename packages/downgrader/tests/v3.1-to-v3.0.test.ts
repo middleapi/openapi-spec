@@ -495,6 +495,7 @@ describe('downgradeSchemaV31ToV30', () => {
       ])
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual(onlyNull)
       expect(downgradeSchemaV31ToV30({ enum: [null] })).toEqual(onlyNull)
+      expect(downgradeSchemaV31ToV30({ enum: [null, 'a'] })).toEqual({ enum: [null, 'a'] })
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
         enum: ['a'],
@@ -518,6 +519,47 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toEqual({
         type: 'string',
         nullable: true,
+      })
+      // As Effect writes a nullish value, with null twice.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
+        }),
+      ).toEqual({ type: 'string', nullable: true })
+      // One branch holds no null to merge, as Valibot writes a union of one schema.
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }] })).toEqual({
+        anyOf: [{ type: 'string' }],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'null' }, { type: 'string', enum: ['a'] }, { type: 'null' }],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', nullable: true, enum: [null] },
+          { type: 'string', enum: ['a'] },
+        ],
+      })
+      // One null object twice still gives null once, or the oneOf rejects it.
+      const nullType: OpenAPIV3_1.SchemaObject = { type: 'null' }
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ type: 'string', enum: ['a'] }, nullType, nullType] }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', enum: ['a'] },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }],
+        }),
+      ).toEqual({
+        anyOf: [
+          { type: 'string' },
+          { type: 'number' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
       })
     })
 
@@ -560,11 +602,6 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [{ type: 'string', enum: ['a'] }, onlyNull],
         oneOf: [{ minLength: 1 }, { maxLength: 0 }],
       })
-      expect(
-        downgradeSchemaV31ToV30({
-          anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
-        }),
-      ).toEqual({ anyOf: [{ type: 'string' }, onlyNull, onlyNull] })
       // A null branch with more than its type is not only null.
       expect(
         downgradeSchemaV31ToV30({
@@ -623,6 +660,11 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       nullable: true,
       enum: [null],
+    })
+    // As Zod emits `z.literal(5)`: the written type stays, though 5 is an integer.
+    expect(downgradeSchemaV31ToV30({ type: 'number', const: 5 })).toEqual({
+      type: 'number',
+      enum: [5],
     })
   })
 
@@ -686,6 +728,7 @@ describe('downgradeSchemaV31ToV30', () => {
   it('turns examples into example', () => {
     expect(downgradeSchemaV31ToV30({ examples: ['a', 'b'] })).toEqual({ example: 'a' })
     expect(downgradeSchemaV31ToV30({ example: 'x', examples: ['a'] })).toEqual({ example: 'x' })
+    expect(downgradeSchemaV31ToV30({ examples: [] })).toStrictEqual({})
   })
 
   it('turns tuples into arrays whose items match any item schema', () => {
@@ -784,6 +827,10 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       format: 'binary',
     })
+    expect(downgradeSchemaV31ToV30({ type: 'string', contentEncoding: 'binary' })).toEqual({
+      type: 'string',
+      format: 'binary',
+    })
     expect(
       downgradeSchemaV31ToV30({
         type: 'string',
@@ -820,6 +867,11 @@ describe('downgradeSchemaV31ToV30', () => {
         ],
       }),
     ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string', contentMediaType: 'image/png' }, { type: 'integer' }],
+      }),
+    ).toEqual({ anyOf: [{ type: 'string', format: 'binary' }, { type: 'integer' }] })
   })
 
   describe('$ref', () => {
@@ -1086,7 +1138,7 @@ describe('downgradeSchemaV31ToV30', () => {
         propertyNames: { enum: ['a'] },
         patternProperties: { '^a$': value },
       }),
-    ).toEqual({})
+    ).toEqual({ additionalProperties: true })
     expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, unevaluatedProperties: false }),
     ).toEqual({ additionalProperties: false })
@@ -1261,14 +1313,17 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
-  it('drops additionalProperties beside patternProperties, which it would contradict', () => {
+  it('makes additionalProperties beside patternProperties true, which allows what patternProperties did', () => {
+    const patternProperties = { '^x-': { type: 'string' } } as const
+    // As Zod writes a loose record, and Effect a record with number keys.
+    for (const additionalProperties of [undefined, true, false, { type: 'number' }] as const) {
+      expect(
+        downgradeSchemaV31ToV30({ type: 'object', patternProperties, additionalProperties }),
+      ).toEqual({ type: 'object', additionalProperties: true })
+    }
     expect(
-      downgradeSchemaV31ToV30({
-        type: 'object',
-        patternProperties: { '^x-': { type: 'string' } },
-        additionalProperties: false,
-      }),
-    ).toEqual({ type: 'object' })
+      downgradeSchemaV31ToV30({ properties: { a: { type: 'string' } }, patternProperties }),
+    ).toEqual({ properties: { a: { type: 'string' } }, additionalProperties: true })
   })
 
   describe('a schema that lost a restriction', () => {
@@ -1304,6 +1359,44 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(
         downgradeSchemaV31ToV30({ anyOf: [{ minimum: 0 }], oneOf: [{ prefixItems: [true] }, {}] }),
       ).toEqual({ anyOf: [{ minimum: 0 }], allOf: [{ anyOf: [{ items: {} }, {}] }] })
+    })
+
+    it('includes propertyNames beyond a string type, and unevaluatedProperties beside an in-place applicator', () => {
+      // As zod emits z.record with a key pattern.
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { type: 'object', propertyNames: { type: 'string', pattern: '^a' } },
+        }),
+      ).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { allOf: [{ properties: { a: {} } }], unevaluatedProperties: false },
+        }),
+      ).toEqual({})
+    })
+
+    it('excludes propertyNames: true, and unevaluatedProperties beside additionalProperties', () => {
+      expect(downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: true } })).toEqual({
+        not: { type: 'object' },
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          not: { additionalProperties: { type: 'string' }, unevaluatedProperties: false },
+        }),
+      ).toEqual({ not: { additionalProperties: { type: 'string' } } })
+    })
+
+    it('carries over to a schema around it, through allOf, anyOf, properties, not, and oneOf', () => {
+      const lost = { type: 'object', propertyNames: { pattern: '^a' } } as const
+      expect(downgradeSchemaV31ToV30({ not: { allOf: [lost, { required: ['a'] }] } })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { anyOf: [lost, { type: 'string' }] } })).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({ not: { properties: { a: lost, b: { type: 'string' } } } }),
+      ).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { not: lost } })).toEqual({})
+      expect(
+        downgradeSchemaV31ToV30({ not: { anyOf: [{ minimum: 0 }], oneOf: [lost, {}] } }),
+      ).toEqual({})
     })
 
     it('excludes keywords that restrict nothing, and tuples converted exactly', () => {
@@ -1643,6 +1736,9 @@ describe('unusual input', () => {
           { type: 'string' },
         ],
       }),
+    ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ type: 'object', if: undefined }, { type: 'string' }] }),
     ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
   })
 

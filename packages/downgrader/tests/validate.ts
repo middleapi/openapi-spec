@@ -92,6 +92,8 @@ export async function expectValidDowngrade<I extends object, O extends object>(
   const before = structuredClone(doc)
   const output = downgrade(doc)
   await expectValidAs(output, to)
+  // It holds only what JSON keeps, with no key holding `undefined`.
+  expect(output).toStrictEqual(JSON.parse(JSON.stringify(output)))
   expectNoNewDanglingRefs(doc, output)
   expect(doc).toEqual(before)
   return output
