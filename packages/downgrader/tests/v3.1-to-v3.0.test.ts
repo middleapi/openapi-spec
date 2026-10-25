@@ -639,6 +639,17 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string', description: 'B' }, { type: 'null' }],
         }),
       ).toEqual({ description: 'A', oneOf: [{ type: 'string', description: 'B' }, onlyNull] })
+      // `additionalProperties` reads the `properties` beside it, so neither joins the other.
+      const closed: OpenAPIV3_1.SchemaObject = { type: 'object', additionalProperties: false }
+      const properties = { b: { type: 'string' } } as const
+      expect(downgradeSchemaV31ToV30({ properties, anyOf: [closed, { type: 'null' }] })).toEqual({
+        properties,
+        oneOf: [closed, onlyNull],
+      })
+      const open: OpenAPIV3_1.SchemaObject = { type: 'object', properties }
+      expect(
+        downgradeSchemaV31ToV30({ additionalProperties: false, anyOf: [open, { type: 'null' }] }),
+      ).toEqual({ additionalProperties: false, oneOf: [open, onlyNull] })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'string', enum: ['a'] }, { type: 'null' }],

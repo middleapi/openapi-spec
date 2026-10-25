@@ -599,7 +599,10 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   if (
     typeof other.type === 'string' &&
     !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(other, name)) &&
-    !Object.keys(other).some((name) => Object.hasOwn(out, name))
+    !Object.keys(other).some((name) => Object.hasOwn(out, name)) &&
+    // `additionalProperties` reads the `properties` beside it.
+    !(Object.hasOwn(other, 'additionalProperties') && Object.hasOwn(out, 'properties')) &&
+    !(Object.hasOwn(other, 'properties') && Object.hasOwn(out, 'additionalProperties'))
   ) {
     delete out[key]
     Object.assign(out, other, { nullable: true })
