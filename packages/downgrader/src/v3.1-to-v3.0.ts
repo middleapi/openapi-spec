@@ -376,11 +376,12 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
 // own, which 3.0 can express. A reusable enum is a `$ref` to it.
 function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
   const ref = getRef(schema.propertyNames)
-  // Followed only alone, since keywords beside it narrow the names further.
+  // Followed alone or beside a `title` or `description`, as Zod writes a
+  // described use, since other keywords beside it narrow the names further.
   const names =
     ref !== undefined &&
     Object.entries(schema.propertyNames as Record<string, unknown>).every(
-      ([name, item]) => item === undefined || name === '$ref',
+      ([name, item]) => item === undefined || ['$ref', 'title', 'description'].includes(name),
     )
       ? resolve(ref, ctx)
       : schema.propertyNames

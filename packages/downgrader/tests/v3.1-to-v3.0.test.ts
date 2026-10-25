@@ -1165,6 +1165,13 @@ describe('downgradeSchemaV31ToV30', () => {
         propertyNames: { $ref: '#/$defs/Lang', description: undefined },
       }),
     ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
+    // A described use, as Zod writes for `z.record(Lang.describe('...'), ...)`, drops the description.
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', title: 'Key', description: 'A key' },
+      }),
+    ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
   })
 
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
