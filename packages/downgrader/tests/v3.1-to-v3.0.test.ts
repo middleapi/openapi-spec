@@ -802,6 +802,17 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'array',
       items: {},
     })
+    // As Zod and ArkType emit a tuple with a rest of any items.
+    expect(
+      downgradeSchemaV31ToV30({ type: 'array', prefixItems: [{ type: 'string' }], items: {} }),
+    ).toEqual({ type: 'array', items: {} })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'array',
+        prefixItems: [{}, { type: 'string' }],
+        items: false,
+      }),
+    ).toEqual({ type: 'array', items: {}, maxItems: 2 })
     // As zod emits a Map entry, and a tuple of one type.
     expect(
       downgradeSchemaV31ToV30({

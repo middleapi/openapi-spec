@@ -326,14 +326,18 @@ function convertTuple(
     out.maxItems = prefixItems.length
   }
   const closed = typeof out.maxItems === 'number' && out.maxItems <= prefixItems.length
-  if (!closed && (items === undefined || items === true)) {
+  const all = closed ? prefixItems : [...prefixItems, items]
+  // An item schema that accepts every value, as Zod and ArkType write a rest
+  // of any items, makes the others redundant, and code generators would read
+  // the `anyOf` of them as a union.
+  if (all.some(acceptsAll)) {
     out.items = {}
-    return false
+    return closed && all.every(acceptsAll)
   }
   // Equal item schemas convert alike, which their outputs, compared while a
   // cycle is still being converted, need not show.
   const variants = new Map<unknown, unknown>()
-  for (const item of closed ? prefixItems : [...prefixItems, items]) {
+  for (const item of all) {
     const key = jsonKey(item)
     if (!variants.has(key)) {
       variants.set(key, convertSchema(item, ctx))
@@ -342,6 +346,14 @@ function convertTuple(
   const [first, ...rest] = variants.values()
   out.items = rest.length === 0 ? first : { anyOf: [first, ...rest] }
   return closed && rest.length === 0 && !isLoose(first)
+}
+
+function acceptsAll(schema: unknown): boolean {
+  return (
+    schema === undefined ||
+    schema === true ||
+    (isRecord(schema) && Object.values(schema).every((value) => value === undefined))
+  )
 }
 
 // Equal JSON values get the same key. A cyclic value is only equal to itself.
