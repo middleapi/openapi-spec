@@ -134,6 +134,9 @@ const nullableUnions: [schema: Record<string, unknown>, input: object, key: 'any
 // into. They keep it, so the `$ref` still resolves.
 const unionTargets = new Set<unknown>()
 
+// Input schemas a `$ref` kept as written points to, for `scalarOneOf`.
+const refTargets = new Set<unknown>()
+
 // A branch with these stays, since null can still fail them beside `nullable: true`.
 const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'oneOf']
 
@@ -313,6 +316,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
         unionTargets.add(resolvePointer(ref.slice(0, at), ctx))
       }
     }
+    refTargets.add(resolvePointer(ref, ctx))
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle.
     const out = { $ref: ref }
@@ -770,6 +774,43 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   }
 }
 
+const SCALAR_TYPES = new Set(['boolean', 'integer', 'number', 'string'])
+
+// Zod writes a union of scalars as a `type` list, which becomes an `anyOf`,
+// and ArkType, Valibot and Pydantic as an `anyOf` of them. No value has two of
+// these types but an integer, which is a number too, so a `oneOf` means the
+// same, which NSwag reads as the first type and the OpenAPI Generator
+// TypeScript client as a union, but the `anyOf` as an empty class. NSwag
+// reads an `enum` beside the `anyOf` only, and gives a property a type it
+// never defines when an `allOf` holds a `$ref` to the `oneOf`, as a `$ref`
+// with siblings becomes, so a schema a `$ref` points to keeps it.
+function scalarOneOf(out: Record<string, unknown>): void {
+  const branches = out.anyOf
+  if (!Array.isArray(branches) || out.oneOf !== undefined || out.enum !== undefined) {
+    return
+  }
+  const types = new Set<unknown>()
+  let nulls = 0
+  for (const branch of branches) {
+    if (isNullBranch(branch, out)) {
+      nulls++
+    } else if (
+      isRecord(branch) &&
+      SCALAR_TYPES.has(branch.type as string) &&
+      !types.has(branch.type) &&
+      Object.keys(branch).length === 1
+    ) {
+      types.add(branch.type)
+    } else {
+      return
+    }
+  }
+  if (nulls <= 1 && !(types.has('integer') && types.has('number'))) {
+    delete out.anyOf
+    out.oneOf = branches
+  }
+}
+
 // The type of every value in a list, when they all have the same one.
 function sharedType(values: unknown): string | undefined {
   if (!Array.isArray(values)) {
@@ -1060,6 +1101,9 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
         if (Array.isArray(branches) && (key === 'anyOf' || branches.length === 2)) {
           mergeNullable(schema, root, key)
         }
+        if (!refTargets.has(input)) {
+          scalarOneOf(schema)
+        }
       }
     }
     return out
@@ -1067,6 +1111,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     // Cleared even when conversion throws, so nothing keeps the input alive.
     nullableUnions.length = 0
     unionTargets.clear()
+    refTargets.clear()
   }
 }
 

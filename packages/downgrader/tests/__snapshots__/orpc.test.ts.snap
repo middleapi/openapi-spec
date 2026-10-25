@@ -24,7 +24,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                     },
                     "path": {
                       "items": {
-                        "anyOf": [
+                        "oneOf": [
                           {
                             "type": "string",
                           },
@@ -186,7 +186,7 @@ exports[`matches the 3.0 snapshot 1`] = `
           },
           "attributes": {
             "additionalProperties": {
-              "anyOf": [
+              "oneOf": [
                 {
                   "type": "string",
                 },
@@ -465,7 +465,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                   },
                   "attributes": {
                     "additionalProperties": {
-                      "anyOf": [
+                      "oneOf": [
                         {
                           "type": "string",
                         },
@@ -832,7 +832,7 @@ exports[`matches the 3.0 snapshot 1`] = `
                   },
                   "attributes": {
                     "additionalProperties": {
-                      "anyOf": [
+                      "oneOf": [
                         {
                           "type": "string",
                         },

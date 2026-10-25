@@ -43,7 +43,7 @@ it('converts the oRPC document into a valid 3.0 document', async () => {
       attributes: {
         type: 'object',
         additionalProperties: {
-          anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+          oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
         },
       },
       discoveredAt: { 'type': 'string', 'format': 'date-time', 'x-native-type': 'date' },
