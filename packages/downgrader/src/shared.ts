@@ -103,7 +103,8 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
   }
   const out: Record<string, unknown> = {}
   copies.set(value, out)
-  for (const [key, item] of Object.entries(value)) {
+  for (const key of Object.keys(value)) {
+    const item = value[key]
     if (item !== undefined) {
       setOwn(out, key, copy(item, copies))
     }
@@ -136,7 +137,8 @@ export function convertObject(
   }
   const out: Record<string, unknown> = {}
   seen.set(value, out)
-  for (const [key, item] of Object.entries(value)) {
+  for (const key of Object.keys(value)) {
+    const item = value[key]
     if (item === undefined) {
       continue
     }
@@ -158,7 +160,8 @@ export function map(convert: Convert, isEntry: (key: string) => boolean = () => 
       return clone(value)
     }
     const out: Record<string, unknown> = {}
-    for (const [key, item] of Object.entries(value)) {
+    for (const key of Object.keys(value)) {
+      const item = value[key]
       const converted = item === undefined ? DROP : isEntry(key) ? convert(item, ctx) : clone(item)
       if (converted !== DROP) {
         setOwn(out, key, converted)
