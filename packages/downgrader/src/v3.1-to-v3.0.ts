@@ -682,6 +682,27 @@ function valueType(value: unknown): string | undefined {
   }
 }
 
+// The `type` of a union whose branches are all enums of that one `type`, or
+// such unions, as a union of `const`s becomes, and as Zod nests one for each
+// `.or()`. A branch with `nullable` lets null through.
+function enumUnionType(branches: unknown): string | undefined {
+  if (!Array.isArray(branches) || branches.length < 2) {
+    return undefined
+  }
+  const [first] = branches
+  const type = isRecord(first) ? first.type : undefined
+  return typeof type === 'string' &&
+    branches.every(
+      (branch) =>
+        isRecord(branch) &&
+        branch.type === type &&
+        branch.nullable !== true &&
+        (Array.isArray(branch.enum) || enumUnionType(branch.anyOf ?? branch.oneOf) === type),
+    )
+    ? type
+    : undefined
+}
+
 function isMediaTypeOnly(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -760,6 +781,13 @@ function finishSchema(
     delete out.enum
     out.type = constType
     out.enum = values
+  }
+  // NSwag reads a union of enums with no `type` beside it, as Zod writes a
+  // union of literals and OpenSearch a documented enum, as an empty class or
+  // as a type it never defines. Every branch already has that `type`.
+  const unionType = out.type === undefined ? enumUnionType(out.anyOf ?? out.oneOf) : undefined
+  if (unionType !== undefined) {
+    out.type = unionType
   }
   if (out.type === 'array' && out.items === undefined) {
     out.items = {}
