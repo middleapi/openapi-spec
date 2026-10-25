@@ -137,6 +137,19 @@ const unionTargets = new Set<unknown>()
 // A branch with these stays, since null can still fail them beside `nullable: true`.
 const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'oneOf']
 
+// 3.0 keywords that describe a value and never reject one.
+const ANNOTATION_KEYWORDS = new Set([
+  'default',
+  'deprecated',
+  'description',
+  'example',
+  'externalDocs',
+  'readOnly',
+  'title',
+  'writeOnly',
+  'xml',
+])
+
 const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
@@ -608,9 +621,15 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   // A branch that accepts every value, as Zod writes for a nullable unknown and
   // Pydantic for `Optional[Any]`, makes the `anyOf` accept every value too.
   // Code generators read the pair as a union with a string, or as a type they
-  // never define.
-  if (key === 'anyOf' && acceptsAll(other)) {
+  // never define. Zod writes the description of such a value in the branch.
+  const names = Object.keys(other)
+  if (
+    key === 'anyOf' &&
+    names.every((name) => ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')) &&
+    !names.some((name) => Object.hasOwn(out, name))
+  ) {
     delete out.anyOf
+    Object.assign(out, other)
     return
   }
   if (
