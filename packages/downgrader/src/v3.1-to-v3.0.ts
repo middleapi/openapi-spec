@@ -134,9 +134,8 @@ const nullableUnions: [schema: Record<string, unknown>, input: object, key: 'any
 // into. They keep it, so the `$ref` still resolves.
 const unionTargets = new Set<unknown>()
 
-// A branch with these stays: null can still fail them beside `nullable: true`,
-// and a `nullable` already there was written 3.0-style.
-const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'nullable', 'oneOf']
+// A branch with these stays, since null can still fail them beside `nullable: true`.
+const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'oneOf']
 
 const convertAnyOf = list(convertSchema)
 const convertCallback = map(convertPathItem, isNotExtension)
@@ -606,6 +605,9 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   }
   if (
     typeof other.type === 'string' &&
+    // Zod writes a nullable nullish value as a nullable branch beside null.
+    // Null matches both, which a `oneOf` rejects.
+    !(key === 'oneOf' && other.nullable === true) &&
     !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(other, name)) &&
     !Object.keys(other).some((name) => Object.hasOwn(out, name)) &&
     // `additionalProperties` reads the `properties` beside it.
