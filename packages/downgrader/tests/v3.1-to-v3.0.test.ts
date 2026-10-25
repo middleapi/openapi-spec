@@ -485,6 +485,63 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('turns a union of scalar types into oneOf, which NSwag reads as the first type', () => {
+      const pattern = '^-?(?:0|[1-9]\\d*)$'
+      // ASP.NET Core writes a number that may come as a string this way.
+      expect(
+        downgradeSchemaV31ToV30({ type: ['integer', 'string'], format: 'int32', pattern }),
+      ).toEqual({ format: 'int32', pattern, oneOf: [{ type: 'integer' }, { type: 'string' }] })
+      expect(downgradeSchemaV31ToV30({ type: ['string', 'boolean', 'null'] })).toEqual({
+        oneOf: [
+          { type: 'string' },
+          { type: 'boolean' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      // ArkType and Valibot write a union of scalars as an `anyOf` of them.
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'number' }, { type: 'string' }] })).toEqual({
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+      })
+      // An integer is a number too, null twice matches two branches, NSwag
+      // reads an `enum` only beside an `anyOf`, and a `oneOf` with a type twice
+      // would match no value of it.
+      const kept: OpenAPIV3_1.SchemaObject[] = [
+        { type: ['integer', 'number'] },
+        { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }, { type: 'null' }] },
+        { type: ['string', 'integer'], enum: ['a', 1] },
+        { anyOf: [{ type: 'string' }, { type: 'string' }] },
+        { anyOf: [{ type: 'string', minLength: 1 }, { type: 'number' }] },
+        { anyOf: [{ type: 'string' }, { type: 'object' }] },
+      ]
+      for (const schema of kept) {
+        expect(downgradeSchemaV31ToV30(schema)).toHaveProperty('anyOf')
+      }
+      // NSwag gives a property a type it never defines when an `allOf` holds a
+      // `$ref` to the `oneOf`, as a `$ref` with siblings becomes.
+      const schemas = convert({
+        components: {
+          schemas: {
+            Referenced: { type: ['string', 'number'] },
+            Named: { type: ['string', 'number'] },
+            Holder: {
+              properties: { a: { $ref: '#/components/schemas/Referenced', description: 'd' } },
+            },
+          },
+        },
+      }).components?.schemas
+      expect(schemas?.Referenced).toHaveProperty('anyOf')
+      expect(schemas?.Named).toHaveProperty('oneOf')
+      expect(
+        downgradeSchemaV31ToV30({
+          type: ['string', 'number'],
+          oneOf: [{ minLength: 1 }, { minimum: 1 }],
+        }),
+      ).toEqual({
+        oneOf: [{ minLength: 1 }, { minimum: 1 }],
+        anyOf: [{ type: 'string' }, { type: 'number' }],
+      })
+    })
+
     it('turns type null into a nullable type that only null matches', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
       expect(Object.keys(downgradeSchemaV31ToV30({ type: 'null' }))).toEqual([
@@ -555,7 +612,7 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }],
         }),
       ).toEqual({
-        anyOf: [
+        oneOf: [
           { type: 'string' },
           { type: 'number' },
           { type: 'string', nullable: true, enum: [null] },
