@@ -744,7 +744,7 @@ export interface EncodingObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#responses-object}
  */
-export interface ResponsesObject extends SpecificationExtensions {
+export interface ResponsesObject extends SpecificationExtensions, StatusCodeResponses {
   /**
    * The documentation of responses other than the ones declared for specific
    * HTTP response codes. Use this field to cover undeclared responses.
@@ -762,8 +762,20 @@ export interface ResponsesObject extends SpecificationExtensions {
    * explicit code definition takes precedence over the range definition for
    * that code.
    */
-  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject
+  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject | undefined
 }
+
+// TypeScript checks a numeric key such as `200` only against declared fields,
+// never against the template index signature above, so every code from 100 to
+// 599 is also declared as a field.
+type StatusCodeResponses = {
+  [statusCode in `${1 | 2 | 3 | 4 | 5}${Digit}${Digit}`]?:
+    | ResponseObject
+    | ReferenceObject
+    | undefined
+}
+
+type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 /**
  * Describes a single response from an API operation, including design-time,

@@ -412,6 +412,11 @@ export const invalidStatusCodeRange = {
   default: { description: 'fallback' },
 } satisfies ResponsesObject
 
+export const numericStatusCode = {
+  // @ts-expect-error: A numeric status code key is checked like a quoted one.
+  200: { descripton: 'misspelled' },
+} satisfies ResponsesObject
+
 export const typedSchema = {
   default: 'available',
   enum: ['available', 'pending', 'sold'],
