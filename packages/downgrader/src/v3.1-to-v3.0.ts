@@ -567,6 +567,16 @@ function isOnlyNullSchema(value: unknown): boolean {
   )
 }
 
+// A 3.1 `type` that names `"null"`, with nothing beside it that null could fail.
+function acceptsNull(schema: unknown): boolean {
+  return (
+    isRecord(schema) &&
+    hasType(schema.type, 'null') &&
+    schema.const === undefined &&
+    !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(schema, name))
+  )
+}
+
 // A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.
 function rejectsNull(schema: unknown): boolean {
   if (!isRecord(schema) || schema.nullable === true) {
@@ -619,11 +629,18 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   } else if (key === 'anyOf' && out.oneOf === undefined) {
     // A `$ref` kept as written rejects null when its target does.
     const ref = getRef(other)
-    if (rejectsNull(ref === undefined ? other : find(root, ref))) {
+    const target = ref === undefined ? other : find(root, ref)
+    if (rejectsNull(target)) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find(isOnlyNullSchema)
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
+    } else if (ref !== undefined && Object.keys(out).length === 1 && acceptsNull(target)) {
+      // GitHub writes a nullable reference this way to a schema that already
+      // admits null, which 3.0 writes as the `$ref` alone. NSwag reads the pair
+      // as an empty class, and oapi-codegen as a union.
+      delete out.anyOf
+      out.$ref = ref
     }
   }
 }
