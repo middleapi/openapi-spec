@@ -782,6 +782,21 @@ describe('downgradeSchemaV31ToV30', () => {
     },
   )
 
+  it('keeps a 3.0-style boolean exclusive bound beside a numeric one, as NestJS writes it', () => {
+    const schema = (fields: Record<string, unknown>) =>
+      downgradeSchemaV31ToV30(fields as OpenAPIV3_1.SchemaObject)
+    expect(schema({ minimum: 0, exclusiveMinimum: true })).toEqual({
+      minimum: 0,
+      exclusiveMinimum: true,
+    })
+    expect(schema({ maximum: 10, exclusiveMaximum: true })).toEqual({
+      maximum: 10,
+      exclusiveMaximum: true,
+    })
+    expect(schema({ exclusiveMinimum: true, exclusiveMaximum: true })).toEqual({})
+    expect(schema({ minimum: 0, exclusiveMinimum: false })).toEqual({ minimum: 0 })
+  })
+
   it('turns examples into example', () => {
     expect(downgradeSchemaV31ToV30({ examples: ['a', 'b'] })).toEqual({ example: 'a' })
     expect(downgradeSchemaV31ToV30({ example: 'x', examples: ['a'] })).toEqual({ example: 'x' })

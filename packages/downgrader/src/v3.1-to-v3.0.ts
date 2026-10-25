@@ -733,6 +733,14 @@ function finishSchema(
     out.maximum = exclusiveMaximum
     out.exclusiveMaximum = true
   }
+  // The 3.0 boolean form, as NestJS writes it in 3.1, means in 3.0 what its
+  // author meant beside a numeric bound.
+  if (exclusiveMinimum === true && typeof minimum === 'number') {
+    out.exclusiveMinimum = true
+  }
+  if (exclusiveMaximum === true && typeof maximum === 'number') {
+    out.exclusiveMaximum = true
+  }
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
   }
