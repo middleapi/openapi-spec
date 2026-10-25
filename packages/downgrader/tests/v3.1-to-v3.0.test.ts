@@ -526,6 +526,10 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
         }),
       ).toEqual({ type: 'string', nullable: true })
+      // One branch holds no null to merge, as Valibot writes a union of one schema.
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }] })).toEqual({
+        anyOf: [{ type: 'string' }],
+      })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'null' }, { type: 'string', enum: ['a'] }, { type: 'null' }],
