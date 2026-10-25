@@ -570,13 +570,28 @@ function isOnlyNull(values: unknown): boolean {
   return Array.isArray(values) && values.length === 1 && values[0] === null
 }
 
-function isOnlyNullSchema(value: unknown): boolean {
+// The schema around a branch holds `name` with the same value, as ArkType
+// writes the description of a described union into every branch too.
+function repeats(
+  out: Record<string, unknown>,
+  branch: Record<string, unknown>,
+  name: string,
+): boolean {
+  return Object.hasOwn(out, name) && jsonKey(out[name]) === jsonKey(branch[name])
+}
+
+// Only null matches the branch, as `{ type: "null" }` becomes, and its other
+// keywords repeat the schema around it.
+function isNullBranch(value: unknown, out: Record<string, unknown>): boolean {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 3 &&
     value.type === 'string' &&
     value.nullable === true &&
-    isOnlyNull(value.enum)
+    isOnlyNull(value.enum) &&
+    Object.keys(value).every(
+      (name) =>
+        name === 'type' || name === 'nullable' || name === 'enum' || repeats(out, value, name),
+    )
   )
 }
 
@@ -604,16 +619,16 @@ function rejectsNull(schema: unknown): boolean {
 // Zod writes a nullable object, array, or integer as an `anyOf` of it and
 // `{ type: "null" }`. Code generators read that pair in 3.0 as a union or an
 // empty class, so the branch takes its place with `nullable: true`, as 3.0
-// writes it, when the schema around it has none of its keywords. A branch
-// that stays, such as a `$ref` or an `enum`, makes the pair a `oneOf` when it
-// rejects null, as null then matches one branch only. NSwag reads that
-// `oneOf` as nullable, and the `anyOf` as an empty class. typia and Litestar
-// write the pair as a `oneOf`, which means the same when the other branch
-// takes `nullable`, and oapi-codegen reads it as a union.
+// writes it, when the schema around it has none of its keywords with another
+// value. A branch that stays, such as a `$ref` or an `enum`, makes the pair a
+// `oneOf` when it rejects null, as null then matches one branch only. NSwag
+// reads that `oneOf` as nullable, and the `anyOf` as an empty class. typia
+// and Litestar write the pair as a `oneOf`, which means the same when the
+// other branch takes `nullable`, and oapi-codegen reads it as a union.
 function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf' | 'oneOf'): void {
   const branches = out[key] as unknown[]
   // Effect writes null twice for a nullish value, once for `undefined`.
-  const others = branches.filter((branch) => !isOnlyNullSchema(branch))
+  const others = branches.filter((branch) => !isNullBranch(branch, out))
   const [other] = others
   if (others.length !== 1 || !isRecord(other)) {
     return
@@ -625,8 +640,11 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   const names = Object.keys(other)
   if (
     key === 'anyOf' &&
-    names.every((name) => ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')) &&
-    !names.some((name) => Object.hasOwn(out, name))
+    names.every(
+      (name) =>
+        (ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')) &&
+        (!Object.hasOwn(out, name) || repeats(out, other, name)),
+    )
   ) {
     delete out.anyOf
     Object.assign(out, other)
@@ -638,7 +656,10 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     // Null matches both, which a `oneOf` rejects.
     !(key === 'oneOf' && other.nullable === true) &&
     !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(other, name)) &&
-    !Object.keys(other).some((name) => Object.hasOwn(out, name)) &&
+    // A `type` beside the pair rejects the null that `nullable` would admit.
+    names.every(
+      (name) => !Object.hasOwn(out, name) || (name !== 'type' && repeats(out, other, name)),
+    ) &&
     // `additionalProperties` reads the `properties` beside it.
     !(Object.hasOwn(other, 'additionalProperties') && Object.hasOwn(out, 'properties')) &&
     !(Object.hasOwn(other, 'properties') && Object.hasOwn(out, 'additionalProperties'))
@@ -651,7 +672,7 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     const target = ref === undefined ? other : find(root, ref)
     if (rejectsNull(target)) {
       // Null once, since `oneOf` rejects a value that matches two branches.
-      const nullBranch = branches.find(isOnlyNullSchema)
+      const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
     } else if (ref !== undefined && Object.keys(out).length === 1 && acceptsNull(target)) {
@@ -709,7 +730,7 @@ function enumUnionType(branches: unknown): string | undefined {
 // branches share.
 function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void {
   const branches = out[key] as unknown[]
-  const enums = branches.filter((branch) => !isOnlyNullSchema(branch))
+  const enums = branches.filter((branch) => !isNullBranch(branch, out))
   const type = enumUnionType(enums)
   if (
     type === undefined ||
@@ -721,7 +742,12 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   const values: unknown[] = []
   const seen = new Set<unknown>()
   for (const branch of enums as Record<string, unknown>[]) {
-    if (Object.keys(branch).length !== 2 || !Array.isArray(branch.enum)) {
+    if (
+      !Array.isArray(branch.enum) ||
+      !Object.keys(branch).every(
+        (name) => name === 'type' || name === 'enum' || repeats(out, branch, name),
+      )
+    ) {
       return
     }
     for (const value of branch.enum) {
@@ -736,8 +762,8 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   }
   const merged = { type, enum: values }
   if (enums.length < branches.length) {
-    const nulls = branches.filter(isOnlyNullSchema)
-    out[key] = isOnlyNullSchema(branches[0]) ? [...nulls, merged] : [merged, ...nulls]
+    const nulls = branches.filter((branch) => isNullBranch(branch, out))
+    out[key] = isNullBranch(branches[0], out) ? [...nulls, merged] : [merged, ...nulls]
   } else {
     delete out[key]
     Object.assign(out, merged)
