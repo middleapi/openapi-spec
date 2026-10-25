@@ -563,6 +563,17 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('removes an anyOf of null and a branch that accepts every value, as Zod and Pydantic write a nullable unknown', () => {
+      expect(downgradeSchemaV31ToV30({ title: 'A', anyOf: [{}, { type: 'null' }] })).toEqual({
+        title: 'A',
+      })
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'null' }, true] })).toEqual({})
+      // Null matches both branches of the oneOf, which then rejects it.
+      expect(downgradeSchemaV31ToV30({ oneOf: [{}, { type: 'null' }] })).toEqual({
+        oneOf: [{}, { type: 'string', nullable: true, enum: [null] }],
+      })
+    })
+
     it('merges a oneOf of one type and null into that type with nullable, as typia and Litestar write it', () => {
       const object: OpenAPIV3_1.SchemaObject = {
         type: 'object',
