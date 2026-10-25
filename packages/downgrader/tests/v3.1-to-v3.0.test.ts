@@ -448,12 +448,11 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schema({ type: 'string', nullable: true })).toEqual({ type: 'string', nullable: true })
       expect(schema({ nullable: true })).toEqual({})
       expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
-      // It admits null, which the 3.1 schema did not, so the branches can overlap.
+      // It admits null, which the 3.1 branch did not, so the branches can overlap,
+      // and the `anyOf` the `oneOf` becomes takes the branch in place of the pair.
       expect(schema({ oneOf: [{ type: 'string', nullable: true }, { type: 'null' }] })).toEqual({
-        anyOf: [
-          { type: 'string', nullable: true },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        type: 'string',
+        nullable: true,
       })
     })
 
@@ -574,6 +573,24 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('merges a nullable branch beside null, as Zod writes a nullable nullish value', () => {
+      const nullable: OpenAPIV3_1.SchemaObject = {
+        anyOf: [{ type: 'string', maxLength: 5 }, { type: 'null' }],
+      }
+      expect(downgradeSchemaV31ToV30({ anyOf: [nullable, { type: 'null' }] })).toEqual({
+        type: 'string',
+        maxLength: 5,
+        nullable: true,
+      })
+      // Null matches both branches of the oneOf, which then rejects it.
+      expect(downgradeSchemaV31ToV30({ oneOf: [nullable, { type: 'null' }] })).toEqual({
+        oneOf: [
+          { type: 'string', maxLength: 5, nullable: true },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+    })
+
     it('merges a oneOf of one type and null into that type with nullable, as typia and Litestar write it', () => {
       const object: OpenAPIV3_1.SchemaObject = {
         type: 'object',
@@ -636,7 +653,6 @@ describe('downgradeSchemaV31ToV30', () => {
       }
       const untyped: OpenAPIV3_1.SchemaObject[] = [
         { $ref: '#/components/schemas/Pet' },
-        { type: 'string', nullable: true },
         { minLength: 1 },
       ]
       for (const branch of untyped) {
