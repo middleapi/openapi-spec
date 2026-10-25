@@ -624,6 +624,63 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('merges a pair whose branches repeat the description beside it, as ArkType writes a described nullable value', () => {
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'd',
+          anyOf: [
+            { type: 'string', description: 'd' },
+            { type: 'null', description: 'd' },
+          ],
+        }),
+      ).toEqual({ description: 'd', type: 'string', nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'd',
+          anyOf: [{ description: 'd' }, { type: 'null', description: 'd' }],
+        }),
+      ).toEqual({ description: 'd' })
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'd',
+          anyOf: [
+            { const: 'a', description: 'd' },
+            { const: 'b', description: 'd' },
+            { type: 'null', description: 'd' },
+          ],
+        }),
+      ).toEqual({
+        description: 'd',
+        oneOf: [
+          { type: 'string', enum: ['a', 'b'] },
+          { description: 'd', type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      // A keyword with another value beside it, as OpenSearch documents the
+      // null branch, still keeps the pair.
+      const kept: OpenAPIV3_1.SchemaObject[] = [
+        {
+          description: 'd',
+          anyOf: [
+            { type: 'string', description: 'd' },
+            { type: 'null', description: 'n' },
+          ],
+        },
+        { description: 'd', anyOf: [{ type: 'string', description: 'e' }, { type: 'null' }] },
+        { maxLength: 3, anyOf: [{ type: 'string', maxLength: 5 }, { type: 'null' }] },
+        { anyOf: [{ type: 'string' }, { type: 'null', description: 'n' }] },
+        // A `type` beside the pair rejects null, so `nullable` would widen it.
+        { type: 'string', anyOf: [{ type: 'string' }, { type: 'null' }] },
+        // An enum of null with a type that rejects it is not a null branch.
+        { anyOf: [{ type: 'integer' }, { type: 'string', enum: [null] }] },
+        { anyOf: [{ type: 'string' }, { type: 'integer', enum: [null] }] },
+      ]
+      for (const schema of kept) {
+        const out = downgradeSchemaV31ToV30(schema) as OpenAPIV3_0.SchemaObject
+        expect(out.anyOf ?? out.oneOf).toHaveLength(2)
+      }
+    })
+
     it('merges a oneOf of one type and null into that type with nullable, as typia and Litestar write it', () => {
       const object: OpenAPIV3_1.SchemaObject = {
         type: 'object',
