@@ -1088,6 +1088,167 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ type: 'array', items: {} })
   })
 
+  it('turns a propertyNames enum, as Zod writes a record with enum keys, into one property per name', () => {
+    const value = { type: 'number' } as const
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        propertyNames: { type: 'string', enum: ['a', 'b', 1] },
+        additionalProperties: value,
+        required: ['a', 'b'],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: value, b: value },
+      additionalProperties: false,
+      required: ['a', 'b'],
+    })
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] } })).toEqual({
+      properties: { a: {} },
+      additionalProperties: false,
+    })
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: undefined } }),
+    ).toEqual({ properties: { a: {} }, additionalProperties: false })
+    // A title or description changes nothing, and a literal key is a const.
+    expect(
+      downgradeSchemaV31ToV30({
+        propertyNames: { enum: ['a'], title: 'Key', description: 'A key' },
+      }),
+    ).toEqual({ properties: { a: {} }, additionalProperties: false })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        propertyNames: { type: 'string', const: 'a' },
+        additionalProperties: value,
+        required: ['a'],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: value },
+      additionalProperties: false,
+      required: ['a'],
+    })
+    // Beside other keywords that name properties, or with more than an enum, it is removed.
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, properties: { a: value } }),
+    ).toEqual({ properties: { a: value } })
+    expect(
+      downgradeSchemaV31ToV30({
+        propertyNames: { enum: ['a'] },
+        patternProperties: { '^a$': value },
+      }),
+    ).toEqual({ additionalProperties: true })
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, unevaluatedProperties: false }),
+    ).toEqual({ additionalProperties: false })
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'] }, additionalProperties: false }),
+    ).toEqual({ additionalProperties: false })
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: 2 } })).toEqual({})
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], type: 'number' } })).toEqual({})
+    expect(downgradeSchemaV31ToV30({ propertyNames: { enum: ['a', 'b'], const: 'a' } })).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({ propertyNames: { anyOf: [{ const: 'a' }, { const: 'b' }] } }),
+    ).toEqual({})
+    // Converted exactly, it keeps an enclosing oneOf.
+    expect(
+      downgradeSchemaV31ToV30({
+        oneOf: [
+          { type: 'object', propertyNames: { enum: ['a'] }, additionalProperties: value },
+          { type: 'string' },
+        ],
+      }),
+    ).toEqual({
+      oneOf: [
+        { type: 'object', properties: { a: value }, additionalProperties: false },
+        { type: 'string' },
+      ],
+    })
+  })
+
+  it('turns a propertyNames $ref to an enum, as Zod writes a record keyed by a reusable enum, into one property per name', () => {
+    const value = { type: 'number' } as const
+    const Lang = { type: 'string' as const, enum: ['en', 'fr'], title: 'Lang' }
+    const names = {
+      type: 'object',
+      properties: { en: value, fr: value },
+      additionalProperties: false,
+    } as const
+    expect(
+      convert({
+        components: {
+          schemas: {
+            Lang,
+            Names: {
+              type: 'object',
+              propertyNames: { $ref: '#/components/schemas/Lang' },
+              additionalProperties: value,
+            },
+          },
+        },
+      }).components?.schemas,
+    ).toEqual({ Lang, Names: names })
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        oneOf: [
+          { type: 'object', propertyNames: { $ref: '#/$defs/Lang' }, additionalProperties: value },
+          { type: 'string' },
+        ],
+      }),
+    ).toEqual({ oneOf: [names, { type: 'string' }] })
+    // A target that is not only an enum, or a $ref with more beside it, is removed as before.
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Short: { type: 'string', maxLength: 2 } },
+        propertyNames: { $ref: '#/$defs/Short' },
+      }),
+    ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', maxLength: 1 },
+      }),
+    ).toEqual({})
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', minLength: undefined },
+      }),
+    ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
+    // A described use, as Zod writes for `z.record(Lang.describe('...'), ...)`, drops the description.
+    expect(
+      downgradeSchemaV31ToV30({
+        $defs: { Lang },
+        propertyNames: { $ref: '#/$defs/Lang', title: 'Key', description: 'A key' },
+      }),
+    ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
+  })
+
+  it('replaces a $ref into the value schema of a record keyed by an enum with its target', () => {
+    // zod-to-json-schema points a reused schema at its first use.
+    const value = { type: 'number' } as const
+    expect(
+      downgradeSchemaV31ToV30({
+        properties: {
+          a: { propertyNames: { enum: ['x'] }, additionalProperties: value },
+          b: { $ref: '#/properties/a/additionalProperties' },
+        },
+      }),
+    ).toEqual({
+      properties: { a: { properties: { x: value }, additionalProperties: false }, b: value },
+    })
+    // A record keyed by any string keeps its additionalProperties, and so the $ref.
+    const map = {
+      properties: {
+        a: { additionalProperties: value },
+        b: { $ref: '#/properties/a/additionalProperties' },
+      },
+    } as const
+    expect(downgradeSchemaV31ToV30(map)).toEqual(map)
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(
