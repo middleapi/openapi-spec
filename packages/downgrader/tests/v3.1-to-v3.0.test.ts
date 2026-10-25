@@ -567,9 +567,41 @@ describe('downgradeSchemaV31ToV30', () => {
         title: 'A',
       })
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'null' }, true] })).toEqual({})
+      // Zod, Valibot, Effect, and Pydantic write the annotations of a described
+      // unknown in the branch.
+      const annotations = {
+        'title': 'B',
+        'description': 'B',
+        'default': 1,
+        'deprecated': true,
+        'externalDocs': { url: 'https://example.com' },
+        'readOnly': true,
+        'writeOnly': true,
+        'xml': { name: 'b' },
+        'x-a': 1,
+      }
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ ...annotations, examples: [1] }, { type: 'null' }] }),
+      ).toEqual({ ...annotations, example: 1 })
+      // The branch's description would replace the one beside it.
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'A',
+          anyOf: [{ description: 'B' }, { type: 'null' }],
+        }),
+      ).toEqual({
+        description: 'A',
+        anyOf: [{ description: 'B' }, { type: 'string', nullable: true, enum: [null] }],
+      })
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ minLength: 1 }, { type: 'null' }] })).toEqual({
+        anyOf: [{ minLength: 1 }, { type: 'string', nullable: true, enum: [null] }],
+      })
       // Null matches both branches of the oneOf, which then rejects it.
       expect(downgradeSchemaV31ToV30({ oneOf: [{}, { type: 'null' }] })).toEqual({
         oneOf: [{}, { type: 'string', nullable: true, enum: [null] }],
+      })
+      expect(downgradeSchemaV31ToV30({ oneOf: [{ description: 'B' }, { type: 'null' }] })).toEqual({
+        oneOf: [{ description: 'B' }, { type: 'string', nullable: true, enum: [null] }],
       })
     })
 
