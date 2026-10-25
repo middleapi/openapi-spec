@@ -4,6 +4,7 @@ import type {
   OpenAPIObject,
   RequestBodyObject,
   ResponseObject,
+  ResponsesObject,
   SchemaObject,
 } from './v3.2'
 
@@ -271,3 +272,8 @@ export const referencedHeaderContent = {
     'text/plain': { $ref: '#/components/mediaTypes/TraceId' },
   },
 } satisfies HeaderObject
+
+export const numericStatusCode = {
+  // @ts-expect-error: A numeric status code key is checked like a quoted one.
+  200: { descripton: 'misspelled' },
+} satisfies ResponsesObject
