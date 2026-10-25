@@ -711,14 +711,30 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ type: ['object', 'string'] })).toEqual({
         oneOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
-      expect(pet({ type: ['object', 'null'] })).toEqual({
-        anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
-      })
-      expect(pet({ type: 'null' })).toEqual({
-        anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
-      })
       expect(pet({ type: 'object', nullable: true } as OpenAPIV3_1.SchemaObject)).toEqual({
         anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
+      })
+    })
+
+    it('keeps only the $ref of an anyOf with null when the target admits null, as GitHub writes it', () => {
+      const ref = { $ref: '#/components/schemas/Pet' }
+      const owner = (target: OpenAPIV3_1.SchemaObject, extra: object = {}) =>
+        convert({
+          components: {
+            schemas: { Pet: target, Owner: { ...extra, anyOf: [{ type: 'null' }, ref] } },
+          },
+        }).components?.schemas?.Owner
+      expect(owner({ type: ['object', 'null'], properties: { a: { type: 'string' } } })).toEqual(
+        ref,
+      )
+      expect(owner({ type: 'null' })).toEqual(ref)
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      // Null can still fail the `enum` or `const`, and the `$ref` can take no description in 3.0.
+      expect(owner({ type: ['string', 'null'], enum: ['a'] })).toEqual({ anyOf: [onlyNull, ref] })
+      expect(owner({ type: ['string', 'null'], const: 'a' })).toEqual({ anyOf: [onlyNull, ref] })
+      expect(owner({ type: ['object', 'null'] }, { description: 'A' })).toEqual({
+        description: 'A',
+        anyOf: [onlyNull, ref],
       })
     })
 
