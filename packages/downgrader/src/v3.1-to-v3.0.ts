@@ -701,11 +701,12 @@ function enumUnionType(branches: unknown): string | undefined {
     : undefined
 }
 
-// Zod, Valibot and GrowthBook write a union of literals as an `anyOf` of
-// `const`s, GitHub as a `oneOf`, and ArkType a nullable one with null beside
-// them. Code generators read the union of one-value enums this becomes as a
-// string or as a union of one-value types, so the enums become one, which
-// they read as an enum. A `oneOf` rejects a value that two branches share.
+// Zod, Valibot, TypeBox and GrowthBook write a union of literals as an `anyOf`
+// of `const`s, GitHub as a `oneOf`, and ArkType and TypeBox a nullable one
+// with null beside them. Code generators read the union of one-value enums
+// this becomes as a string or as a union of one-value types, so the enums
+// become one, which they read as an enum. A `oneOf` rejects a value that two
+// branches share.
 function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void {
   const branches = out[key] as unknown[]
   const enums = branches.filter((branch) => !isOnlyNullSchema(branch))

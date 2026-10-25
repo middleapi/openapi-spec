@@ -2089,6 +2089,7 @@ describe('unusual input', () => {
         schemas: {
           S: { properties: 'none', allOf: {}, example: { a: 1, b: undefined } },
           R: { $ref: 1 },
+          U: { anyOf: [1, 2] },
         },
       },
     }
@@ -2102,6 +2103,7 @@ describe('unusual input', () => {
     expect(out.components?.schemas).toEqual({
       S: { properties: 'none', allOf: {}, example: { a: 1 } },
       R: {},
+      U: { anyOf: [1, 2] },
     })
   })
 })
