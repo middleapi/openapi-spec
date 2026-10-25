@@ -260,7 +260,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 - OpenAPI Generator merges the `"null"` branch beside a `$ref` to a string enum into a new enum, so the reference is lost. Pass `--openapi-normalizer SIMPLIFY_ONEOF_ANYOF_ENUM=false` to keep it.
 - datamodel-code-generator reads a required property with `nullable: true` as never null. Pass `--strict-nullable` to keep null.
 - oapi-codegen 2.8 rejects, and the OpenAPI Generator C# client breaks on, a string enum with a `format` such as `uuid`, which a `const` with a `format` becomes, as ArkType writes for `string.uuid`.
-- Validators that coerce a value to each branch's `type`, as Prism, express-openapi-validator and openapi-backend do for parameters, and Fastify by default for bodies too, match a value such as `1` or `"1"` to two branches of the `oneOf` a union of scalar types becomes, and reject it. They read 3.1 too, which keeps the `type` list.
+- Validators that coerce a value to each branch's `type`, as Prism, express-openapi-validator and openapi-backend do for parameters, and Fastify by default for bodies too, match a value such as `1` or `"1"` to two branches of the `oneOf` a union of scalar types becomes, and reject it. Prism, express-openapi-validator and openapi-backend read 3.1 too, which keeps the `type` list.
 - Kiota reads the `"null"` branch's `type: "string"` as a real type, so array items that may be null, and a union of several types with null, come out as strings. Kiota reads 3.1 too, which keeps their types.
 
 ## Performance
