@@ -1056,7 +1056,7 @@ describe('downgradeSchemaV31ToV30', () => {
       additionalProperties: false,
     })
     expect(
-      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], description: undefined } }),
+      downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: undefined } }),
     ).toEqual({ properties: { a: {} }, additionalProperties: false })
     // A title or description changes nothing, and a literal key is a const.
     expect(
@@ -1162,7 +1162,7 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({
         $defs: { Lang },
-        propertyNames: { $ref: '#/$defs/Lang', description: undefined },
+        propertyNames: { $ref: '#/$defs/Lang', minLength: undefined },
       }),
     ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
     // A described use, as Zod writes for `z.record(Lang.describe('...'), ...)`, drops the description.
