@@ -1614,6 +1614,27 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(() => JSON.stringify(out)).not.toThrow()
     })
 
+    it('keeps an anyOf for the $refs of its own conversion only', () => {
+      const union: OpenAPIV3_1.SchemaObject = { type: ['string', 'number'] }
+      const pair: OpenAPIV3_1.SchemaObject = { anyOf: [{ type: 'string' }, { type: 'null' }] }
+      const schemas = convert({
+        components: {
+          schemas: {
+            union,
+            pair,
+            A: { $ref: '#/components/schemas/union' },
+            B: { $ref: '#/components/schemas/pair/anyOf/0' },
+          },
+        },
+      }).components?.schemas
+      expect(schemas?.union).toHaveProperty('anyOf')
+      expect(schemas?.pair).toHaveProperty('anyOf')
+      expect(downgradeSchemaV31ToV30(union)).toEqual({
+        oneOf: [{ type: 'string' }, { type: 'number' }],
+      })
+      expect(downgradeSchemaV31ToV30(pair)).toEqual({ type: 'string', nullable: true })
+    })
+
     it('leaves a $ref into $defs that does not resolve as written', () => {
       expect(downgradeSchemaV31ToV30({ $ref: '#/$defs/Missing' })).toEqual({
         $ref: '#/$defs/Missing',
