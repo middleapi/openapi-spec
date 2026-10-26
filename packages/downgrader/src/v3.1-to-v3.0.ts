@@ -581,6 +581,10 @@ function isOnlyNull(values: unknown): boolean {
   return Array.isArray(values) && values.length === 1 && values[0] === null
 }
 
+function isAnnotation(name: string): boolean {
+  return ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')
+}
+
 // The schema around a branch holds `name` with the same value, as ArkType
 // writes the description of a described union into every branch too.
 function repeats(
@@ -652,9 +656,7 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
   if (
     key === 'anyOf' &&
     names.every(
-      (name) =>
-        (ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')) &&
-        (!Object.hasOwn(out, name) || repeats(out, other, name)),
+      (name) => isAnnotation(name) && (!Object.hasOwn(out, name) || repeats(out, other, name)),
     )
   ) {
     delete out.anyOf
@@ -799,11 +801,24 @@ function scalarOneOf(out: Record<string, unknown>): void {
     return
   }
   // Such a `oneOf` as a branch, as a nullable union of them or an Effect
-  // number in a union becomes, joins this one.
+  // number in a union becomes, joins this one. Zod writes the description of
+  // a described union in that branch, which then moves here.
   const members: unknown[] = []
+  const notes: Record<string, unknown> = {}
   for (const branch of branches) {
-    if (isRecord(branch) && Array.isArray(branch.oneOf) && Object.keys(branch).length === 1) {
+    if (
+      isRecord(branch) &&
+      Array.isArray(branch.oneOf) &&
+      Object.keys(branch).every(
+        (name) =>
+          name === 'oneOf' ||
+          (isAnnotation(name) &&
+            (!Object.hasOwn(out, name) || repeats(out, branch, name)) &&
+            (!Object.hasOwn(notes, name) || repeats(notes, branch, name))),
+      )
+    ) {
       members.push(...branch.oneOf)
+      Object.assign(notes, branch)
     } else {
       members.push(branch)
     }
@@ -826,7 +841,7 @@ function scalarOneOf(out: Record<string, unknown>): void {
   }
   if (nulls <= 1 && !(types.has('integer') && types.has('number'))) {
     delete out.anyOf
-    out.oneOf = members
+    Object.assign(out, notes, { oneOf: members })
   }
 }
 
