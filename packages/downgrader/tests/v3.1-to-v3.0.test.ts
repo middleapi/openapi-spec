@@ -1224,6 +1224,28 @@ describe('downgradeSchemaV31ToV30', () => {
         { title: 'C', type: 'string', enum: ['c'] },
       ],
     })
+    // Enums of one type with another keyword among them, or with no `type`, stay.
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ const: 'a' }, { const: 'b', description: 'B' }, { const: 'c' }, { type: 'null' }],
+      }),
+    ).toEqual({
+      anyOf: [
+        { type: 'string', enum: ['a'] },
+        { description: 'B', type: 'string', enum: ['b'] },
+        { type: 'string', enum: ['c'] },
+        { type: 'string', nullable: true, enum: [null] },
+      ],
+    })
+    // A branch stays as written when no other enum shares its `type`.
+    const described: OpenAPIV3_1.SchemaObject = { type: 'string', enum: ['a'], description: 'D' }
+    expect(
+      downgradeSchemaV31ToV30({ description: 'D', anyOf: [described, { type: 'boolean' }] }),
+    ).toEqual({ description: 'D', oneOf: [described, { type: 'boolean' }] })
+    const typeless: OpenAPIV3_1.SchemaObject = {
+      anyOf: [{ enum: ['a', 1] }, { enum: ['b', 2] }, { type: 'boolean' }],
+    }
+    expect(downgradeSchemaV31ToV30(typeless)).toEqual(typeless)
     expect(
       downgradeSchemaV31ToV30({ anyOf: [{ const: 'a' }, { const: 1 }, { const: 'a' }] }),
     ).toEqual({
