@@ -456,7 +456,7 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
-    it('turns several types into anyOf, moving items into the array branch', () => {
+    it('turns several types into a union, moving items into the array branch', () => {
       expect(
         downgradeSchemaV31ToV30({
           type: ['array', 'string', 'null'],
@@ -465,7 +465,7 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({
         maxLength: 3,
-        anyOf: [
+        oneOf: [
           { type: 'array', items: { type: 'number' } },
           { type: 'string' },
           { type: 'string', nullable: true, enum: [null] },
@@ -501,6 +501,11 @@ describe('downgradeSchemaV31ToV30', () => {
       // ArkType and Valibot write a union of scalars as an `anyOf` of them.
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'number' }, { type: 'string' }] })).toEqual({
         oneOf: [{ type: 'number' }, { type: 'string' }],
+      })
+      // Also with an array, as for `string | string[]`.
+      const strings = { type: 'array', items: { type: 'string' } } as const
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, strings] })).toEqual({
+        oneOf: [{ type: 'string' }, strings],
       })
       // As Effect writes a number.
       const effectNumber: OpenAPIV3_1.SchemaObject[] = [
@@ -2081,7 +2086,7 @@ describe('downgradeSchemaV31ToV30', () => {
             Nested: {
               oneOf: [
                 { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
-                { type: 'string' },
+                { type: 'array', items: { type: 'string' } },
               ],
             },
             Cycle: { oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }] },
@@ -2101,7 +2106,7 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schemas?.Nested).toEqual({
         anyOf: [
           { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
-          { type: 'string' },
+          { type: 'array', items: { type: 'string' } },
         ],
       })
       expect(schemas?.Cycle).toEqual({
@@ -2230,7 +2235,7 @@ describe('unusual input', () => {
       allOf: [{ minimum: 0 }, { not: {} }],
     })
     expect(downgradeSchemaV31ToV30({ type: ['array', 'string'] })).toEqual({
-      anyOf: [{ type: 'array', items: {} }, { type: 'string' }],
+      oneOf: [{ type: 'array', items: {} }, { type: 'string' }],
     })
     expect(downgradeSchemaV31ToV30({ type: ['string'] })).toEqual({ type: 'string' })
     expect(downgradeSchemaV31ToV30({ maximum: 5, exclusiveMaximum: 10 })).toEqual({ maximum: 5 })
