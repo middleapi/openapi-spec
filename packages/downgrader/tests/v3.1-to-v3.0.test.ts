@@ -564,17 +564,32 @@ describe('downgradeSchemaV31ToV30', () => {
           { type: 'boolean' },
         ],
       })
-      // An integer is a number too, null twice matches two branches, NSwag
-      // reads an `enum` only beside an `anyOf`, and a `oneOf` with a type twice
-      // would match no value of it.
+      // Effect writes null twice for a nullish value, and Zod a nullable nullish
+      // union as a nullable union of them, which the `oneOf` takes once.
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [...effectNumber, { type: 'null' }, { type: 'null' }] }),
+      ).toEqual({ oneOf: [...effectNumber, { type: 'string', nullable: true, enum: [null] }] })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: ['string', 'number', 'null'] }, { type: 'null' }],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string' },
+          { type: 'number' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      // An integer is a number too, NSwag reads an `enum` only beside an
+      // `anyOf`, and a `oneOf` with a type or null twice would match no value
+      // of it.
       const kept: OpenAPIV3_1.SchemaObject[] = [
         { type: ['integer', 'number'] },
-        { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }, { type: 'null' }] },
+        { anyOf: [{ oneOf: [{ type: 'null' }, { type: 'null' }] }, { type: 'number' }] },
         { anyOf: [{ type: ['string', 'null'] }, { type: ['number', 'null'] }] },
         { type: ['string', 'integer'], enum: ['a', 1] },
         { anyOf: [{ type: 'string' }, { type: 'string' }] },
         { anyOf: [{ type: 'string' }, { type: 'object' }] },
-        { anyOf: [{ type: ['string', 'number', 'null'] }, { type: 'null' }] },
         {
           anyOf: [
             { anyOf: [{ type: 'string' }, { type: 'number' }], minLength: 1 },
