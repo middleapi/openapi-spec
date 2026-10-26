@@ -581,9 +581,11 @@ describe('downgradeSchemaV31ToV30', () => {
         ],
       })
       // An integer is a number too, NSwag reads an `enum` only beside an
-      // `anyOf`, and a `oneOf` with a type twice would match no value of it.
+      // `anyOf`, and a `oneOf` with a type or null twice would match no value
+      // of it.
       const kept: OpenAPIV3_1.SchemaObject[] = [
         { type: ['integer', 'number'] },
+        { anyOf: [{ oneOf: [{ type: 'null' }, { type: 'null' }] }, { type: 'number' }] },
         { anyOf: [{ type: ['string', 'null'] }, { type: ['number', 'null'] }] },
         { type: ['string', 'integer'], enum: ['a', 1] },
         { anyOf: [{ type: 'string' }, { type: 'string' }] },

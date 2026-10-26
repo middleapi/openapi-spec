@@ -806,7 +806,8 @@ function scalarOneOf(out: Record<string, unknown>): void {
   }
   // Such a `oneOf` as a branch, as a nullable union of them or an Effect
   // number in a union becomes, joins this one. Zod writes the description of
-  // a described union in that branch, which then moves here.
+  // a described union in that branch, which then moves here. One with null
+  // twice rejects null, so it stays.
   const members: unknown[] = []
   const notes: Record<string, unknown> = {}
   for (const branch of branches) {
@@ -819,7 +820,8 @@ function scalarOneOf(out: Record<string, unknown>): void {
           (isAnnotation(name) &&
             (!Object.hasOwn(out, name) || repeats(out, branch, name)) &&
             (!Object.hasOwn(notes, name) || repeats(notes, branch, name))),
-      )
+      ) &&
+      branch.oneOf.filter((member) => isNullBranch(member, out)).length <= 1
     ) {
       members.push(...branch.oneOf)
       Object.assign(notes, branch)
