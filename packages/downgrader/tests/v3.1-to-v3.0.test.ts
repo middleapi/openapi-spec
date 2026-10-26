@@ -527,6 +527,27 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(
         downgradeSchemaV31ToV30({ anyOf: [{ type: 'boolean' }, { anyOf: effectNumber }] }),
       ).toEqual({ oneOf: [{ type: 'boolean' }, ...effectNumber] })
+      // Zod writes the description of a described nullable union beside its types.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ description: 'd', type: ['string', 'number'] }, { type: 'null' }],
+        }),
+      ).toEqual({
+        description: 'd',
+        oneOf: [
+          { type: 'string' },
+          { type: 'number' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [
+            { description: 'd', oneOf: [{ type: 'boolean' }] },
+            { description: 'd', anyOf: effectNumber },
+          ],
+        }),
+      ).toEqual({ description: 'd', oneOf: [{ type: 'boolean' }, ...effectNumber] })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }, { type: 'boolean' }],
@@ -551,8 +572,18 @@ describe('downgradeSchemaV31ToV30', () => {
         { anyOf: [{ type: ['string', 'number', 'null'] }, { type: 'null' }] },
         {
           anyOf: [
-            { anyOf: [{ type: 'string' }, { type: 'number' }], title: 'T' },
+            { anyOf: [{ type: 'string' }, { type: 'number' }], minLength: 1 },
             { type: 'null' },
+          ],
+        },
+        {
+          description: 'a',
+          anyOf: [{ type: ['string', 'number'], description: 'b' }, { type: 'null' }],
+        },
+        {
+          anyOf: [
+            { description: 'a', oneOf: [{ type: 'boolean' }] },
+            { description: 'b', anyOf: effectNumber },
           ],
         },
         {
