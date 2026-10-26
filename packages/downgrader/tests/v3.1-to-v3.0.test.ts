@@ -1171,16 +1171,87 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'string', enum: ['a', 'b'] },
       ],
     })
+    // Beside other types, as Zod writes `'a' | 'b' | number`, the enums of each
+    // type become one, and a union of scalars then becomes a `oneOf`.
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string', const: 'a' }, { type: 'string', const: 'b' }, { type: 'number' }],
+      }),
+    ).toEqual({ oneOf: [{ type: 'string', enum: ['a', 'b'] }, { type: 'number' }] })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ anyOf: [{ const: 'a' }, { const: 1 }, { const: 'b' }] }, { type: 'null' }],
+      }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', enum: ['a', 'b'] },
+        { type: 'integer', enum: [1] },
+        { type: 'string', nullable: true, enum: [null] },
+      ],
+    })
+    // utoipa writes the unit variants of a Rust enum beside its other variants.
+    expect(
+      downgradeSchemaV31ToV30({
+        oneOf: [
+          { type: 'string', enum: ['pending'] },
+          { type: 'object', required: ['failed'] },
+          { type: 'string', enum: ['done'] },
+        ],
+      }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', enum: ['pending', 'done'] },
+        { type: 'object', required: ['failed'] },
+      ],
+    })
+    // A branch with another keyword stays, unless the schema around it holds
+    // that keyword with the same value, as ArkType writes a described union.
+    expect(
+      downgradeSchemaV31ToV30({
+        description: 'D',
+        anyOf: [
+          { const: 'a', description: 'D' },
+          { const: 1 },
+          { const: 'b', description: 'D' },
+          { const: 'c', title: 'C' },
+        ],
+      }),
+    ).toEqual({
+      description: 'D',
+      anyOf: [
+        { type: 'string', enum: ['a', 'b'] },
+        { type: 'integer', enum: [1] },
+        { title: 'C', type: 'string', enum: ['c'] },
+      ],
+    })
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [{ const: 'a' }, { const: 1 }, { const: 'a' }] }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'integer', enum: [1] },
+      ],
+    })
     // A `oneOf` rejects a value two branches share, and an `enum` beside the
     // union, or another `type`, matches only some of its values.
     const kept: [OpenAPIV3_1.SchemaObject, string][] = [
       [{ oneOf: [{ const: 'a' }, { enum: ['a', 'b'] }] }, 'oneOf'],
       [{ enum: ['a', 'c'], anyOf: [{ const: 'a' }, { const: 'b' }] }, 'anyOf'],
+      [{ enum: ['a', 1], anyOf: [{ const: 'a' }, { const: 1 }, { const: 'b' }] }, 'anyOf'],
       [{ type: 'number', anyOf: [{ const: 1 }, { const: 2 }] }, 'anyOf'],
     ]
     for (const [schema, key] of kept) {
       expect(downgradeSchemaV31ToV30(schema)).toHaveProperty(key)
     }
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ const: 'a' }, { const: 1 }, { const: 'a' }] }),
+    ).toEqual({
+      oneOf: [
+        { type: 'string', enum: ['a'] },
+        { type: 'integer', enum: [1] },
+        { type: 'string', enum: ['a'] },
+      ],
+    })
     // A `$ref` into the union still resolves.
     const doc = convert({
       components: {

@@ -748,11 +748,11 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   const branches = out[key] as unknown[]
   const enums = branches.filter((branch) => !isNullBranch(branch, out))
   const type = enumUnionType(enums)
-  if (
-    type === undefined ||
-    (out.type !== undefined && out.type !== type) ||
-    out.enum !== undefined
-  ) {
+  if ((out.type !== undefined && out.type !== type) || out.enum !== undefined) {
+    return
+  }
+  if (type === undefined) {
+    mergeEnumsByType(out, key)
     return
   }
   const values: unknown[] = []
@@ -783,6 +783,49 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   } else {
     delete out[key]
     Object.assign(out, merged)
+  }
+}
+
+// Zod, ArkType and Valibot write a union of literals of several types, or of
+// literals and other types, as `'a' | 'b' | number`, with a branch for each
+// literal, and utoipa so writes the unit variants of a Rust enum beside its
+// other variants. The enums of each type become one, so `scalarOneOf` can then
+// make a `oneOf` of a union of scalars.
+function mergeEnumsByType(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void {
+  const branches = out[key] as unknown[]
+  const merged = new Map<unknown, { enum: unknown[]; seen: Set<unknown> }>()
+  const result: unknown[] = []
+  for (const branch of branches) {
+    if (
+      !isRecord(branch) ||
+      typeof branch.type !== 'string' ||
+      !Array.isArray(branch.enum) ||
+      branch.nullable === true ||
+      !Object.keys(branch).every(
+        (name) => name === 'type' || name === 'enum' || repeats(out, branch, name),
+      )
+    ) {
+      result.push(branch)
+      continue
+    }
+    let group = merged.get(branch.type)
+    if (group === undefined) {
+      group = { enum: [], seen: new Set() }
+      merged.set(branch.type, group)
+      result.push({ type: branch.type, enum: group.enum })
+    }
+    for (const value of branch.enum) {
+      const valueKey = jsonKey(value)
+      if (!group.seen.has(valueKey)) {
+        group.seen.add(valueKey)
+        group.enum.push(value)
+      } else if (key === 'oneOf') {
+        return
+      }
+    }
+  }
+  if (result.length < branches.length) {
+    out[key] = result
   }
 }
 
