@@ -680,10 +680,13 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     delete out[key]
     Object.assign(out, other, { nullable: true })
   } else if (key === 'anyOf' && out.oneOf === undefined) {
-    // A `$ref` kept as written rejects null when its target does.
+    // A `$ref` kept as written rejects null when its target does, and so does
+    // the `allOf` that holds a `$ref` with siblings, as Zod writes the
+    // description of a described reference beside it.
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
-    if (rejectsNull(target)) {
+    const held = Array.isArray(other.allOf) ? getRef(other.allOf[0]) : undefined
+    if (rejectsNull(target) || (held !== undefined && rejectsNull(find(root, held)))) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
