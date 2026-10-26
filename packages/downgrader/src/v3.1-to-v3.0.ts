@@ -786,18 +786,19 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
   }
 }
 
-const SCALAR_TYPES = new Set(['boolean', 'integer', 'number', 'string'])
+const ONE_OF_TYPES = new Set(['array', 'boolean', 'integer', 'number', 'string'])
 
 // Zod writes a union of scalars as a `type` list, which becomes an `anyOf`,
-// ArkType, Valibot and Pydantic as an `anyOf` of them, and Effect a number as
-// an `anyOf` of it and the strings it writes for NaN and the infinities. No
-// value has two of these types but an integer, which is a number too, so a
-// `oneOf` of branches of different types, which only a null branch lets null
-// match, means the same. NSwag reads it as the first branch and the OpenAPI
-// Generator TypeScript client as a union, but the `anyOf` as an empty class. NSwag
-// reads an `enum` beside the `anyOf` only, and gives a property a type it
-// never defines when an `allOf` holds a `$ref` to the `oneOf`, as a `$ref`
-// with siblings becomes, so a schema a `$ref` points to keeps it.
+// ArkType, Valibot and Pydantic as an `anyOf` of them, also with an array, as
+// for `string | string[]`, and Effect a number as an `anyOf` of it and the
+// strings it writes for NaN and the infinities. No value has two of these types
+// but an integer, which is a number too, so a `oneOf` of branches of different
+// types, which only a null branch lets null match, means the same. NSwag reads
+// it as the first branch and the OpenAPI Generator TypeScript client as a
+// union, but the `anyOf` as an empty class. NSwag reads an `enum` beside the
+// `anyOf` only, and gives a property a type it never defines when an `allOf`
+// holds a `$ref` to the `oneOf`, as a `$ref` with siblings becomes, so a schema
+// a `$ref` points to keeps it.
 function scalarOneOf(out: Record<string, unknown>): void {
   const branches = out.anyOf
   if (!Array.isArray(branches) || out.oneOf !== undefined || out.enum !== undefined) {
@@ -833,7 +834,7 @@ function scalarOneOf(out: Record<string, unknown>): void {
       nulls++
     } else if (
       isRecord(member) &&
-      SCALAR_TYPES.has(member.type as string) &&
+      ONE_OF_TYPES.has(member.type as string) &&
       !types.has(member.type) &&
       member.nullable !== true
     ) {
