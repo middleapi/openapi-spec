@@ -827,11 +827,17 @@ function scalarOneOf(out: Record<string, unknown>): void {
       members.push(branch)
     }
   }
+  // Effect writes null twice for a nullish value, which the `oneOf` takes
+  // once, since null would match both.
+  const oneOf: unknown[] = []
   const types = new Set<unknown>()
-  let nulls = 0
+  let nullable = false
   for (const member of members) {
     if (isNullBranch(member, out)) {
-      nulls++
+      if (nullable) {
+        continue
+      }
+      nullable = true
     } else if (
       isRecord(member) &&
       ONE_OF_TYPES.has(member.type as string) &&
@@ -842,10 +848,11 @@ function scalarOneOf(out: Record<string, unknown>): void {
     } else {
       return
     }
+    oneOf.push(member)
   }
-  if (nulls <= 1 && !(types.has('integer') && types.has('number'))) {
+  if (!(types.has('integer') && types.has('number'))) {
     delete out.anyOf
-    Object.assign(out, notes, { oneOf: members })
+    Object.assign(out, notes, { oneOf })
   }
 }
 
