@@ -941,6 +941,21 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ type: 'object', nullable: true } as OpenAPIV3_1.SchemaObject)).toEqual({
         anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
+      // Zod writes the description of a described reference beside the `$ref`.
+      const described = (target: OpenAPIV3_1.SchemaObject) =>
+        convert({
+          components: {
+            schemas: {
+              Pet: target,
+              Owner: {
+                anyOf: [{ $ref: '#/components/schemas/Pet', description: 'd' }, { type: 'null' }],
+              },
+            },
+          },
+        }).components?.schemas?.Owner
+      const wrapped = { description: 'd', allOf: [{ $ref: '#/components/schemas/Pet' }] }
+      expect(described({ type: 'object' })).toEqual({ oneOf: [wrapped, onlyNull] })
+      expect(described({ type: ['object', 'null'] })).toEqual({ anyOf: [wrapped, onlyNull] })
     })
 
     it('keeps only the $ref of an anyOf with null when the target admits null, as GitHub writes it', () => {
