@@ -798,25 +798,35 @@ function scalarOneOf(out: Record<string, unknown>): void {
   if (!Array.isArray(branches) || out.oneOf !== undefined || out.enum !== undefined) {
     return
   }
+  // Such a `oneOf` as a branch, as a nullable union of them or an Effect
+  // number in a union becomes, joins this one.
+  const members: unknown[] = []
+  for (const branch of branches) {
+    if (isRecord(branch) && Array.isArray(branch.oneOf) && Object.keys(branch).length === 1) {
+      members.push(...branch.oneOf)
+    } else {
+      members.push(branch)
+    }
+  }
   const types = new Set<unknown>()
   let nulls = 0
-  for (const branch of branches) {
-    if (isNullBranch(branch, out)) {
+  for (const member of members) {
+    if (isNullBranch(member, out)) {
       nulls++
     } else if (
-      isRecord(branch) &&
-      SCALAR_TYPES.has(branch.type as string) &&
-      !types.has(branch.type) &&
-      branch.nullable !== true
+      isRecord(member) &&
+      SCALAR_TYPES.has(member.type as string) &&
+      !types.has(member.type) &&
+      member.nullable !== true
     ) {
-      types.add(branch.type)
+      types.add(member.type)
     } else {
       return
     }
   }
   if (nulls <= 1 && !(types.has('integer') && types.has('number'))) {
     delete out.anyOf
-    out.oneOf = branches
+    out.oneOf = members
   }
 }
 

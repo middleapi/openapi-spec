@@ -508,6 +508,25 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'string', enum: ['Infinity', '-Infinity', 'NaN'] },
       ]
       expect(downgradeSchemaV31ToV30({ anyOf: effectNumber })).toEqual({ oneOf: effectNumber })
+      // A nullable union of them, as Zod and Valibot write it, and an Effect
+      // number in a union join the branches around them.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [
+            { anyOf: [{ type: 'string', maxLength: 5 }, { type: 'boolean' }] },
+            { type: 'null' },
+          ],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', maxLength: 5 },
+          { type: 'boolean' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ type: 'boolean' }, { anyOf: effectNumber }] }),
+      ).toEqual({ oneOf: [{ type: 'boolean' }, ...effectNumber] })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }, { type: 'boolean' }],
@@ -529,6 +548,19 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: ['string', 'integer'], enum: ['a', 1] },
         { anyOf: [{ type: 'string' }, { type: 'string' }] },
         { anyOf: [{ type: 'string' }, { type: 'object' }] },
+        { anyOf: [{ type: ['string', 'number', 'null'] }, { type: 'null' }] },
+        {
+          anyOf: [
+            { anyOf: [{ type: 'string' }, { type: 'number' }], title: 'T' },
+            { type: 'null' },
+          ],
+        },
+        {
+          anyOf: [
+            { oneOf: [{ type: 'string' }, { type: 'string', enum: ['a'] }] },
+            { type: 'null' },
+          ],
+        },
       ]
       for (const schema of kept) {
         expect(downgradeSchemaV31ToV30(schema)).toHaveProperty('anyOf')
