@@ -970,11 +970,12 @@ function finishSchema(
       delete out[key]
     }
   }
-  for (const key of ['anyOf', 'oneOf'] as const) {
-    const branches = out[key]
-    if (Array.isArray(branches) && branches.length > 1) {
-      nullableUnions.push([out, schema, key])
-    }
+  // Two named reads, as reading `out[key]` in a loop here costs a few percent of a conversion.
+  if (Array.isArray(out.anyOf) && out.anyOf.length > 1) {
+    nullableUnions.push([out, schema, 'anyOf'])
+  }
+  if (Array.isArray(out.oneOf) && out.oneOf.length > 1) {
+    nullableUnions.push([out, schema, 'oneOf'])
   }
   if (loose) {
     LOOSE.add(out)
