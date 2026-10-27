@@ -1851,14 +1851,11 @@ describe('downgradeSchemaV31ToV30', () => {
       downgradeSchemaV31ToV30({
         oneOf: [
           { type: 'object', propertyNames: { enum: ['a'] }, additionalProperties: value },
-          { type: 'string' },
+          {},
         ],
       }),
     ).toEqual({
-      oneOf: [
-        { type: 'object', properties: { a: value }, additionalProperties: false },
-        { type: 'string' },
-      ],
+      oneOf: [{ type: 'object', properties: { a: value }, additionalProperties: false }, {}],
     })
   })
 
@@ -2086,6 +2083,7 @@ describe('downgradeSchemaV31ToV30', () => {
       // it in an `allOf`, as OpenAI writes a resource as an item and its ID.
       const kept: unknown[] = [
         { ...second, required: [] },
+        { ...second, properties: { type: { enum: [null, 'b'] } } },
         { properties: second.properties },
         { allOf: [{ $ref: '#/$defs/B' }, { required: ['id'] }] },
       ]
@@ -2122,19 +2120,23 @@ describe('downgradeSchemaV31ToV30', () => {
       // As OpenAI writes text or a list of input items, and Zod a nullable
       // object with null as a branch of its own.
       expect(
-        downgradeSchemaV31ToV30({ oneOf: [{ type: 'string' }, metadata, { type: 'null' }] }),
+        downgradeSchemaV31ToV30({
+          oneOf: [{ type: 'string' }, { type: 'integer' }, metadata, { type: 'null' }],
+        }),
       ).toEqual({
         oneOf: [
           { type: 'string' },
+          { type: 'integer' },
           { type: 'object' },
           { type: 'string', nullable: true, enum: [null] },
         ],
       })
       // A value can match both when they share a value, or neither holds the
       // property to some values, or requires it, or takes only objects, or
-      // both take null. Objects as values count as none, since they may hold
-      // the same keys in another order, and so do values beside `nullable` or
-      // a `type` that names null, which becomes `nullable`.
+      // both take null, or when a `$ref` dangles. Objects as values count as
+      // none, since they may hold the same keys in another order, and so do
+      // values beside `nullable` or a `type` that names null, which becomes
+      // `nullable`.
       const others: unknown[] = [
         { ...second, properties: { type: { enum: [null, 'a'] } } },
         { ...second, properties: { type: { const: { b: 1 } } } },
@@ -2147,20 +2149,33 @@ describe('downgradeSchemaV31ToV30', () => {
         { properties: { type: { const: 'a' } }, required: ['type'] },
         true,
         { ...second, nullable: true },
+        { $ref: '#/$defs/Missing' },
       ]
-      for (const other of others) {
-        for (const oneOf of [
+      const keyed = (value: unknown, other: string): OpenAPIV3_1.SchemaObject => ({
+        ...first,
+        properties: { ...first.properties, type: { enum: [value, other] } },
+      })
+      const unions: unknown[][] = [
+        ...others.flatMap((other) => [
           [first, other],
           [other, first],
-        ]) {
-          expect(downgradeSchemaV31ToV30({ oneOf } as OpenAPIV3_1.SchemaObject)).toHaveProperty(
-            'anyOf',
-          )
-        }
+        ]),
+        [
+          { ...first, required: [] },
+          { ...second, required: [] },
+        ],
+        [
+          { properties: first.properties, required: ['type'] },
+          { properties: second.properties, required: ['type'] },
+        ],
+        [keyed({ a: 1, b: 2 }, 'x'), keyed({ b: 2, a: 1 }, 'y')],
+        [metadata, { type: 'integer' }, { type: 'number' }],
+      ]
+      for (const oneOf of unions) {
+        expect(downgradeSchemaV31ToV30({ oneOf } as OpenAPIV3_1.SchemaObject)).toHaveProperty(
+          'anyOf',
+        )
       }
-      expect(
-        downgradeSchemaV31ToV30({ oneOf: [metadata, { type: 'integer' }, { type: 'number' }] }),
-      ).toHaveProperty('anyOf')
       // As NetBird writes a union of one member so far.
       expect(downgradeSchemaV31ToV30({ oneOf: [metadata] })).toEqual({
         oneOf: [{ type: 'object' }],
@@ -2558,15 +2573,12 @@ describe('unusual input', () => {
     ).toEqual({ type: 'string' })
     expect(
       downgradeSchemaV31ToV30({
-        oneOf: [
-          { type: 'object', propertyNames: { type: 'string', description: undefined } },
-          { type: 'string' },
-        ],
+        oneOf: [{ type: 'object', propertyNames: { type: 'string', description: undefined } }, {}],
       }),
-    ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
-    expect(
-      downgradeSchemaV31ToV30({ oneOf: [{ type: 'object', if: undefined }, { type: 'string' }] }),
-    ).toEqual({ oneOf: [{ type: 'object' }, { type: 'string' }] })
+    ).toEqual({ oneOf: [{ type: 'object' }, {}] })
+    expect(downgradeSchemaV31ToV30({ oneOf: [{ type: 'object', if: undefined }, {}] })).toEqual({
+      oneOf: [{ type: 'object' }, {}],
+    })
   })
 
   it('tolerates malformed input without throwing', () => {
