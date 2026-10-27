@@ -1522,6 +1522,34 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ type: 'string' })
   })
 
+  it('drops the content keywords of an untyped schema with subschemas, which hold its value', () => {
+    // Itential's GoDaddy adapter marks JSON and XML bodies with their media type.
+    const ref = { $ref: '#/components/schemas/Ticket' }
+    expect(
+      downgradeSchemaV31ToV30({
+        allOf: [ref, { description: 'd' }],
+        contentMediaType: 'application/json',
+      }),
+    ).toEqual({ allOf: [ref, { description: 'd' }] })
+    expect(downgradeSchemaV31ToV30({ ...ref, contentMediaType: 'application/xml' })).toEqual({
+      allOf: [ref],
+    })
+    const object = { type: 'object' as const }
+    for (const subschemas of [
+      { anyOf: [object, { type: 'array' as const, items: {} }] },
+      { oneOf: [object, { type: 'array' as const, items: {} }] },
+      { properties: { a: object } },
+      { items: object },
+    ]) {
+      expect(downgradeSchemaV31ToV30({ ...subschemas, contentEncoding: 'base64' })).toEqual(
+        subschemas,
+      )
+    }
+    expect(
+      downgradeSchemaV31ToV30({ prefixItems: [object], contentMediaType: 'application/json' }),
+    ).toEqual({ items: {} })
+  })
+
   it('drops an anyOf whose branch holds only contentMediaType, which matches every value', () => {
     // Zod's `z.file().mime(['image/png', 'image/jpeg'])`.
     expect(

@@ -1087,6 +1087,20 @@ function binaryFormat(schema: Record<string, unknown>): string | undefined {
     : undefined
 }
 
+// An untyped schema with these holds what they hold, such as the object of a
+// JSON body marked with its media type, not a binary string.
+function hasSubschemas(schema: Record<string, unknown>): boolean {
+  return (
+    schema.$ref !== undefined ||
+    schema.allOf !== undefined ||
+    schema.anyOf !== undefined ||
+    schema.oneOf !== undefined ||
+    schema.properties !== undefined ||
+    schema.items !== undefined ||
+    schema.prefixItems !== undefined
+  )
+}
+
 function finishSchema(
   out: Record<string, unknown>,
   schema: Record<string, unknown>,
@@ -1202,7 +1216,10 @@ function finishSchema(
     out.additionalProperties = true
   }
   const format = binaryFormat(schema)
-  if (format !== undefined && (schema.type === undefined || hasType(schema.type, 'string'))) {
+  if (
+    format !== undefined &&
+    (schema.type === undefined ? !hasSubschemas(schema) : hasType(schema.type, 'string'))
+  ) {
     // A `format` that only repeats the encoding, as Zod writes, gives way.
     if (out.format === undefined || out.format === schema.contentEncoding) {
       out.format = format
