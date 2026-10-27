@@ -588,7 +588,6 @@ describe('downgradeSchemaV31ToV30', () => {
         { anyOf: [{ oneOf: [{ type: 'null' }, { type: 'null' }] }, { type: 'number' }] },
         { anyOf: [{ type: ['string', 'null'] }, { type: ['number', 'null'] }] },
         { type: ['string', 'integer'], enum: ['a', 1] },
-        { anyOf: [{ type: 'string' }, { type: 'string' }] },
         { anyOf: [{ type: 'string' }, { type: 'object' }] },
         {
           anyOf: [
@@ -1548,6 +1547,62 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({ oneOf: [{ type: 'string', format: 'binary' }, { type: 'integer' }] })
   })
 
+  it('drops an anyOf branch equal to the one before it, as oRPC 1.x files with several media types become', () => {
+    // oRPC 1.x's Zod 4 converter for `z.file().mime(['application/pdf', 'image/png'])`.
+    const file: OpenAPIV3_1.SchemaObject = {
+      anyOf: [
+        { type: 'string', contentMediaType: 'application/pdf' },
+        { type: 'string', contentMediaType: 'image/png' },
+      ],
+    }
+    const binary = { type: 'string', format: 'binary' }
+    expect(downgradeSchemaV31ToV30(file)).toEqual(binary)
+    expect(downgradeSchemaV31ToV30({ ...file, description: 'd' })).toEqual({
+      ...binary,
+      description: 'd',
+    })
+    // `.nullable()`, which then merges as a pair.
+    expect(downgradeSchemaV31ToV30({ anyOf: [file, { type: 'null' }] })).toEqual({
+      ...binary,
+      nullable: true,
+    })
+    // The branches left merge as before.
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [...file.anyOf!, { type: 'integer' }, { type: 'null' }] }),
+    ).toEqual({
+      oneOf: [binary, { type: 'integer' }, { type: 'string', nullable: true, enum: [null] }],
+    })
+    // Only neighbors are compared.
+    const [pdf, png] = file.anyOf!
+    expect(downgradeSchemaV31ToV30({ anyOf: [pdf!, { type: 'integer' }, png!] })).toEqual({
+      anyOf: [binary, { type: 'integer' }, binary],
+    })
+    const ref = { $ref: '#/components/schemas/A' }
+    expect(downgradeSchemaV31ToV30({ anyOf: [ref, ref] })).toEqual(ref)
+    // A lone branch stays in the `anyOf` beside a `$ref`, whose siblings 3.0
+    // ignores, and beside keywords that are not annotations, or annotations
+    // that the branch holds with another value.
+    expect(downgradeSchemaV31ToV30({ anyOf: [ref, ref], description: 'd' })).toEqual({
+      anyOf: [ref],
+      description: 'd',
+    })
+    expect(downgradeSchemaV31ToV30({ ...file, minLength: 1 })).toEqual({
+      anyOf: [binary],
+      minLength: 1,
+    })
+    const described = { type: 'string', description: 'b' } as const
+    expect(downgradeSchemaV31ToV30({ anyOf: [described, described], description: 'a' })).toEqual({
+      anyOf: [described],
+      description: 'a',
+    })
+    expect(downgradeSchemaV31ToV30({ anyOf: [described, described], description: 'b' })).toEqual(
+      described,
+    )
+    expect(downgradeSchemaV31ToV30({ anyOf: [null, null] } as never)).toEqual({ anyOf: [null] })
+    // A `oneOf` rejects a value that two branches match.
+    expect(downgradeSchemaV31ToV30({ oneOf: file.anyOf })).toEqual({ oneOf: [binary, binary] })
+  })
+
   describe('$ref', () => {
     it('wraps a $ref with siblings in allOf, which 3.0 does not ignore', () => {
       expect(
@@ -2075,10 +2130,10 @@ describe('downgradeSchemaV31ToV30', () => {
     it('turns an enclosing oneOf into anyOf, since branches may now overlap', () => {
       const branches = [
         { type: 'object', propertyNames: { pattern: '^a' } },
-        { type: 'object', propertyNames: { pattern: '^b' } },
+        { type: 'object', propertyNames: { pattern: '^b' }, minProperties: 1 },
       ] as const
       expect(downgradeSchemaV31ToV30({ oneOf: [...branches] })).toEqual({
-        anyOf: [{ type: 'object' }, { type: 'object' }],
+        anyOf: [{ type: 'object' }, { type: 'object', minProperties: 1 }],
       })
       expect(downgradeSchemaV31ToV30({ oneOf: [{ type: 'string' }, { type: 'number' }] })).toEqual({
         oneOf: [{ type: 'string' }, { type: 'number' }],
@@ -2311,7 +2366,7 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [
           {
             type: 'array',
-            items: { anyOf: [{ type: 'object' }, { type: 'object' }] },
+            items: { type: 'object' },
             maxItems: 2,
           },
           { type: 'array', items: { type: 'object' } },
