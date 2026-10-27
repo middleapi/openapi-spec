@@ -722,6 +722,68 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
+// Whether two branches hold the same keys with the same values. An object
+// value matches only itself, since comparing objects in full would cost an
+// object that a dereferenced document shares once for each path to it.
+function isSameBranch(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!isRecord(a) || !isRecord(b)) {
+    return false
+  }
+  for (const name in a) {
+    if (!Object.hasOwn(b, name) || a[name] !== b[name]) {
+      return false
+    }
+  }
+  for (const name in b) {
+    if (!Object.hasOwn(a, name)) {
+      return false
+    }
+  }
+  return true
+}
+
+// oRPC 1.x writes a file with several media types as an `anyOf` of strings
+// with one media type each, which all become the same binary string. A
+// branch equal to the one before it matches the same values, so it goes.
+// Comparing only neighbors, as oRPC writes them, keeps the cost linear. A
+// lone branch left takes the place of the `anyOf` when the schema around it
+// holds only annotations that the branch lacks or repeats, or nothing at all
+// beside a `$ref`, whose siblings 3.0 ignores. NSwag and oapi-codegen then
+// read a file upload, and `mergeNullable` a nullable one as a pair. A `oneOf`
+// rejects a value that two branches match, so it keeps them. Returns whether
+// several branches are left.
+function dropEqualBranches(out: Record<string, unknown>): boolean {
+  const branches = out.anyOf as unknown[]
+  const kept = branches.filter(
+    (branch, index) => index === 0 || !isSameBranch(branches[index - 1], branch),
+  )
+  if (kept.length === branches.length) {
+    return true
+  }
+  out.anyOf = kept
+  if (kept.length > 1) {
+    return true
+  }
+  const [branch] = kept
+  const names = Object.keys(out)
+  if (
+    isRecord(branch) &&
+    (getRef(branch) === undefined || names.length === 1) &&
+    names.every(
+      (name) =>
+        name === 'anyOf' ||
+        (isAnnotation(name) && (!Object.hasOwn(branch, name) || repeats(out, branch, name))),
+    )
+  ) {
+    delete out.anyOf
+    Object.assign(out, branch)
+  }
+  return false
+}
+
 // Zod writes a nullable object, array, or integer as an `anyOf` of it and
 // `{ type: "null" }`. Code generators read that pair in 3.0 as a union or an
 // empty class, so the branch takes its place with `nullable: true`, as 3.0
@@ -1292,7 +1354,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
     const out = downgrade(root, convert)
     for (const [schema, input, key] of nullableUnions) {
-      if (!unionTargets.has(input)) {
+      if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
         mergeEnums(schema, key)
         const branches = schema[key]
         // A `oneOf` with null twice rejects null, so only a pair can merge.
