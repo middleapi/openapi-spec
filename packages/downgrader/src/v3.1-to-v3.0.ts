@@ -548,10 +548,20 @@ function isApart(a: Tags, b: Tags): boolean {
 
 // The tags of a schema and of the members of its `allOf`, which take every
 // value it takes, as OpenAI writes a resource as an `allOf` of an item and its ID.
+// A `$ref` back into a target being inlined is cut to `{}`, which keeps nothing,
+// and so is a `$ref` whose chain of `$ref`s reaches one.
 function partTags(schema: unknown, ctx: Context): Tags[] {
   const follow = (value: unknown): unknown => {
-    const ref = getRef(value)
-    return ref === undefined ? value : resolve(ref, ctx)
+    const visited = new Set<string>()
+    let target = value
+    for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
+      if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
+        return undefined
+      }
+      visited.add(ref)
+      target = resolvePointer(ref, ctx)
+    }
+    return target
   }
   const target = follow(schema)
   const parts =

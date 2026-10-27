@@ -2310,6 +2310,67 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({})
     })
 
+    it('counts a $defs target cut at recursion as telling no branch apart', () => {
+      // As Pydantic writes a tree as a tagged union of a leaf and a group of them.
+      const leaf = { type: 'object', properties: { kind: { const: 'leaf' } }, required: ['kind'] }
+      const group: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: {
+          kind: { const: 'group' },
+          items: {
+            type: 'array',
+            items: { oneOf: [{ $ref: '#/$defs/Leaf' }, { $ref: '#/$defs/Group' }] },
+          },
+        },
+        required: ['kind'],
+      }
+      const leaf30 = { ...leaf, properties: { kind: { type: 'string', enum: ['leaf'] } } }
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ $ref: '#/$defs/Leaf' }, { $ref: '#/$defs/Group' }],
+          $defs: { Leaf: leaf, Group: group } as Record<string, OpenAPIV3_1.SchemaObject>,
+        }),
+      ).toEqual({
+        oneOf: [
+          leaf30,
+          {
+            ...group,
+            properties: {
+              kind: { type: 'string', enum: ['group'] },
+              items: { type: 'array', items: { anyOf: [leaf30, {}] } },
+            },
+          },
+        ],
+      })
+      // Also when the `$ref` reaches it through another.
+      const aliased: OpenAPIV3_1.SchemaObject = {
+        ...group,
+        properties: {
+          ...group.properties,
+          items: {
+            type: 'array',
+            items: { oneOf: [{ $ref: '#/$defs/Leaf' }, { $ref: '#/$defs/Alias' }] },
+          },
+        },
+      }
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ $ref: '#/$defs/Leaf' }, { $ref: '#/$defs/Group' }],
+          $defs: { Leaf: leaf, Group: aliased, Alias: { $ref: '#/$defs/Group' } } as Record<
+            string,
+            OpenAPIV3_1.SchemaObject
+          >,
+        }),
+      ).toHaveProperty(['oneOf', 1, 'properties', 'items', 'items', 'anyOf'])
+      // A chain of `$ref`s that loops tells none apart either.
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ $ref: '#/$defs/A' }, { type: 'object', propertyNames: { maxLength: 1 } }],
+          $defs: { A: { $ref: '#/$defs/B' }, B: { $ref: '#/$defs/A' } },
+        }),
+      ).toEqual({ anyOf: [{}, { type: 'object' }] })
+    })
+
     it('includes the target of a $ref kept in the output', () => {
       // As zod emits z.xor over tuples registered as components.
       const tuple = (
