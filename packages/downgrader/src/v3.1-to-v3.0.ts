@@ -493,10 +493,89 @@ function losesRestriction(
   }
 }
 
+// What 3.0 keeps of a schema however loose the rest of it becomes: its type,
+// and the values, each a string, number, boolean or null, of a `const` or an
+// `enum` that it holds a property to, and whether an object requires it. Null
+// matches a `nullable` schema, even with an `enum`, as some read it, so such a
+// schema or property keeps nothing, nor does a property whose `type` names
+// null, which becomes `nullable`.
+interface Tags {
+  readonly type: unknown
+  readonly values: Map<string, { readonly values: unknown[]; readonly required: boolean }>
+}
+
+function tagsOf(schema: Record<string, unknown>): Tags {
+  const values: Tags['values'] = new Map()
+  if (schema.nullable === true) {
+    return { type: undefined, values }
+  }
+  const required = schema.type === 'object' && Array.isArray(schema.required) ? schema.required : []
+  const properties = isRecord(schema.properties) ? schema.properties : {}
+  for (const name of Object.keys(properties)) {
+    const property = properties[name]
+    const held =
+      isRecord(property) && property.nullable !== true && !hasType(property.type, 'null')
+        ? property.const === undefined
+          ? property.enum
+          : [property.const]
+        : undefined
+    if (Array.isArray(held) && held.every((value) => typeof value !== 'object' || value === null)) {
+      values.set(name, { values: held, required: required.includes(name) })
+    }
+  }
+  return { type: schema.type, values }
+}
+
+// Whether no value matches both: they have different types, other than an
+// integer and a number, or one requires a property that the other holds to
+// other values, as OpenAI, Zod and oRPC write a tagged union.
+function isApart(a: Tags, b: Tags): boolean {
+  if (typeof a.type === 'string' && typeof b.type === 'string' && a.type !== b.type) {
+    return ![a.type, b.type].every((type) => type === 'integer' || type === 'number')
+  }
+  for (const [name, tag] of a.values) {
+    const other = b.values.get(name)
+    if (
+      other !== undefined &&
+      (tag.required || other.required) &&
+      tag.values.every((value) => !other.values.includes(value))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+// The tags of a schema and of the members of its `allOf`, which take every
+// value it takes, as OpenAI writes a resource as an `allOf` of an item and its ID.
+function partTags(schema: unknown, ctx: Context): Tags[] {
+  const follow = (value: unknown): unknown => {
+    const ref = getRef(value)
+    return ref === undefined ? value : resolve(ref, ctx)
+  }
+  const target = follow(schema)
+  const parts =
+    isRecord(target) && Array.isArray(target.allOf)
+      ? [target, ...target.allOf.map(follow)]
+      : [target]
+  return parts.filter(isRecord).map(tagsOf)
+}
+
+// Whether no value matches two of the branches, however loose they become.
+function isDisjoint(branches: unknown[], ctx: Context): boolean {
+  const tags = branches.map((branch) => partTags(branch, ctx))
+  return tags.every((parts, index) =>
+    tags
+      .slice(index + 1)
+      .every((others) => parts.some((part) => others.some((other) => isApart(part, other)))),
+  )
+}
+
 // A schema that lost a restriction accepts more values. A `not` over it would
 // then reject values the original accepts, and so would a `oneOf` whose
 // branches may now overlap, so the `not` is removed and the `oneOf` becomes
-// an `anyOf`. Returns whether the schema is loosened itself.
+// an `anyOf`, unless no two branches can match the same value. Returns
+// whether the schema is loosened itself.
 function loosen(
   out: Record<string, unknown>,
   schema: Record<string, unknown>,
@@ -518,8 +597,10 @@ function loosen(
     loose = true
   }
   if (Array.isArray(out.oneOf) && out.oneOf.some(isLoose)) {
-    addAnyOf(out, out.oneOf)
-    delete out.oneOf
+    if (!isDisjoint(schema.oneOf as unknown[], ctx)) {
+      addAnyOf(out, out.oneOf)
+      delete out.oneOf
+    }
     loose = true
   }
   return (

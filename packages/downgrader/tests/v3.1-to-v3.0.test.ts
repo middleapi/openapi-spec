@@ -2056,6 +2056,117 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ anyOf: [{ minimum: 0 }], allOf: [{ anyOf: [{ items: {} }, {}] }] })
     })
 
+    it('keeps a oneOf whose branches no value can match two of', () => {
+      // As OpenAI writes a tagged union whose members hold metadata with limited
+      // keys, and oRPC an error union whose error data holds a tuple.
+      const metadata: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        propertyNames: { type: 'string', maxLength: 64 },
+      }
+      const first: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { type: { const: 'a' }, metadata },
+        required: ['type'],
+      }
+      const second: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { type: { type: 'string', enum: ['b', 'c'] } },
+        required: ['type'],
+      }
+      const out = {
+        type: 'object',
+        properties: { type: { type: 'string', enum: ['a'] }, metadata: { type: 'object' } },
+        required: ['type'],
+      }
+      expect(
+        downgradeSchemaV31ToV30({ oneOf: [first, { $ref: '#/$defs/B' }], $defs: { B: second } }),
+      ).toEqual({ oneOf: [out, second] })
+      // The other need not require the property, as OpenAI writes an input
+      // message with an optional `type`, nor take only objects, and may require
+      // it in an `allOf`, as OpenAI writes a resource as an item and its ID.
+      const kept: unknown[] = [
+        { ...second, required: [] },
+        { properties: second.properties },
+        { allOf: [{ $ref: '#/$defs/B' }, { required: ['id'] }] },
+      ]
+      for (const other of kept) {
+        for (const oneOf of [
+          [first, other],
+          [other, first],
+        ]) {
+          expect(
+            downgradeSchemaV31ToV30({ oneOf, $defs: { B: second } } as OpenAPIV3_1.SchemaObject),
+          ).toHaveProperty('oneOf')
+        }
+      }
+      // Each pair has a property of its own that tells it apart, as oRPC tells
+      // defined errors apart by `code` and from others by `defined`.
+      const failed: OpenAPIV3_1.SchemaObject = {
+        ...first,
+        properties: { ...first.properties, defined: { const: true } },
+        required: ['defined', 'type'],
+      }
+      const defined: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { defined: { const: true }, type: { const: 'b' } },
+        required: ['defined', 'type'],
+      }
+      const undefinedError: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { defined: { const: false }, type: { type: 'string' } },
+        required: ['defined', 'type'],
+      }
+      expect(downgradeSchemaV31ToV30({ oneOf: [failed, defined, undefinedError] })).toHaveProperty(
+        'oneOf',
+      )
+      // As OpenAI writes text or a list of input items, and Zod a nullable
+      // object with null as a branch of its own.
+      expect(
+        downgradeSchemaV31ToV30({ oneOf: [{ type: 'string' }, metadata, { type: 'null' }] }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string' },
+          { type: 'object' },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      // A value can match both when they share a value, or neither holds the
+      // property to some values, or requires it, or takes only objects, or
+      // both take null. Objects as values count as none, since they may hold
+      // the same keys in another order, and so do values beside `nullable` or
+      // a `type` that names null, which becomes `nullable`.
+      const others: unknown[] = [
+        { ...second, properties: { type: { enum: [null, 'a'] } } },
+        { ...second, properties: { type: { const: { b: 1 } } } },
+        { ...second, properties: { type: { type: 'string', enum: ['b'], nullable: true } } },
+        { ...second, properties: { type: { type: ['string', 'null'], enum: ['b'] } } },
+        { ...second, properties: { type: { type: 'string' } } },
+        { ...second, properties: { type: true } },
+        { type: 'object', required: ['type'] },
+        { type: 'object', properties: { type: { enum: ['a'] } } },
+        { properties: { type: { const: 'a' } }, required: ['type'] },
+        true,
+        { ...second, nullable: true },
+      ]
+      for (const other of others) {
+        for (const oneOf of [
+          [first, other],
+          [other, first],
+        ]) {
+          expect(downgradeSchemaV31ToV30({ oneOf } as OpenAPIV3_1.SchemaObject)).toHaveProperty(
+            'anyOf',
+          )
+        }
+      }
+      expect(
+        downgradeSchemaV31ToV30({ oneOf: [metadata, { type: 'integer' }, { type: 'number' }] }),
+      ).toHaveProperty('anyOf')
+      // As NetBird writes a union of one member so far.
+      expect(downgradeSchemaV31ToV30({ oneOf: [metadata] })).toEqual({
+        oneOf: [{ type: 'object' }],
+      })
+    })
+
     it('includes propertyNames beyond a string type, and unevaluatedProperties beside an in-place applicator', () => {
       // As zod emits z.record with a key pattern.
       expect(
@@ -2211,7 +2322,12 @@ describe('downgradeSchemaV31ToV30', () => {
             },
             Not: { not: { $ref: '#/components/schemas/StrNum' } },
             Exact: { oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }] },
-            ViaAlias: { oneOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }] },
+            ViaAlias: {
+              oneOf: [
+                { $ref: '#/components/schemas/Alias' },
+                { type: 'array', items: { type: 'string' } },
+              ],
+            },
             Nested: {
               oneOf: [
                 { type: 'array', items: { $ref: '#/components/schemas/StrNum' } },
@@ -2230,7 +2346,10 @@ describe('downgradeSchemaV31ToV30', () => {
         oneOf: [{ $ref: '#/components/schemas/Point' }, { type: 'string' }],
       })
       expect(schemas?.ViaAlias).toEqual({
-        anyOf: [{ $ref: '#/components/schemas/Alias' }, { type: 'string' }],
+        anyOf: [
+          { $ref: '#/components/schemas/Alias' },
+          { type: 'array', items: { type: 'string' } },
+        ],
       })
       expect(schemas?.Nested).toEqual({
         anyOf: [
