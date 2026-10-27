@@ -1034,6 +1034,22 @@ function finishSchema(
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...(Array.isArray(out.allOf) ? out.allOf : [])]
   }
+  // A discriminator picks only among named components, not the targets that
+  // replace `$ref`s into `$defs`, as Pydantic and msgspec write a tagged union.
+  // Its `mapping` into them would dangle, which validators that follow it reject.
+  if (
+    out.discriminator !== undefined &&
+    [schema.oneOf, schema.anyOf].some(
+      (branches) =>
+        Array.isArray(branches) &&
+        branches.some((branch) => {
+          const ref = getRef(branch)
+          return ref !== undefined && isInlined(ref, ctx)
+        }),
+    )
+  ) {
+    delete out.discriminator
+  }
   if (schema.const !== undefined) {
     out.enum = [clone(schema.const)]
   }

@@ -1669,6 +1669,41 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(() => JSON.stringify(out)).not.toThrow()
     })
 
+    it('removes a discriminator over $refs into $defs, as Pydantic writes a tagged union', () => {
+      const cat = { type: 'object', properties: { kind: { const: 'cat' } }, required: ['kind'] }
+      const cat30 = { ...cat, properties: { kind: { type: 'string', enum: ['cat'] } } }
+      const dog = { type: 'object', properties: { kind: { const: 'dog' } }, required: ['kind'] }
+      const dog30 = { ...dog, properties: { kind: { type: 'string', enum: ['dog'] } } }
+      const discriminator = {
+        propertyName: 'kind',
+        mapping: { cat: '#/$defs/Cat', dog: '#/$defs/Dog' },
+      }
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [{ $ref: '#/$defs/Cat' }, { $ref: '#/$defs/Dog' }],
+          discriminator,
+          $defs: { Cat: cat, Dog: dog },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({ oneOf: [cat30, dog30] })
+      // As msgspec writes it, and with only one branch from `$defs`.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/definitions/Dog' }],
+          discriminator: { propertyName: 'kind' },
+          definitions: { Dog: dog },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({ anyOf: [{ $ref: '#/components/schemas/Cat' }, dog30] })
+      // Kept over `$ref`s kept as written, or into `$defs` that dangle.
+      for (const branches of [
+        [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
+        [{ $ref: '#/$defs/Cat' }, { type: 'object' }],
+      ]) {
+        expect(
+          downgradeSchemaV31ToV30({ oneOf: branches, discriminator } as OpenAPIV3_1.SchemaObject),
+        ).toEqual({ oneOf: branches, discriminator })
+      }
+    })
+
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
       expect(
         downgradeSchemaV31ToV30({
