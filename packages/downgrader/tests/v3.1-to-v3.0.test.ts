@@ -1545,6 +1545,9 @@ describe('downgradeSchemaV31ToV30', () => {
         subschemas,
       )
     }
+    expect(
+      downgradeSchemaV31ToV30({ prefixItems: [object], contentMediaType: 'application/json' }),
+    ).toEqual({ items: {} })
   })
 
   it('drops an anyOf whose branch holds only contentMediaType, which matches every value', () => {

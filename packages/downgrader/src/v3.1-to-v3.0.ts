@@ -1096,7 +1096,8 @@ function hasSubschemas(schema: Record<string, unknown>): boolean {
     schema.anyOf !== undefined ||
     schema.oneOf !== undefined ||
     schema.properties !== undefined ||
-    schema.items !== undefined
+    schema.items !== undefined ||
+    schema.prefixItems !== undefined
   )
 }
 
