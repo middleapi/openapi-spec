@@ -1,0 +1,12 @@
+{
+  "extends": "uncheck/tsconfig/middleapi/lib",
+  "include": ["package.json", "src"],
+  "exclude": [
+    "**/*.test.*",
+    "**/*.test-d.ts",
+    "**/*.bench.*",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/__snapshots__/**"
+  ]
+}
