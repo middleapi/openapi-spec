@@ -64,6 +64,8 @@ describe('Router', () => {
         '/{}',
         '/{+}',
         '/{a.b}',
+        '/{id',
+        '/id}',
       )
 
       for (const path of [
@@ -76,6 +78,8 @@ describe('Router', () => {
         '/{}',
         '/{+}',
         '/{a.b}',
+        '/{id',
+        '/id}',
       ] as const) {
         expect(router.match('GET', path)).toEqual({ data: path, params: undefined })
       }
@@ -219,7 +223,12 @@ describe('Router', () => {
 
       expect(Object.getPrototypeOf(params)).toBe(Object.prototype)
       expect(Object.keys(params)).toEqual(['__proto__'])
-      expect(Object.getOwnPropertyDescriptor(params, '__proto__')?.value).toBe('value')
+      expect(Object.getOwnPropertyDescriptor(params, '__proto__')).toEqual({
+        value: 'value',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      })
     })
 
     it('returns a new params object for each match', () => {
@@ -468,6 +477,31 @@ describe('createPrefixMatcher', () => {
     expect(matches('/projects/42/info')).toBe(false)
   })
 
+  it('matches a prefix of several literal segments', () => {
+    const matches = createPrefixMatcher('/api/v1')
+
+    expect(matches('/api/v1')).toBe(true)
+    expect(matches('/api/v1/')).toBe(true)
+    expect(matches('/api/v1/users')).toBe(true)
+    expect(matches('/%61pi/v1/users')).toBe(true)
+
+    expect(matches('/api')).toBe(false)
+    expect(matches('/api/v1x')).toBe(false)
+    expect(matches('/api/v2/users')).toBe(false)
+    expect(matches('/api//v1')).toBe(false)
+  })
+
+  it('matches a prefix that starts with a param', () => {
+    const matches = createPrefixMatcher('/{workspaceId}/planets')
+
+    expect(matches('/w1/planets')).toBe(true)
+    expect(matches('/w1/planets/earth')).toBe(true)
+
+    expect(matches('//planets')).toBe(false)
+    expect(matches('/w1/moons')).toBe(false)
+    expect(matches('/planets')).toBe(false)
+  })
+
   it('ignores the trailing slash of a prefix', () => {
     const matches = createPrefixMatcher('/api/')
 
@@ -495,6 +529,12 @@ describe('createPrefixMatcher', () => {
   })
 
   it('keeps empty segments and encoded slashes in a prefix', () => {
+    const slash = createPrefixMatcher('/x%2Fy')
+
+    expect(slash('/x%2Fy')).toBe(true)
+    expect(slash('/x%2fy/z')).toBe(true)
+    expect(slash('/x/y')).toBe(false)
+
     const matches = createPrefixMatcher('/a//b%2Fc')
 
     expect(matches('/a//b%2Fc')).toBe(true)
@@ -508,6 +548,11 @@ describe('createPrefixMatcher', () => {
     expect(empty('/a//info')).toBe(true)
     expect(empty('/a/')).toBe(false)
     expect(empty('/a')).toBe(false)
+
+    const root = createPrefixMatcher('//')
+
+    expect(root('//')).toBe(true)
+    expect(root('/')).toBe(false)
   })
 
   it('matches every path for the root prefix', () => {
