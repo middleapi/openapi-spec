@@ -812,19 +812,10 @@ describe('downgradeSchemaV31ToV30', () => {
           { description: 'd', type: 'string', nullable: true, enum: [null] },
         ],
       })
-      // A keyword with another value beside it, as OpenSearch documents the
-      // null branch, still keeps the pair.
+      // A keyword with another value beside it still keeps the pair.
       const kept: OpenAPIV3_1.SchemaObject[] = [
-        {
-          description: 'd',
-          anyOf: [
-            { type: 'string', description: 'd' },
-            { type: 'null', description: 'n' },
-          ],
-        },
         { description: 'd', anyOf: [{ type: 'string', description: 'e' }, { type: 'null' }] },
         { maxLength: 3, anyOf: [{ type: 'string', maxLength: 5 }, { type: 'null' }] },
-        { anyOf: [{ type: 'string' }, { type: 'null', description: 'n' }] },
         // A `type` beside the pair rejects null, so `nullable` would widen it.
         { type: 'string', anyOf: [{ type: 'string' }, { type: 'null' }] },
         // An enum of null with a type that rejects it is not a null branch.
@@ -834,6 +825,63 @@ describe('downgradeSchemaV31ToV30', () => {
       for (const schema of kept) {
         const out = downgradeSchemaV31ToV30(schema) as OpenAPIV3_0.SchemaObject
         expect(out.anyOf ?? out.oneOf).toHaveLength(2)
+      }
+    })
+
+    it('merges a pair whose null branch documents null, as Lithic and Mailgun write it', () => {
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [
+            { type: 'string', description: 'The sending domain' },
+            { type: 'null', description: 'No sending domain' },
+          ],
+        }),
+      ).toEqual({ type: 'string', description: 'The sending domain', nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [
+            { type: 'null', title: 'Null', description: 'No limit' },
+            { title: 'Limit', type: 'integer', minimum: 0 },
+          ],
+        }),
+      ).toEqual({ title: 'Limit', type: 'integer', minimum: 0, nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          example: ['*'],
+          anyOf: [
+            { type: 'array', items: { type: 'string' } },
+            { type: 'null', example: null },
+          ],
+        }),
+      ).toEqual({ example: ['*'], type: 'array', items: { type: 'string' }, nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          title: 'Flag',
+          anyOf: [{ type: 'boolean' }, { 'type': 'null', 'x-skip': ['cli'] }],
+        }),
+      ).toEqual({ title: 'Flag', type: 'boolean', nullable: true })
+      // A null branch that stays keeps them.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ const: 'a' }, { const: 'b' }, { type: 'null', description: 'n' }],
+        }),
+      ).toEqual({
+        oneOf: [
+          { type: 'string', enum: ['a', 'b'] },
+          { type: 'string', nullable: true, enum: [null], description: 'n' },
+        ],
+      })
+      // These say something of null itself, so the pair stays.
+      for (const note of [
+        { default: null },
+        { deprecated: true },
+        { readOnly: true },
+        { writeOnly: true },
+      ]) {
+        const out = downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'string' }, { type: 'null', ...note }],
+        }) as OpenAPIV3_0.SchemaObject
+        expect(out.anyOf).toHaveLength(2)
       }
     })
 
@@ -932,12 +980,12 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [{ type: 'string', enum: ['a'] }, onlyNull],
         oneOf: [{ minLength: 1 }, { maxLength: 0 }],
       })
-      // A null branch with more than its type is not only null.
+      // A null branch with a keyword that says something of null itself is not only null.
       expect(
         downgradeSchemaV31ToV30({
-          anyOf: [{ type: 'object' }, { type: 'null', description: 'd' }],
+          anyOf: [{ type: 'object' }, { type: 'null', deprecated: true }],
         }),
-      ).toEqual({ anyOf: [{ type: 'object' }, { ...onlyNull, description: 'd' }] })
+      ).toEqual({ anyOf: [{ type: 'object' }, { ...onlyNull, deprecated: true }] })
     })
 
     it('makes an anyOf of a $ref and null a oneOf when the target rejects null', () => {

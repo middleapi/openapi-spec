@@ -724,7 +724,8 @@ function repeats(
 }
 
 // Only null matches the branch, as `{ type: "null" }` becomes, and its other
-// keywords repeat the schema around it.
+// keywords repeat the schema around it, or only document null, as Lithic and
+// Mailgun write a `description` of the null case.
 function isNullBranch(value: unknown, out: Record<string, unknown>): boolean {
   return (
     isRecord(value) &&
@@ -733,7 +734,14 @@ function isNullBranch(value: unknown, out: Record<string, unknown>): boolean {
     isOnlyNull(value.enum) &&
     Object.keys(value).every(
       (name) =>
-        name === 'type' || name === 'nullable' || name === 'enum' || repeats(out, value, name),
+        name === 'type' ||
+        name === 'nullable' ||
+        name === 'enum' ||
+        name === 'title' ||
+        name === 'description' ||
+        name === 'example' ||
+        name.startsWith('x-') ||
+        repeats(out, value, name),
     )
   )
 }
