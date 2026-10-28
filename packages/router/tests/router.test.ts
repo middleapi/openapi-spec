@@ -29,6 +29,7 @@ describe('Router', () => {
 
       expect(router.match('GET', '/')).toEqual({ data: '/', params: undefined })
       expect(router.match('GET', '/ping/')).toEqual({ data: '/ping', params: undefined })
+      expect(router.match('GET', '/p%69ng/')).toEqual({ data: '/ping', params: undefined })
       expect(router.match('GET', '/echo')).toEqual({ data: '/echo/', params: undefined })
       expect(router.match('GET', '/echo/')).toEqual({ data: '/echo/', params: undefined })
 
@@ -51,6 +52,15 @@ describe('Router', () => {
       expect(root.match('GET', '//')).toEqual({ data: '//', params: undefined })
     })
 
+    it('matches routes added after earlier matches, raw or percent-encoded', () => {
+      const router = routerOf('/a')
+      expect(router.match('GET', '/%61')).toEqual({ data: '/a', params: undefined })
+
+      router.add('GET', '/b', '/b')
+      expect(router.match('GET', '/b')).toEqual({ data: '/b', params: undefined })
+      expect(router.match('GET', '/%62')).toEqual({ data: '/b', params: undefined })
+    })
+
     it('matches path text literally, even characters that are route syntax elsewhere', () => {
       const router = routerOf(
         '/.',
@@ -66,6 +76,7 @@ describe('Router', () => {
         '/{a.b}',
         '/{id',
         '/id}',
+        '/id}/{x}',
       )
 
       for (const path of [
@@ -94,6 +105,7 @@ describe('Router', () => {
         params: undefined,
       })
       expect(router.match('GET', '/a/id.json')).toBeUndefined()
+      expect(router.match('GET', '/id}/1')).toEqual({ data: '/id}/{x}', params: { x: '1' } })
 
       expect(router.match('GET', '/what%3F')).toEqual({ data: '/what%3F', params: undefined })
       expect(router.match('GET', '/what')).toBeUndefined()
@@ -137,16 +149,20 @@ describe('Router', () => {
       // an encoded slash stays inside its segment
       expect(router.match('GET', '/x:y/a/b/1')).toBeUndefined()
 
-      const docs = routerOf('/docs/a%2Fb')
+      const docs = routerOf('/docs/a%2Fb', '/docs/a/b', '/a%2Fb')
       expect(docs.match('GET', '/docs/a%2Fb')).toEqual({ data: '/docs/a%2Fb', params: undefined })
       expect(docs.match('GET', '/docs/a%2fb')).toEqual({ data: '/docs/a%2Fb', params: undefined })
-      expect(docs.match('GET', '/docs/a/b')).toBeUndefined()
+      expect(docs.match('GET', '/docs/a/b')).toEqual({ data: '/docs/a/b', params: undefined })
+      expect(docs.match('GET', '/a%2Fb')).toEqual({ data: '/a%2Fb', params: undefined })
+      expect(docs.match('GET', '/a/b')).toBeUndefined()
     })
 
     it('keeps text whose percent-encoding is malformed as written', () => {
-      const router = routerOf('/a%ZZ', '/b%25/{id}')
+      const router = routerOf('/a%ZZ', '/b%25/{id}', '/c%2525')
 
       expect(router.match('GET', '/a%ZZ')).toEqual({ data: '/a%ZZ', params: undefined })
+      expect(router.match('GET', '/c%2525')).toEqual({ data: '/c%2525', params: undefined })
+      expect(router.match('GET', '/c%25')).toBeUndefined()
       expect(router.match('GET', '/b%/x%ZZ')).toEqual({
         data: '/b%25/{id}',
         params: { id: 'x%ZZ' },
@@ -422,6 +438,8 @@ describe('Router', () => {
       router.add('GET', '/users/{userId}/', 'second')
       router.add('GET', '/static', 'first')
       router.add('GET', '/st%61tic', 'second')
+      router.add('GET', '/%6Fther', 'first')
+      router.add('GET', '/other', 'second')
       router.add('GET', '/files/{+path}/{a}', 'first')
       router.add('GET', '/files/{+rest}/{b}', 'second')
       router.add('POST', '/users/{userId}', 'post')
@@ -429,6 +447,8 @@ describe('Router', () => {
       expect(router.match('GET', '/users/1')).toEqual({ data: 'first', params: { id: '1' } })
       expect(router.match('GET', '/static')).toEqual({ data: 'first', params: undefined })
       expect(router.match('GET', '/st%61tic')).toEqual({ data: 'first', params: undefined })
+      expect(router.match('GET', '/other')).toEqual({ data: 'first', params: undefined })
+      expect(router.match('GET', '/%6Fther')).toEqual({ data: 'first', params: undefined })
       expect(router.match('GET', '/files/a/b')).toEqual({
         data: 'first',
         params: { path: 'a', a: 'b' },
