@@ -1787,6 +1787,52 @@ describe('downgradeSchemaV31ToV30', () => {
       }
     })
 
+    it('keeps a $ref beside only annotations bare in a union beside a discriminator', () => {
+      // As Anthropic describes each branch of a tagged union. 3.0 maps a
+      // discriminator only to the `$ref`s among the branches.
+      const text = '#/components/schemas/Text'
+      const image = '#/components/schemas/Image'
+      const discriminator = { propertyName: 'type', mapping: { text, image } }
+      for (const key of ['oneOf', 'anyOf'] as const) {
+        expect(
+          downgradeSchemaV31ToV30({
+            [key]: [
+              {
+                '$ref': text,
+                'description': 'Text',
+                'title': 'Text',
+                'deprecated': true,
+                'x-kind': 'a',
+              },
+              { $ref: image, type: 'object' },
+            ],
+            discriminator,
+          } as OpenAPIV3_1.SchemaObject),
+        ).toEqual({
+          [key]: [{ $ref: text }, { type: 'object', allOf: [{ $ref: image }] }],
+          discriminator,
+        })
+      }
+      // Without a discriminator, or beside one 3.0 removes, it is wrapped.
+      const branches = [{ $ref: text, description: 'Text' }, { $ref: image }]
+      expect(downgradeSchemaV31ToV30({ oneOf: branches })).toEqual({
+        oneOf: [{ description: 'Text', allOf: [{ $ref: text }] }, { $ref: image }],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [...branches, { $ref: '#/$defs/Dog' }],
+          discriminator,
+          $defs: { Dog: { type: 'object' } },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({
+        oneOf: [
+          { description: 'Text', allOf: [{ $ref: text }] },
+          { $ref: image },
+          { type: 'object' },
+        ],
+      })
+    })
+
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
       expect(
         downgradeSchemaV31ToV30({
