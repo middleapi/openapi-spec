@@ -87,6 +87,12 @@ export class Router<T> {
       return
     }
 
+    this.addParsed(method, path, data)
+  }
+
+  // Separate from `add`, so V8 compiles it only once a path has `{` or `%`,
+  // which keeps cold starts short for route sets without any.
+  private addParsed(method: string, path: `/${string}`, data: T): void {
     const segments = parse(path)
 
     if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
