@@ -67,3 +67,12 @@ export function restRequests(resources: number): Requests {
 export function toRou3Path(path: string): string {
   return path.replaceAll(/\{\+([\w-]+)\}/g, '**:$1').replaceAll(/\{([\w-]+)\}/g, ':$1')
 }
+
+/**
+ * A new copy of a request path, as a server parses one for each request. V8
+ * caches what `split` returns for a string literal, so matching the same
+ * literal over and over would hide part of the cost of a real request.
+ */
+export function fresh(pathname: `/${string}`): `/${string}` {
+  return `/${pathname.slice(1)}`
+}

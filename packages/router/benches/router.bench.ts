@@ -3,7 +3,14 @@ import { addRoute, createRouter, findRoute, routeToRegExp } from 'rou3'
 import { bench, describe } from 'vitest'
 
 import type { Requests, Routes } from './__shared__/routes'
-import { restRequests, restRoutes, rpcRequests, rpcRoutes, toRou3Path } from './__shared__/routes'
+import {
+  fresh,
+  restRequests,
+  restRoutes,
+  rpcRequests,
+  rpcRoutes,
+  toRou3Path,
+} from './__shared__/routes'
 
 // rou3 runs as is, without the percent-decoding oRPC does around it today,
 // so each comparison is against less work than this router does.
@@ -31,13 +38,13 @@ function compare(name: string, routes: Routes, requests: Requests): void {
 
     bench('@openapi-spec/router', () => {
       for (const [method, pathname] of requests) {
-        ours.match(method, pathname)
+        ours.match(method, fresh(pathname))
       }
     })
 
     bench('rou3', () => {
       for (const [method, pathname] of requests) {
-        findRoute(rou3, method, pathname)
+        findRoute(rou3, method, fresh(pathname))
       }
     })
   })
@@ -67,16 +74,18 @@ describe('prefix match, 10 pending lazy routers', () => {
 
   bench('@openapi-spec/router', () => {
     for (const [, pathname] of requests) {
+      const path = fresh(pathname)
       for (const matches of ours) {
-        matches(pathname)
+        matches(path)
       }
     }
   })
 
   bench('rou3', () => {
     for (const [, pathname] of requests) {
+      const path = fresh(pathname)
       for (const regExp of rou3) {
-        regExp.test(pathname)
+        regExp.test(path)
       }
     }
   })
