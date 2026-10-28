@@ -75,6 +75,12 @@ export class Router<T> {
   add(method: string, path: `/${string}`, data: T): void {
     const segments = parse(path)
 
+    if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
+      throw new TypeError(
+        `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
+      )
+    }
+
     let routes = this.methods.get(method)
     if (routes === undefined) {
       routes = { root: createNode(), statics: new Map(), dynamic: false }
@@ -186,8 +192,7 @@ export class Router<T> {
 export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string}`) => boolean {
   const head: (string | undefined)[] = []
 
-  for (const text of trimTrailingSlash(prefix).split('/').slice(1)) {
-    const segment = toSegment(text)
+  for (const segment of parse(prefix)) {
     if (typeof segment === 'string') {
       head.push(segment)
     } else if (segment.catchAll) {
@@ -243,15 +248,7 @@ function createNode<T>(): Node<T> {
 }
 
 function parse(path: `/${string}`): Segment[] {
-  const segments = trimTrailingSlash(path).split('/').slice(1).map(toSegment)
-
-  if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
-    throw new TypeError(
-      `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
-    )
-  }
-
-  return segments
+  return trimTrailingSlash(path).split('/').slice(1).map(toSegment)
 }
 
 function toSegment(text: string): Segment {
