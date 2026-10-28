@@ -1805,11 +1805,16 @@ describe('downgradeSchemaV31ToV30', () => {
                 'x-kind': 'a',
               },
               { $ref: image, type: 'object' },
+              { description: 'Any other block' },
             ],
             discriminator,
           } as OpenAPIV3_1.SchemaObject),
         ).toEqual({
-          [key]: [{ $ref: text }, { type: 'object', allOf: [{ $ref: image }] }],
+          [key]: [
+            { $ref: text },
+            { type: 'object', allOf: [{ $ref: image }] },
+            { description: 'Any other block' },
+          ],
           discriminator,
         })
       }
