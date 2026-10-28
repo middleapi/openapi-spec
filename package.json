@@ -14,7 +14,7 @@
     "sync:sponsors": "node scripts/sync-sponsors.ts && pnpm run fix '**/README.md'"
   },
   "devDependencies": {
-    "@codspeed/vitest-plugin": "^5.7.1",
+    "@codspeed/vitest-plugin": "^6.1.0",
     "@seriousme/openapi-schema-validator": "^2.11.0",
     "@types/node": "^26.6.5",
     "@typescript/typescript6": "^6.0.2",
