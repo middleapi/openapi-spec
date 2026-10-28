@@ -35,8 +35,16 @@ interface Node<T> {
 
 interface MethodRoutes<T> {
   readonly root: Node<T>
-  /** The routes without params, by path, for a request path without `%`. */
+  /**
+   * The routes without params whose segments hold no `/` or `%` once
+   * decoded, by decoded path, for a request path without `%`.
+   */
   readonly statics: Map<string, Route<T>>
+  /**
+   * The paths in `statics` not yet in the tree, where only a request path
+   * with `%` looks for them.
+   */
+  unindexed: string[]
   /** Whether a route can match only through the tree. */
   dynamic: boolean
 }
@@ -73,6 +81,12 @@ export class Router<T> {
    * @throws {TypeError} if `path` has more than one catch-all param, before adding anything
    */
   add(method: string, path: `/${string}`, data: T): void {
+    // Without `{` or `%`, a path has only literal segments, which read the same decoded.
+    if (!path.includes('{') && !path.includes('%')) {
+      this.addStatic(method, trimTrailingSlash(path), data)
+      return
+    }
+
     const segments = parse(path)
 
     if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
@@ -81,31 +95,28 @@ export class Router<T> {
       )
     }
 
-    let routes = this.methods.get(method)
-    if (routes === undefined) {
-      routes = { root: createNode(), statics: new Map(), dynamic: false }
-      this.methods.set(method, routes)
+    if (
+      segments.every(
+        (segment) =>
+          typeof segment === 'string' && !segment.includes('/') && !segment.includes('%'),
+      )
+    ) {
+      this.addStatic(method, `/${segments.join('/')}`, data)
+      return
     }
+
+    const routes = this.routesOf(method)
+    routes.dynamic = true
 
     let node = routes.root
     let params: RouteParam[] | undefined
-    let isStatic = true
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i]!
       const index = i + 1
 
       if (typeof segment === 'string') {
-        node.literals ??= new Map()
-        let child = node.literals.get(segment)
-        if (child === undefined) {
-          child = createNode()
-          node.literals.set(segment, child)
-        }
-        node = child
-        if (segment.includes('/') || segment.includes('%')) {
-          isStatic = false
-        }
+        node = literalChild(node, segment)
         continue
       }
 
@@ -132,21 +143,27 @@ export class Router<T> {
       if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
         node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
         node.catchAlls.sort(compareCatchAlls)
-        routes.dynamic = true
       }
       return
     }
 
-    if (node.route !== undefined) {
-      return
+    node.route ??= { data, params, tail: 0 }
+  }
+
+  private routesOf(method: string): MethodRoutes<T> {
+    let routes = this.methods.get(method)
+    if (routes === undefined) {
+      routes = { root: createNode(), statics: new Map(), unindexed: [], dynamic: false }
+      this.methods.set(method, routes)
     }
+    return routes
+  }
 
-    node.route = { data, params, tail: 0 }
-
-    if (params === undefined && isStatic) {
-      routes.statics.set(segments.length === 0 ? '' : `/${segments.join('/')}`, node.route)
-    } else {
-      routes.dynamic = true
+  private addStatic(method: string, path: string, data: T): void {
+    const routes = this.routesOf(method)
+    if (!routes.statics.has(path)) {
+      routes.statics.set(path, { data, params: undefined, tail: 0 })
+      routes.unindexed.push(path)
     }
   }
 
@@ -171,6 +188,10 @@ export class Router<T> {
     const encoded = path.includes('%')
     if (!encoded && !routes.dynamic) {
       return undefined
+    }
+
+    if (encoded && routes.unindexed.length > 0) {
+      indexStatics(routes)
     }
 
     const segments = split(path, encoded)
@@ -241,6 +262,32 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
 
     return true
   }
+}
+
+/**
+ * Adds the routes in `statics` to the tree, once a request path needs
+ * decoding, so that adding them stays cheap for apps that never see one.
+ */
+function indexStatics<T>(routes: MethodRoutes<T>): void {
+  for (const path of routes.unindexed) {
+    let node = routes.root
+    for (const segment of path.split('/').slice(1)) {
+      node = literalChild(node, segment)
+    }
+    node.route = routes.statics.get(path)
+  }
+
+  routes.unindexed = []
+}
+
+function literalChild<T>(node: Node<T>, segment: string): Node<T> {
+  node.literals ??= new Map()
+  let child = node.literals.get(segment)
+  if (child === undefined) {
+    child = createNode()
+    node.literals.set(segment, child)
+  }
+  return child
 }
 
 function createNode<T>(): Node<T> {
