@@ -242,7 +242,7 @@ function createNode<T>(): Node<T> {
   return { literals: undefined, param: undefined, catchAlls: undefined, route: undefined }
 }
 
-function parse(path: string): Segment[] {
+function parse(path: `/${string}`): Segment[] {
   const segments = trimTrailingSlash(path).split('/').slice(1).map(toSegment)
 
   if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
