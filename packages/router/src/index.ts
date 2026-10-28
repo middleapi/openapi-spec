@@ -27,6 +27,10 @@ interface CatchAll<T> {
 
 interface Node<T> {
   literals: Map<string, Node<T>> | undefined
+  /** The text of the only literal child, if there is just one. */
+  literal: string | undefined
+  /** The only literal child, if there is just one. */
+  literalNode: Node<T> | undefined
   param: Node<T> | undefined
   /** The routes whose catch-all param starts here, most specific first. */
   catchAlls: CatchAll<T>[] | undefined
@@ -292,12 +296,22 @@ function literalChild<T>(node: Node<T>, segment: string): Node<T> {
   if (child === undefined) {
     child = createNode()
     node.literals.set(segment, child)
+    const only = node.literals.size === 1
+    node.literal = only ? segment : undefined
+    node.literalNode = only ? child : undefined
   }
   return child
 }
 
 function createNode<T>(): Node<T> {
-  return { literals: undefined, param: undefined, catchAlls: undefined, route: undefined }
+  return {
+    literals: undefined,
+    literal: undefined,
+    literalNode: undefined,
+    param: undefined,
+    catchAlls: undefined,
+    route: undefined,
+  }
 }
 
 function parse(path: `/${string}`): Segment[] {
@@ -361,7 +375,13 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
   const segment = segments[index]!
 
   if (node.literals !== undefined) {
-    const child = node.literals.get(segment)
+    // Comparing with an only literal is cheaper than hashing the segment.
+    const child =
+      node.literal === undefined
+        ? node.literals.get(segment)
+        : segment === node.literal
+          ? node.literalNode
+          : undefined
     if (child !== undefined) {
       const route = find(child, segments, index + 1)
       if (route !== undefined) {
