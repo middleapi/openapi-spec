@@ -400,9 +400,14 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   const end = segments.length - route.tail
 
   for (const { name, index, catchAll } of route.params!) {
-    const value = catchAll
-      ? segments.slice(index, end).join('/')
-      : segments[index < 0 ? segments.length + index : index]!
+    let value = segments[index < 0 ? segments.length + index : index]!
+
+    // Faster than `segments.slice(index, end).join('/')`.
+    if (catchAll) {
+      for (let i = index + 1; i < end; i++) {
+        value += `/${segments[i]}`
+      }
+    }
 
     // Assigning `__proto__` would set the prototype instead of adding a key.
     if (name === '__proto__') {
