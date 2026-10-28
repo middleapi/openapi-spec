@@ -153,7 +153,8 @@ const ANNOTATION_KEYWORDS = new Set([
   'xml',
 ])
 
-const convertAnyOf = list(convertSchema)
+const convertUnion = list(convertSchema)
+const convertTaggedUnion = list(convertTaggedBranch)
 const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaType)
 const convertReference = refOr(clone)
@@ -171,15 +172,15 @@ const SCHEMA_FIELDS = defineFields({
   // Zod writes a file with several media types as an `anyOf` of branches
   // that hold only `contentMediaType`, an annotation, so it matches every
   // value. Its branches would each become a binary string in 3.0.
-  anyOf: (item, ctx) =>
-    Array.isArray(item) && item.some(isMediaTypeOnly) ? DROP : convertAnyOf(item, ctx),
+  anyOf: (item, ctx, schema) =>
+    Array.isArray(item) && item.some(isMediaTypeOnly) ? DROP : convertBranches(item, ctx, schema),
   // An empty one rejects every value, which `finishSchema` keeps another way.
   enum: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
   // `finishSchema` builds it from `prefixItems`.
   items: (item, ctx, schema) =>
     schema.prefixItems === undefined ? convertSchema(item, ctx) : DROP,
   not: convertSchema,
-  oneOf: list(convertSchema),
+  oneOf: convertBranches,
   properties: map(convertSchema),
   // 3.0 requires at least one entry.
   required: (item) => (Array.isArray(item) && item.length === 0 ? DROP : clone(item)),
@@ -307,6 +308,42 @@ function refOr(convert: Convert): Convert {
     return isInlined(ref, ctx) ? inline(ref, ctx, self) : { $ref: ref }
   }
   return self
+}
+
+// A discriminator picks only among named components, not the targets that
+// replace `$ref`s into `$defs`, as Pydantic and msgspec write a tagged union.
+// Its `mapping` into them would dangle, which validators that follow it reject.
+function keepsDiscriminator(schema: Record<string, unknown>, ctx: Context): boolean {
+  return (
+    schema.discriminator !== undefined &&
+    ![schema.oneOf, schema.anyOf].some(
+      (branches) =>
+        Array.isArray(branches) &&
+        branches.some((branch) => {
+          const ref = getRef(branch)
+          return ref !== undefined && isInlined(ref, ctx)
+        }),
+    )
+  )
+}
+
+// 3.0 maps a discriminator only to the `$ref`s among its branches, not to
+// inline schemas, so a branch that is a `$ref` beside only annotations, as
+// Anthropic and ElevenLabs describe each one, stays the bare `$ref`, whose
+// siblings 3.0 ignores, rather than becoming an `allOf`, which oapi-codegen
+// stops on there.
+function convertBranches(item: unknown, ctx: Context, schema: Record<string, unknown>): unknown {
+  return keepsDiscriminator(schema, ctx) ? convertTaggedUnion(item, ctx) : convertUnion(item, ctx)
+}
+
+function convertTaggedBranch(value: unknown, ctx: Context): unknown {
+  const ref = getRef(value)
+  return ref !== undefined &&
+    Object.keys(value as Record<string, unknown>).every(
+      (key) => key === '$ref' || isAnnotation(key),
+    )
+    ? convertSchemaRef(ref, ctx)
+    : convertSchema(value, ctx)
 }
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
@@ -1110,20 +1147,7 @@ function finishSchema(
   if (typeof schema.$ref === 'string') {
     out.allOf = [convertSchemaRef(schema.$ref, ctx), ...(Array.isArray(out.allOf) ? out.allOf : [])]
   }
-  // A discriminator picks only among named components, not the targets that
-  // replace `$ref`s into `$defs`, as Pydantic and msgspec write a tagged union.
-  // Its `mapping` into them would dangle, which validators that follow it reject.
-  if (
-    out.discriminator !== undefined &&
-    [schema.oneOf, schema.anyOf].some(
-      (branches) =>
-        Array.isArray(branches) &&
-        branches.some((branch) => {
-          const ref = getRef(branch)
-          return ref !== undefined && isInlined(ref, ctx)
-        }),
-    )
-  ) {
+  if (out.discriminator !== undefined && !keepsDiscriminator(schema, ctx)) {
     delete out.discriminator
   }
   if (schema.const !== undefined) {
