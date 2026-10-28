@@ -278,15 +278,23 @@ function trimTrailingSlash(path: string): string {
   return path.charCodeAt(path.length - 1) === 47 ? path.slice(0, -1) : path
 }
 
-/** Splits a path with its trailing slash trimmed, keeping the empty string before its first slash. */
+/**
+ * Splits a path with its trailing slash trimmed, keeping the empty string
+ * before its first slash. A loop is faster than `path.split('/')`, which V8
+ * makes cheap only for strings it has interned, unlike request paths.
+ */
 function split(path: string, encoded: boolean): string[] {
-  const segments = path.split('/')
+  const segments: string[] = []
+  let start = 0
 
-  if (encoded) {
-    for (let i = 1; i < segments.length; i++) {
-      segments[i] = decode(segments[i]!)
-    }
+  for (let end = path.indexOf('/'); end !== -1; end = path.indexOf('/', start)) {
+    const segment = path.slice(start, end)
+    segments.push(encoded ? decode(segment) : segment)
+    start = end + 1
   }
+
+  const segment = path.slice(start)
+  segments.push(encoded ? decode(segment) : segment)
 
   return segments
 }

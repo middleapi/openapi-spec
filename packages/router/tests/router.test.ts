@@ -44,6 +44,11 @@ describe('Router', () => {
       expect(router.match('GET', '//a/b')).toBeUndefined()
       expect(router.match('GET', '/a//c')).toEqual({ data: '/a//c', params: undefined })
       expect(router.match('GET', '/a/c')).toBeUndefined()
+
+      // the root path has no segments, not one empty segment
+      const root = routerOf('//', '/{id}')
+      expect(root.match('GET', '/')).toBeUndefined()
+      expect(root.match('GET', '//')).toEqual({ data: '//', params: undefined })
     })
 
     it('matches path text literally, even characters that are route syntax elsewhere', () => {
