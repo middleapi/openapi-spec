@@ -448,15 +448,6 @@ describe('Router', () => {
       )
       expect(router.match('GET', '/a/x/b')).toBeUndefined()
     })
-
-    it('throws for a path that does not start with a slash', () => {
-      const router = new Router<string>()
-
-      expect(() => router.add('GET', 'users' as `/${string}`, 'invalid')).toThrowError(
-        new TypeError('OpenAPI path "users" must start with "/".'),
-      )
-      expect(router.match('GET', '/')).toBeUndefined()
-    })
   })
 })
 
@@ -560,11 +551,5 @@ describe('createPrefixMatcher', () => {
 
     expect(matches('/')).toBe(true)
     expect(matches('/a/b')).toBe(true)
-  })
-
-  it('throws for a prefix that does not start with a slash', () => {
-    expect(() => createPrefixMatcher('api' as `/${string}`)).toThrowError(
-      new TypeError('OpenAPI path "api" must start with "/".'),
-    )
   })
 })

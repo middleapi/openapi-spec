@@ -70,7 +70,7 @@ export class Router<T> {
   /**
    * Adds a route for requests with exactly this `method`.
    *
-   * @throws {TypeError} if `path` does not start with `/` or has more than one catch-all param, before adding anything
+   * @throws {TypeError} if `path` has more than one catch-all param, before adding anything
    */
   add(method: string, path: `/${string}`, data: T): void {
     const segments = parse(path)
@@ -184,10 +184,6 @@ export class Router<T> {
  * prefix, or from its catch-all param on, are not checked.
  */
 export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string}`) => boolean {
-  if (prefix.charCodeAt(0) !== 47) {
-    throw new TypeError(`OpenAPI path "${prefix}" must start with "/".`)
-  }
-
   const head: (string | undefined)[] = []
 
   for (const text of trimTrailingSlash(prefix).split('/').slice(1)) {
@@ -246,11 +242,7 @@ function createNode<T>(): Node<T> {
   return { literals: undefined, param: undefined, catchAlls: undefined, route: undefined }
 }
 
-function parse(path: string): Segment[] {
-  if (path.charCodeAt(0) !== 47) {
-    throw new TypeError(`OpenAPI path "${path}" must start with "/".`)
-  }
-
+function parse(path: `/${string}`): Segment[] {
   const segments = trimTrailingSlash(path).split('/').slice(1).map(toSegment)
 
   if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
