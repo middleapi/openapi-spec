@@ -489,6 +489,22 @@ describe('createPrefixMatcher', () => {
     expect(matches('/v1beta/info')).toBe(false)
   })
 
+  it('keeps empty segments and encoded slashes in a prefix', () => {
+    const matches = createPrefixMatcher('/a//b%2Fc')
+
+    expect(matches('/a//b%2Fc')).toBe(true)
+    expect(matches('/a//b%2fc/info')).toBe(true)
+    expect(matches('/a/b%2Fc')).toBe(false)
+    expect(matches('/a//b/c')).toBe(false)
+
+    const empty = createPrefixMatcher('/a//')
+
+    expect(empty('/a//')).toBe(true)
+    expect(empty('/a//info')).toBe(true)
+    expect(empty('/a/')).toBe(false)
+    expect(empty('/a')).toBe(false)
+  })
+
   it('matches every path for the root prefix', () => {
     const matches = createPrefixMatcher('/')
 
