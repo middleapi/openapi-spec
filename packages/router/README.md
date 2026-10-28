@@ -21,7 +21,7 @@
   </a>
 </div>
 
-`@openapi-spec/router` matches HTTP requests against [OpenAPI](https://spec.openapis.org/) path templates such as `/planets/{id}` and `/files/{+path}`, with no route syntax of its own to translate them into. It is built for how [oRPC](https://orpc.dev) routes [OpenAPI procedures](https://orpc.dev/docs/openapi/routing): small, with no dependencies, and faster than general-purpose routers on the route sets oRPC builds.
+`@openapi-spec/router` matches HTTP requests against [OpenAPI](https://spec.openapis.org/) path templates such as `/planets/{id}` and `/files/{+path}`, with no route syntax of its own to translate them into. It is built for how [oRPC](https://orpc.dev) routes [OpenAPI procedures](https://orpc.dev/docs/openapi/routing): small, with no dependencies, and faster than [rou3](https://github.com/h3js/rou3) on the route sets oRPC builds.
 
 ## Usage
 
@@ -85,6 +85,8 @@ Catch-all params that start at the same segment compare the segments after them 
 ## Performance
 
 A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
+
+Paths with params cost more than static ones, since each of their segments is sliced out and matched on its own. Radix-tree routers such as [memoirist](https://github.com/SaltyAom/memoirist) and [find-my-way](https://github.com/delvedor/find-my-way) compare the path in place and can be faster on them.
 
 [Benchmarks](https://github.com/middleapi/openapi-spec/tree/main/packages/router/benches) compare it with [rou3](https://github.com/h3js/rou3) on route sets like oRPC's. [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every pull request to catch regressions.
 
