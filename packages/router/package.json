@@ -1,0 +1,53 @@
+{
+  "name": "@openapi-spec/router",
+  "version": "0.4.0",
+  "description": "Fast HTTP router for OpenAPI path templates, with {name} and {+name} params, built for oRPC",
+  "keywords": [
+    "oas",
+    "openapi",
+    "openapi-spec",
+    "path-template",
+    "router",
+    "routing",
+    "typescript"
+  ],
+  "homepage": "https://github.com/middleapi/openapi-spec",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/middleapi/openapi-spec.git",
+    "directory": "packages/router"
+  },
+  "funding": [
+    "https://github.com/sponsors/dinwwwh",
+    "https://opencollective.com/middleapi"
+  ],
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "prepack": "unbuild"
+  },
+  "devDependencies": {
+    "rou3": "^1.0.0"
+  },
+  "unbuild": {
+    "declaration": "node16"
+  }
+}
