@@ -1,5 +1,5 @@
-import { Router } from '@openapi-spec/router'
-import { addRoute, createRouter, findRoute } from 'rou3'
+import { createPrefixMatcher, Router } from '@openapi-spec/router'
+import { addRoute, createRouter, findRoute, routeToRegExp } from 'rou3'
 import { bench, describe } from 'vitest'
 
 import type { Requests, Routes } from './__shared__/routes'
@@ -55,5 +55,29 @@ describe('add, 703 REST-style procedures', () => {
 
   bench('rou3', () => {
     createRou3(routes)
+  })
+})
+
+describe('prefix match, 10 pending lazy routers', () => {
+  // oRPC tests each pending lazy router's prefix on every request until it loads.
+  const prefixes = Array.from({ length: 10 }, (_, i) => `/api/v1/lazy${i}` as const)
+  const ours = prefixes.map(createPrefixMatcher)
+  const rou3 = prefixes.map((prefix) => routeToRegExp(`${toRou3Path(prefix)}/**`))
+  const requests = restRequests(100)
+
+  bench('@openapi-spec/router', () => {
+    for (const [, pathname] of requests) {
+      for (const matches of ours) {
+        matches(pathname)
+      }
+    }
+  })
+
+  bench('rou3', () => {
+    for (const [, pathname] of requests) {
+      for (const regExp of rou3) {
+        regExp.test(pathname)
+      }
+    }
   })
 })

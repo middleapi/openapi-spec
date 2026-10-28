@@ -201,18 +201,41 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
     }
   }
 
-  return (pathname) => {
-    const path = trimTrailingSlash(pathname)
-    const segments = split(path, path.includes('%'))
+  // oRPC tests each pending lazy router's prefix on every request, so a prefix
+  // of only literal text is compared at once for a path without `%`, and other
+  // paths are read only as far as the prefix goes.
+  const literal = head.every(
+    (segment) => segment !== undefined && segment !== '' && !segment.includes('/'),
+  )
+    ? head.map((segment) => `/${segment}`).join('')
+    : undefined
 
-    if (segments.length <= head.length) {
-      return false
+  return (pathname) => {
+    if (literal !== undefined && !pathname.includes('%')) {
+      return (
+        pathname.startsWith(literal) &&
+        (pathname.length === literal.length || pathname.charCodeAt(literal.length) === 47)
+      )
     }
 
-    for (let i = 0; i < head.length; i++) {
-      if (!matchesSegment(head[i], segments[i + 1]!)) {
+    let start = 1
+
+    for (const expected of head) {
+      // At the end, or at a trailing slash, the path has no more segments.
+      if (start >= pathname.length) {
         return false
       }
+
+      let end = pathname.indexOf('/', start)
+      if (end === -1) {
+        end = pathname.length
+      }
+
+      if (!matchesSegment(expected, decode(pathname.slice(start, end)))) {
+        return false
+      }
+
+      start = end + 1
     }
 
     return true
