@@ -92,6 +92,21 @@ const PARAM_NAME = /^[\w-]+$/
 const FILTER_AFTER = 1024
 
 /**
+ * Each node starts as a copy of this one, which V8 makes in one step. An
+ * object literal with `undefined` values would define each property in turn,
+ * which adds up while a cold start builds the tree.
+ */
+const EMPTY_NODE: Readonly<Node<never>> = {
+  literals: undefined,
+  literal: undefined,
+  literalNode: undefined,
+  param: undefined,
+  catchAlls: undefined,
+  route: undefined,
+  pending: undefined,
+}
+
+/**
  * Matches request paths against OpenAPI path templates, the way oRPC routes
  * them:
  *
@@ -229,7 +244,7 @@ function routesOf<T>(methods: Map<string, MethodRoutes<T>>, method: string): Met
   let routes = methods.get(method)
   if (routes === undefined) {
     routes = {
-      root: createNode(),
+      root: { ...EMPTY_NODE },
       statics: new Map(),
       filter: undefined,
       unfiltered: 0,
@@ -421,7 +436,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
       }
 
       if (!segment.catchAll) {
-        child.param ??= createNode()
+        child.param ??= { ...EMPTY_NODE }
         child = child.param
         continue
       }
@@ -471,7 +486,7 @@ function literalChild<T>(node: Node<T>, segment: string): Node<T> {
   if (node.literals === undefined) {
     if (node.literalNode === undefined) {
       node.literal = segment
-      node.literalNode = createNode()
+      node.literalNode = { ...EMPTY_NODE }
       return node.literalNode
     }
     if (segment === node.literal) {
@@ -485,22 +500,10 @@ function literalChild<T>(node: Node<T>, segment: string): Node<T> {
 
   let child = node.literals.get(segment)
   if (child === undefined) {
-    child = createNode()
+    child = { ...EMPTY_NODE }
     node.literals.set(segment, child)
   }
   return child
-}
-
-function createNode<T>(): Node<T> {
-  return {
-    literals: undefined,
-    literal: undefined,
-    literalNode: undefined,
-    param: undefined,
-    catchAlls: undefined,
-    route: undefined,
-    pending: undefined,
-  }
 }
 
 function parse(path: `/${string}`): Segment[] {
