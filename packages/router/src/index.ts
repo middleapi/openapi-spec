@@ -405,7 +405,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
       // first part, a route waits before one, and before literal text like it,
       // which keeps the first of two that read the same. A route added whole
       // goes after the routes waiting there.
-      if (segment.charCodeAt(0) === 123) {
+      if (segment[0] === '{') {
         if (!whole && index > start) {
           if (index < literals) {
             literals = index
