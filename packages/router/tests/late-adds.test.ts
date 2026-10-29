@@ -15,6 +15,9 @@ describe('routes added after requests', () => {
     router.add('GET', '/d/{+r}/e', 'duplicate')
     router.add('GET', '/d/f', '/d/f')
     router.add('GET', '/d/{x}', '/d/{x}')
+    // shares its parts up to `t` with the route before it
+    router.add('GET', '/s/{x}/t/{y}', '/s/{x}/t/{y}')
+    router.add('GET', '/s/{x}/t/u', '/s/{x}/t/u')
 
     expectMatches(router, {
       '/a/1/b/2': ['/a/{x}/b/{y}', { x: '1', y: '2' }],
@@ -26,6 +29,8 @@ describe('routes added after requests', () => {
       '/d/f/e': ['/d/{+p}/e', { p: 'f' }],
       '/%64/f': ['/d/f'],
       '/a/1/c': ['/a/{x}/c', { x: '1' }],
+      '/s/1/t/2': ['/s/{x}/t/{y}', { x: '1', y: '2' }],
+      '/s/1/t/u': ['/s/{x}/t/u', { x: '1' }],
     })
   })
 
