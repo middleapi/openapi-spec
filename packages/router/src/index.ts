@@ -638,8 +638,10 @@ function matchesSegment(expected: string | undefined, segment: string): boolean 
   return expected === undefined ? segment !== '' : segment === expected
 }
 
+// `params` is spread only for a param named `__proto__`, not on every pass.
+/* oxlint-disable oxc/no-accumulating-spread */
 function toParams<T>(route: Route<T>, segments: readonly string[]): Record<string, string> {
-  const params: Record<string, string> = {}
+  let params: Record<string, string> = {}
   const end = segments.length - route.tail
 
   for (const { name, index, catchAll } of route.params!) {
@@ -652,14 +654,10 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
       }
     }
 
-    // Assigning `__proto__` would set the prototype instead of adding a key.
+    // Assigning `__proto__` would set the prototype, where a computed key in
+    // an object literal adds it.
     if (name === '__proto__') {
-      Object.defineProperty(params, name, {
-        configurable: true,
-        enumerable: true,
-        value,
-        writable: true,
-      })
+      params = { ...params, [name]: value }
     } else {
       params[name] = value
     }
@@ -667,3 +665,4 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
 
   return params
 }
+/* oxlint-enable oxc/no-accumulating-spread */
