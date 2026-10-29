@@ -359,9 +359,10 @@ function isAnnotatedRef(value: Record<string, unknown>): boolean {
 
 // 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
 // as one of the schemas the discriminator picks among, so openapi-typescript
-// leaves out the tag and Hey API pins it to the name of the schema around it.
-// So a `$ref` to one beside only annotations, as OpenAI and Adyen describe a
-// property holding a tagged union, stays the bare `$ref`, as a branch does.
+// leaves out the tag, and Hey API pins it to the name of the schema around it
+// when the target has no `oneOf`. So a `$ref` to one beside only annotations,
+// as OpenAI and Adyen describe a property holding a tagged union, stays the
+// bare `$ref`, as a branch does.
 function isTaggedRef(ref: string, ctx: Context): boolean {
   const target = resolvePointer(ref, ctx)
   return isRecord(target) && keepsDiscriminator(target, ctx) && !isInlined(ref, ctx)
