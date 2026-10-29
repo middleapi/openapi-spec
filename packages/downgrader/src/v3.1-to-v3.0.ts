@@ -831,6 +831,24 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
+// A union with no `type` whose branches each reject null, or are a `$ref` to
+// a schema that does, as Zod writes a registered union, and GitHub and Notion
+// a tagged one.
+function unionRejectsNull(schema: unknown, root: unknown): boolean {
+  if (!isRecord(schema) || schema.type !== undefined) {
+    return false
+  }
+  const branches = schema.anyOf ?? schema.oneOf
+  return (
+    Array.isArray(branches) &&
+    branches.length > 0 &&
+    branches.every((branch) => {
+      const branchRef = getRef(branch)
+      return rejectsNull(branchRef === undefined ? branch : find(root, branchRef))
+    })
+  )
+}
+
 // Whether two branches hold the same keys with the same values. An object
 // value matches only itself, since comparing objects in full would cost an
 // object that a dereferenced document shares once for each path to it.
@@ -942,10 +960,10 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     delete out[key]
     Object.assign(out, other, { nullable: true })
   } else if (key === 'anyOf' && out.oneOf === undefined) {
-    // A `$ref` kept as written rejects null when its target does, and an
-    // `allOf` when any of its members does, such as the `$ref` with siblings
-    // that Zod writes for a described reference, or either side of an
-    // intersection.
+    // A `$ref` kept as written rejects null when its target does, or is a
+    // union that does, and an `allOf` when any of its members does, such as
+    // the `$ref` with siblings that Zod writes for a described reference, or
+    // either side of an intersection.
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
     const held =
@@ -954,7 +972,7 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
         const memberRef = getRef(member)
         return rejectsNull(memberRef === undefined ? member : find(root, memberRef))
       })
-    if (rejectsNull(target) || held) {
+    if (rejectsNull(target) || (ref !== undefined && unionRejectsNull(target, root)) || held) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]

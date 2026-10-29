@@ -1072,6 +1072,50 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(described({ type: ['object', 'null'] })).toEqual({ anyOf: [wrapped, onlyNull] })
     })
 
+    it('makes an anyOf of a $ref and null a oneOf when the target is a union that rejects null, as Zod writes a registered union', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      const ref = { $ref: '#/components/schemas/Pet' }
+      const pet = (target: OpenAPIV3_1.SchemaObject) =>
+        convert({
+          components: {
+            schemas: {
+              Cat: { type: 'object', properties: { meow: { type: 'string' } } },
+              Dog: { type: 'object', properties: { bark: { type: 'string' } } },
+              Name: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+              Pet: target,
+              Owner: { anyOf: [ref, { type: 'null' }] },
+            },
+          },
+        }).components?.schemas?.Owner
+      // Zod's `z.union([z.literal('a'), z.literal('b')]).meta({ id })`.
+      expect(
+        pet({
+          anyOf: [
+            { type: 'string', const: 'a' },
+            { type: 'string', const: 'b' },
+          ],
+        }),
+      ).toEqual({ oneOf: [ref, onlyNull] })
+      // GitHub and Notion write a tagged union of `$ref`s.
+      expect(
+        pet({
+          oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
+        }),
+      ).toEqual({ oneOf: [ref, onlyNull] })
+      // Null can pass a branch, or the target of a branch's `$ref`.
+      expect(pet({ anyOf: [{ type: 'string' }, {}] })).toEqual({ anyOf: [ref, onlyNull] })
+      expect(
+        pet({
+          oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Name' }],
+        }),
+      ).toEqual({ anyOf: [ref, onlyNull] })
+      // A union with a `type` counts by that `type` alone, and one with no branches not at all.
+      expect(pet({ type: ['object', 'null'], anyOf: [{ type: 'object' }] })).toEqual({
+        anyOf: [ref, onlyNull],
+      })
+      expect(pet({ anyOf: [] } as OpenAPIV3_1.SchemaObject)).toEqual({ anyOf: [ref, onlyNull] })
+    })
+
     it('makes an anyOf of an allOf and null a oneOf when any member rejects null', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
       const base = { type: 'object', properties: { b: { type: 'string' } } } as const
@@ -1147,8 +1191,8 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(owner({ description: 'Any JSON value' })).toEqual(ref)
       expect(owner({ examples: [1] })).toEqual(ref)
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
-      // Null can fail every branch, or the `enum` beside them.
-      expect(owner({ anyOf: [pet, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
+      // Null can fail every branch, which makes the pair a `oneOf`, or the `enum` beside them.
+      expect(owner({ anyOf: [pet, { type: 'string' }] })).toEqual({ oneOf: [ref, onlyNull] })
       expect(owner({ anyOf: [{ type: 'string' }, { type: 'null' }], enum: ['a'] })).toEqual({
         anyOf: [ref, onlyNull],
       })
