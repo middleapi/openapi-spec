@@ -53,15 +53,27 @@ function compare(name: string, routes: Routes, requests: Requests): void {
 compare('match, 250 RPC-style procedures', rpcRoutes(50), rpcRequests(50))
 compare('match, 703 REST-style procedures', restRoutes(100), restRequests(100))
 
-describe('add, 703 REST-style procedures', () => {
+describe('add, then a request for each method, 703 REST-style procedures', () => {
   const routes = restRoutes(100)
+  // This router builds a method's tree on its first request that needs one.
+  const requests = [
+    ['GET', '/api/v1/resource0/1'],
+    ['PATCH', '/api/v1/resource0/1'],
+    ['DELETE', '/api/v1/resource0/1'],
+  ] as const
 
   bench('@openapi-spec/router', () => {
-    createOurs(routes)
+    const router = createOurs(routes)
+    for (const [method, pathname] of requests) {
+      router.match(method, fresh(pathname))
+    }
   })
 
   bench('rou3', () => {
-    createRou3(routes)
+    const router = createRou3(routes)
+    for (const [method, pathname] of requests) {
+      findRoute(router, method, fresh(pathname))
+    }
   })
 })
 

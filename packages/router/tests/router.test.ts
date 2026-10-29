@@ -53,12 +53,15 @@ describe('Router', () => {
     })
 
     it('matches routes added after earlier matches, raw or percent-encoded', () => {
-      const router = routerOf('/a')
+      const router = routerOf('/a', '/a/{id}')
       expect(router.match('GET', '/%61')).toEqual({ data: '/a', params: undefined })
+      expect(router.match('GET', '/a/1')).toEqual({ data: '/a/{id}', params: { id: '1' } })
 
       router.add('GET', '/b', '/b')
+      router.add('GET', '/b/{id}', '/b/{id}')
       expect(router.match('GET', '/b')).toEqual({ data: '/b', params: undefined })
       expect(router.match('GET', '/%62')).toEqual({ data: '/b', params: undefined })
+      expect(router.match('GET', '/b/1')).toEqual({ data: '/b/{id}', params: { id: '1' } })
     })
 
     it('matches path text literally, even characters that are route syntax elsewhere', () => {
@@ -442,6 +445,10 @@ describe('Router', () => {
       router.add('GET', '/other', 'second')
       router.add('GET', '/files/{+path}/{a}', 'first')
       router.add('GET', '/files/{+rest}/{b}', 'second')
+      router.add('GET', '/a/{x}.json', 'first')
+      router.add('GET', '/a/%7Bx%7D.json', 'second')
+      router.add('GET', '/b/%7Bx%7D.json', 'first')
+      router.add('GET', '/b/{x}.json', 'second')
       router.add('POST', '/users/{userId}', 'post')
 
       expect(router.match('GET', '/users/1')).toEqual({ data: 'first', params: { id: '1' } })
@@ -454,6 +461,10 @@ describe('Router', () => {
         params: { path: 'a', a: 'b' },
       })
       expect(router.match('POST', '/users/1')).toEqual({ data: 'post', params: { userId: '1' } })
+      expect(router.match('GET', '/a/{x}.json')).toEqual({ data: 'first', params: undefined })
+      expect(router.match('GET', '/a/%7Bx%7D.json')).toEqual({ data: 'first', params: undefined })
+      expect(router.match('GET', '/b/{x}.json')).toEqual({ data: 'first', params: undefined })
+      expect(router.match('GET', '/b/%7Bx%7D.json')).toEqual({ data: 'first', params: undefined })
     })
   })
 
@@ -467,6 +478,16 @@ describe('Router', () => {
         ),
       )
       expect(router.match('GET', '/a/x/b')).toBeUndefined()
+    })
+
+    it('accepts `{+` more than once when only one is a catch-all param', () => {
+      const router = routerOf('/{+a}/x{+b}', '/{+c}/{+d')
+
+      expect(router.match('GET', '/1/2/x{+b}')).toEqual({
+        data: '/{+a}/x{+b}',
+        params: { a: '1/2' },
+      })
+      expect(router.match('GET', '/1/{+d')).toEqual({ data: '/{+c}/{+d', params: { c: '1' } })
     })
   })
 })

@@ -86,6 +86,8 @@ Catch-all params that start at the same segment compare the segments after them 
 
 A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
 
+`add` keeps each route with params as written, and a method's tree is built on the first request for that method that needs it. A process that starts cold and serves a few requests pays only for the methods it serves.
+
 Paths with params cost more than static ones, since each of their segments is sliced out and matched on its own. Radix-tree routers such as [memoirist](https://github.com/SaltyAom/memoirist) and [find-my-way](https://github.com/delvedor/find-my-way) compare the path in place and can be faster on them.
 
 [Benchmarks](https://github.com/middleapi/openapi-spec/tree/main/packages/router/benches) compare it with [rou3](https://github.com/h3js/rou3) on route sets like oRPC's. [CodSpeed](https://app.codspeed.io/middleapi/openapi-spec) runs them on every pull request to catch regressions.
