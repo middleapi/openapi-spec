@@ -1957,6 +1957,8 @@ describe('downgradeSchemaV31ToV30', () => {
                 'description': 'Text',
                 'title': 'Text',
                 'deprecated': true,
+                'examples': [{ type: 'text' }],
+                '$comment': 'A text block',
                 'x-kind': 'a',
               },
               { $ref: image, type: 'object' },
@@ -1994,9 +1996,10 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('keeps a $ref beside only annotations bare to a schema with a discriminator', () => {
-      // As OpenAI describes a property holding a tagged union, and Adyen one
-      // holding a base with a `mapping`. 3.0 reads an `allOf` that holds the
-      // `$ref` as one of the schemas the discriminator picks among.
+      // As OpenAI describes a property holding a tagged union, Anthropic gives
+      // it `examples`, and Adyen describes one holding a base with a `mapping`.
+      // 3.0 reads an `allOf` that holds the `$ref` as one of the schemas the
+      // discriminator picks among.
       const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
       const identification = {
         type: 'object',
@@ -2021,6 +2024,7 @@ describe('downgradeSchemaV31ToV30', () => {
               type: 'object',
               properties: {
                 strategy: { ...ref('Strategy'), description: 'The chunking strategy' },
+                data: { ...ref('Strategy'), examples: [{ type: 'auto' }], $comment: 'Event data' },
                 identification: { ...ref('Identification'), 'title': 'Account', 'x-a': 1 },
                 typed: { ...ref('Identification'), type: 'object' },
                 pet: { ...ref('Pet'), description: 'Pet' },
@@ -2033,6 +2037,7 @@ describe('downgradeSchemaV31ToV30', () => {
         type: 'object',
         properties: {
           strategy: ref('Strategy'),
+          data: ref('Strategy'),
           identification: ref('Identification'),
           typed: { type: 'object', allOf: [ref('Identification')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },

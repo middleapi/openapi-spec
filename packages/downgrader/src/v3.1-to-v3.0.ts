@@ -353,8 +353,12 @@ function convertTaggedBranch(value: unknown, ctx: Context): unknown {
     : convertSchema(value, ctx)
 }
 
+// The 3.1 annotations `examples` and `$comment` count too, as the Anthropic
+// API writes `examples` beside a `$ref` to a tagged union.
 function isAnnotatedRef(value: Record<string, unknown>): boolean {
-  return Object.keys(value).every((key) => key === '$ref' || isAnnotation(key))
+  return Object.keys(value).every(
+    (key) => key === '$ref' || key === 'examples' || key === '$comment' || isAnnotation(key),
+  )
 }
 
 // 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
