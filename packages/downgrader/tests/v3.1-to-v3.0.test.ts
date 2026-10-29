@@ -1072,6 +1072,38 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(described({ type: ['object', 'null'] })).toEqual({ anyOf: [wrapped, onlyNull] })
     })
 
+    it('makes an anyOf of an allOf and null a oneOf when any member rejects null', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      const base = { type: 'object', properties: { b: { type: 'string' } } } as const
+      const open = { properties: { b: { type: 'string' } } } as const
+      const ref = { $ref: '#/components/schemas/Pet' }
+      // oRPC writes Zod's `z.intersection(B, Pet).nullable()` with the `$ref` second.
+      const owner = (first: OpenAPIV3_1.SchemaObject, target: OpenAPIV3_1.SchemaObject) =>
+        convert({
+          components: {
+            schemas: {
+              Pet: target,
+              Owner: { anyOf: [{ allOf: [first, ref] }, { type: 'null' }] },
+            },
+          },
+        }).components?.schemas?.Owner
+      expect(owner(base, { type: 'object' })).toEqual({ oneOf: [{ allOf: [base, ref] }, onlyNull] })
+      // One member that rejects null is enough, in either place.
+      expect(owner(base, { type: ['object', 'null'] })).toEqual({
+        oneOf: [{ allOf: [base, ref] }, onlyNull],
+      })
+      expect(owner(open, { type: 'object' })).toEqual({ oneOf: [{ allOf: [open, ref] }, onlyNull] })
+      // Null can pass every member, so it can match both branches.
+      expect(owner(open, { type: ['object', 'null'] })).toEqual({
+        anyOf: [{ allOf: [open, ref] }, onlyNull],
+      })
+      // An intersection of two inline objects.
+      const other = { type: 'object', properties: { c: { type: 'number' } } } as const
+      expect(
+        downgradeSchemaV31ToV30({ anyOf: [{ allOf: [base, other] }, { type: 'null' }] }),
+      ).toEqual({ oneOf: [{ allOf: [base, other] }, onlyNull] })
+    })
+
     it('keeps only the $ref of an anyOf with null when the target admits null, as GitHub writes it', () => {
       const ref = { $ref: '#/components/schemas/Pet' }
       const owner = (target: OpenAPIV3_1.SchemaObject, extra: object = {}) =>
