@@ -558,16 +558,17 @@ function losesRestriction(
 
 // What 3.0 keeps of a schema however loose the rest of it becomes: its type,
 // and the values, each a string, number, boolean or null, of a `const` or an
-// `enum` that it holds a property to, and whether an object requires it. Null
-// matches a `nullable` schema, even with an `enum`, as some read it, so such a
-// schema or property keeps nothing, nor does a property whose `type` names
-// null, which becomes `nullable`.
+// `enum` that it holds a property to, also through a `$ref` beside only
+// annotations, as Zod writes a literal with its own id, and whether an object
+// requires it. Null matches a `nullable` schema, even with an `enum`, as some
+// read it, so such a schema or property keeps nothing, nor does a property
+// whose `type` names null, which becomes `nullable`.
 interface Tags {
   readonly type: unknown
   readonly values: Map<string, { readonly values: unknown[]; readonly required: boolean }>
 }
 
-function tagsOf(schema: Record<string, unknown>): Tags {
+function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   const values: Tags['values'] = new Map()
   if (schema.nullable === true) {
     return { type: undefined, values }
@@ -575,7 +576,11 @@ function tagsOf(schema: Record<string, unknown>): Tags {
   const required = schema.type === 'object' && Array.isArray(schema.required) ? schema.required : []
   const properties = isRecord(schema.properties) ? schema.properties : {}
   for (const name of Object.keys(properties)) {
-    const property = properties[name]
+    const value = properties[name]
+    const property =
+      getRef(value) !== undefined && isAnnotatedRef(value as Record<string, unknown>)
+        ? follow(value, ctx)
+        : value
     const held =
       isRecord(property) && property.nullable !== true && !hasType(property.type, 'null')
         ? property.const === undefined
@@ -609,29 +614,31 @@ function isApart(a: Tags, b: Tags): boolean {
   return false
 }
 
+// The schema that a chain of `$ref`s from `value` ends at. A `$ref` back into
+// a target being inlined is cut to `{}`, which keeps nothing, and so is a
+// `$ref` whose chain of `$ref`s reaches one.
+function follow(value: unknown, ctx: Context): unknown {
+  const visited = new Set<string>()
+  let target = value
+  for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
+    if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
+      return undefined
+    }
+    visited.add(ref)
+    target = resolvePointer(ref, ctx)
+  }
+  return target
+}
+
 // The tags of a schema and of the members of its `allOf`, which take every
 // value it takes, as OpenAI writes a resource as an `allOf` of an item and its ID.
-// A `$ref` back into a target being inlined is cut to `{}`, which keeps nothing,
-// and so is a `$ref` whose chain of `$ref`s reaches one.
 function partTags(schema: unknown, ctx: Context): Tags[] {
-  const follow = (value: unknown): unknown => {
-    const visited = new Set<string>()
-    let target = value
-    for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
-      if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
-        return undefined
-      }
-      visited.add(ref)
-      target = resolvePointer(ref, ctx)
-    }
-    return target
-  }
-  const target = follow(schema)
+  const target = follow(schema, ctx)
   const parts =
     isRecord(target) && Array.isArray(target.allOf)
-      ? [target, ...target.allOf.map(follow)]
+      ? [target, ...target.allOf.map((member) => follow(member, ctx))]
       : [target]
-  return parts.filter(isRecord).map(tagsOf)
+  return parts.filter(isRecord).map((part) => tagsOf(part, ctx))
 }
 
 // Whether no value matches two of the branches, however loose they become.

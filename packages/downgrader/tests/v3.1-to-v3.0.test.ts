@@ -2586,6 +2586,49 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('reads the values of a property through a $ref beside only annotations', () => {
+      // As Zod writes a literal or an enum with its own id as a tag, and the
+      // Entitle API a one-value enum for each tag.
+      const tagged = (kind: unknown, loose = false) => ({
+        type: 'object',
+        properties: {
+          kind,
+          ...(loose && { metadata: { type: 'object', propertyNames: { maxLength: 64 } } }),
+        },
+        required: ['kind'],
+      })
+      const union = (a: unknown, b: unknown) => ({ oneOf: [tagged(a, true), tagged(b)] })
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      const schemas = convert({
+        components: {
+          schemas: {
+            A: { type: 'string', const: 'a' },
+            B: { type: 'string', enum: ['b'] },
+            AliasB: ref('B'),
+            NullB: { type: ['string', 'null'], enum: ['b', null] },
+            Tagged: union(ref('A'), ref('B')),
+            Described: union({ ...ref('A'), description: 'The kind.' }, ref('AliasB')),
+            // Null matches both once the `type` beside the `$ref` becomes `nullable`.
+            NullableRef: union(ref('A'), { ...ref('B'), type: ['string', 'null'] }),
+            NullableTarget: union(ref('A'), ref('NullB')),
+          } as Record<string, OpenAPIV3_1.SchemaObject>,
+        },
+      }).components?.schemas
+      expect(schemas?.Tagged).toEqual({
+        oneOf: [
+          {
+            type: 'object',
+            properties: { kind: ref('A'), metadata: { type: 'object' } },
+            required: ['kind'],
+          },
+          tagged(ref('B')),
+        ],
+      })
+      expect(schemas?.Described).toHaveProperty('oneOf')
+      expect(schemas?.NullableRef).toHaveProperty('anyOf')
+      expect(schemas?.NullableTarget).toHaveProperty('anyOf')
+    })
+
     it('includes propertyNames beyond a string type, and unevaluatedProperties beside an in-place applicator', () => {
       // As zod emits z.record with a key pattern.
       expect(
