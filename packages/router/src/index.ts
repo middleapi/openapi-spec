@@ -384,7 +384,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
 
     for (; index < parts.length; index++) {
       const part = parts[index]!
-      let segment: Segment = decode(part)
+      let segment: Segment = part.includes('%') ? decode(part) : part
 
       // Only a part starting with `{` once decoded can be a param. Past its
       // first part, a route waits before one, and before literal text like it,
@@ -392,7 +392,9 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
       // goes after the routes waiting there.
       if (segment.charCodeAt(0) === 123) {
         if (!whole && index > start) {
-          literals = Math.min(literals, index)
+          if (index < literals) {
+            literals = index
+          }
           ;(child.pending ??= []).push(parts, data, params)
           continue next
         }
@@ -408,7 +410,9 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
         continue
       }
 
-      literals = Math.min(literals, index)
+      if (index < literals) {
+        literals = index
+      }
       // An array literal holds just its items, where a push to `[]` reserves 17.
       if (params === undefined) {
         params = [segment]
