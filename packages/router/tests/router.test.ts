@@ -522,6 +522,26 @@ describe('Router', () => {
       expect(router.match('GET', '/b/{x}.json')).toEqual({ data: 'first', params: undefined })
       expect(router.match('GET', '/b/%7Bx%7D.json')).toEqual({ data: 'first', params: undefined })
     })
+
+    it('keeps the same order for routes added after requests built part of the tree', () => {
+      const router = new Router<string>()
+      router.add('GET', '/a/{x}/b', 'first')
+      router.add('GET', '/c/%7Bx%7D/{id}', '/c/%7Bx%7D/{id}')
+      // builds the tree up to `/a`, and past `/c/{x}`
+      expect(router.match('GET', '/a')).toBeUndefined()
+      expect(router.match('GET', '/c/%7Bx%7D/1')).toEqual({
+        data: '/c/%7Bx%7D/{id}',
+        params: { id: '1' },
+      })
+
+      router.add('GET', '/a/{y}/b', 'second')
+      router.add('GET', '/c/%7Bx%7D/d', '/c/%7Bx%7D/d')
+      expect(router.match('GET', '/a/1/b')).toEqual({ data: 'first', params: { x: '1' } })
+      expect(router.match('GET', '/c/%7Bx%7D/d')).toEqual({
+        data: '/c/%7Bx%7D/d',
+        params: undefined,
+      })
+    })
   })
 
   describe('invalid paths', () => {
