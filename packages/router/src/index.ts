@@ -113,12 +113,13 @@ export class Router<T> {
    */
   add(method: string, path: `/${string}`, data: T): void {
     // Without `{` or `%`, a path has only literal segments, which read the same decoded.
-    if (!path.includes('{') && !path.includes('%')) {
+    const braced = path.includes('{')
+    if (!braced && !path.includes('%')) {
       addStatic(this.methods, method, trimTrailingSlash(path), data)
       return
     }
 
-    addParsed(this.methods, method, path, data)
+    addParsed(this.methods, method, path, data, braced)
   }
 
   /**
@@ -180,8 +181,9 @@ function addParsed<T>(
   method: string,
   path: `/${string}`,
   data: T,
+  braced: boolean,
 ): void {
-  if (path.includes('{')) {
+  if (braced) {
     // Only a path with `{+` twice can have two catch-all params. `lastIndexOf`
     // would cost more, as V8 runs it outside its fast builtins.
     const catchAll = path.indexOf('{+')
@@ -241,8 +243,9 @@ function addStatic<T>(
   data: T,
 ): void {
   const routes = routesOf(methods, method)
-  if (!routes.statics.has(path)) {
-    routes.statics.set(path, data)
+  const statics = routes.statics
+  if (!statics.has(path)) {
+    statics.set(path, data)
     routes.filter = undefined
   }
 }
