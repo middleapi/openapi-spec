@@ -123,7 +123,12 @@ describe('Router', () => {
     })
 
     it('matches text that requests leave raw but routes encode, and the other way around', () => {
-      const router = routerOf('/v1^beta/items:batchGet/{id}', '/a:b%7Bc%7D', '/x%3Ay/a%2Fb/{id}')
+      const router = routerOf(
+        '/v1^beta/items:batchGet/{id}',
+        '/a:b%7Bc%7D',
+        '/x%3Ay/b',
+        '/x%3Ay/a%2Fb/{id}',
+      )
 
       for (const path of [
         '/v1^beta/items:batchGet/a^b',
@@ -138,6 +143,10 @@ describe('Router', () => {
 
       for (const path of ['/a:b%7Bc%7D', '/a%3Ab%7bc%7d', '/a:b{c}'] as const) {
         expect(router.match('GET', path)).toEqual({ data: '/a:b%7Bc%7D', params: undefined })
+      }
+
+      for (const path of ['/x:y/b', '/x%3Ay/b', '/x%3ay/b'] as const) {
+        expect(router.match('GET', path)).toEqual({ data: '/x%3Ay/b', params: undefined })
       }
 
       for (const path of ['/x:y/a%2Fb/1', '/x%3Ay/a%2fb/1'] as const) {
@@ -481,13 +490,16 @@ describe('Router', () => {
     })
 
     it('accepts `{+` more than once when only one is a catch-all param', () => {
-      const router = routerOf('/{+a}/x{+b}', '/{+c}/{+d')
+      const router = routerOf('/{+a}/x{+b}', '/{id}/{+c}/{+d')
 
       expect(router.match('GET', '/1/2/x{+b}')).toEqual({
         data: '/{+a}/x{+b}',
         params: { a: '1/2' },
       })
-      expect(router.match('GET', '/1/{+d')).toEqual({ data: '/{+c}/{+d', params: { c: '1' } })
+      expect(router.match('GET', '/1/2/3/{+d')).toEqual({
+        data: '/{id}/{+c}/{+d',
+        params: { id: '1', c: '2/3' },
+      })
     })
   })
 })
