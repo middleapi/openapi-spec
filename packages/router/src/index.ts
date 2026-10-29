@@ -415,18 +415,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
         continue
       }
 
-      const tail: (string | undefined)[] = []
-      for (let i = index + 1; i < parts.length; i++) {
-        const after = toSegment(parts[i]!, i - parts.length)
-        if (typeof after === 'string') {
-          tail.push(after)
-        } else {
-          tail.push(undefined)
-          params.push(after)
-        }
-      }
-
-      addCatchAll(child, { tail, route: { data, params, tail: tail.length } })
+      addCatchAll(child, parts, index, data, params)
       continue next
     }
 
@@ -434,12 +423,33 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
   }
 }
 
-// Separate from `expand`, whose loop would otherwise allocate a scope
-// for the closure below on every segment.
-function addCatchAll<T>(node: Node<T>, catchAll: CatchAll<T>): void {
+/**
+ * Adds a route whose catch-all param is the part at `index`. Keeping this out
+ * of `expand` makes the code V8 compiles for a cold start's first request
+ * smaller, and keeps the closure below from making `expand` allocate a scope
+ * on every segment.
+ */
+function addCatchAll<T>(
+  node: Node<T>,
+  parts: readonly string[],
+  index: number,
+  data: T,
+  params: RouteParam[],
+): void {
+  const tail: (string | undefined)[] = []
+  for (let i = index + 1; i < parts.length; i++) {
+    const after = toSegment(parts[i]!, i - parts.length)
+    if (typeof after === 'string') {
+      tail.push(after)
+    } else {
+      tail.push(undefined)
+      params.push(after)
+    }
+  }
+
   node.catchAlls ??= []
-  if (!node.catchAlls.some((other) => sameTail(other.tail, catchAll.tail))) {
-    node.catchAlls.push(catchAll)
+  if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
+    node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
     node.catchAlls.sort(compareCatchAlls)
   }
 }
