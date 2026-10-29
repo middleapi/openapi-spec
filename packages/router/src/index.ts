@@ -36,7 +36,7 @@ interface Node<T> {
   literals: Map<string, Node<T>> | undefined
   /** The text of the only literal child, if there is just one. */
   literal: string | undefined
-  /** The only literal child, if there is just one. */
+  /** The only literal child, while `literal` holds its text. */
   literalNode: Node<T> | undefined
   param: Node<T> | undefined
   /** The routes whose catch-all param starts here, most specific first. */
@@ -222,16 +222,13 @@ function addParsed<T>(
       )
     }
   } else {
-    const segments = parse(path)
+    // Without `{`, every segment is literal text.
+    const segments = parse(path) as string[]
     // Paths with `{` wait in `pending`, so one whose decoded text has a `{`
     // waits there too, keeping the first of two that read the same.
     if (
       segments.every(
-        (segment) =>
-          typeof segment === 'string' &&
-          !segment.includes('/') &&
-          !segment.includes('%') &&
-          !segment.includes('{'),
+        (segment) => !segment.includes('/') && !segment.includes('%') && !segment.includes('{'),
       )
     ) {
       addStatic(methods, method, `/${segments.join('/')}`, data)
@@ -491,7 +488,6 @@ function literalChild<T>(node: Node<T>, segment: string): Node<T> {
     node.literals = new Map()
     node.literals.set(node.literal!, node.literalNode)
     node.literal = undefined
-    node.literalNode = undefined
   }
 
   let child = node.literals.get(segment)
