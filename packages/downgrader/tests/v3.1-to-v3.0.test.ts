@@ -1113,6 +1113,8 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [{ description: 'd', allOf: [ref] }, onlyNull],
       })
       expect(pet({ oneOf: [cat, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
+      // It reads an inline one as its first branch, so that pair still becomes a `oneOf`.
+      expect(pet({}, { oneOf: [cat, dog] })).toEqual({ oneOf: [{ oneOf: [cat, dog] }, onlyNull] })
       expect(pet({ oneOf: [{ type: ['object'] }, { type: 'string' }] })).toEqual({
         anyOf: [ref, onlyNull],
       })
