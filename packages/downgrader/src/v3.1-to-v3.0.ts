@@ -137,6 +137,16 @@ const unionTargets = new Set<unknown>()
 // Input schemas a `$ref` kept as written points to, for `scalarOneOf`.
 const refTargets = new Set<unknown>()
 
+// The 3.0 keywords that apply only to objects, which `convertType` moves into
+// the `"object"` branch of a `type` list.
+const OBJECT_KEYWORDS = [
+  'additionalProperties',
+  'maxProperties',
+  'minProperties',
+  'properties',
+  'required',
+]
+
 // A branch with these stays, since null can still fail them beside `nullable: true`.
 const NOT_NULLABLE_KEYWORDS = ['$ref', 'allOf', 'anyOf', 'enum', 'not', 'oneOf']
 
@@ -684,11 +694,22 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     }
   } else if (rest.length > 1) {
     // Code generators ignore `nullable` inside an `anyOf` branch, so null gets its own.
+    // hey-api reads the object keywords beside the `anyOf` as part of every branch.
+    const object = Object.fromEntries(
+      OBJECT_KEYWORDS.filter((key) => out[key] !== undefined).map((key) => [key, out[key]]),
+    )
     addAnyOf(out, [
-      ...rest.map((item) => ({ type: item, ...(item === 'array' && { items: out.items ?? {} }) })),
+      ...rest.map((item) => ({
+        type: item,
+        ...(item === 'array' && { items: out.items ?? {} }),
+        ...(item === 'object' && object),
+      })),
       ...(nullable ? [onlyNull()] : []),
     ])
     delete out.items
+    for (const key of OBJECT_KEYWORDS) {
+      delete out[key]
+    }
   } else if (nullable) {
     // 3.0 has no null type, so only null may match, and an `enum` without it matches nothing.
     if (out.enum === undefined || (Array.isArray(out.enum) && out.enum.includes(null))) {
@@ -1177,13 +1198,19 @@ function finishSchema(
     out.properties = Object.fromEntries(names.map((name) => [name, value]))
     out.additionalProperties = false
   }
-  // Before `convertType` moves `items` into an `anyOf` branch.
+  // Before `convertType` moves `items` and the object keywords into `anyOf` branches.
   // A `const` outside the `enum` beside it matched nothing, and now matches itself.
   const constOutsideEnum =
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
     !includesJson(schema.enum, schema.const)
   let loose = loosen(out, schema, exactTuple, ctx) || constOutsideEnum
+  // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
+  // dropped, as it would reject the properties `patternProperties` allowed.
+  // Code generators read a missing one as allowing no other properties.
+  if (schema.patternProperties !== undefined) {
+    out.additionalProperties = true
+  }
   convertType(out, schema.type)
   // Written 3.0-style in a 3.1 document, it can only mean what it means in 3.0.
   if (schema.nullable === true && typeof out.type === 'string' && out.nullable !== true) {
@@ -1240,12 +1267,6 @@ function finishSchema(
   }
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
-  }
-  // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
-  // dropped, as it would reject the properties `patternProperties` allowed.
-  // Code generators read a missing one as allowing no other properties.
-  if (schema.patternProperties !== undefined) {
-    out.additionalProperties = true
   }
   const format = binaryFormat(schema)
   if (

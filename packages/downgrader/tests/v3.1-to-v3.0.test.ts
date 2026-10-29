@@ -473,6 +473,51 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('moves the object keywords into the object branch, as WordPress writes a theme feature', () => {
+      const properties = { 'default-image': { type: 'string' } } as const
+      expect(
+        downgradeSchemaV31ToV30({
+          type: ['boolean', 'object'],
+          default: false,
+          properties,
+          required: ['default-image'],
+          additionalProperties: false,
+          minProperties: 1,
+          maxProperties: 2,
+        }),
+      ).toEqual({
+        default: false,
+        anyOf: [
+          { type: 'boolean' },
+          {
+            type: 'object',
+            properties,
+            required: ['default-image'],
+            additionalProperties: false,
+            minProperties: 1,
+            maxProperties: 2,
+          },
+        ],
+      })
+      // As Litestar writes it, and with the `additionalProperties` that `patternProperties` becomes.
+      expect(
+        downgradeSchemaV31ToV30({
+          type: ['null', 'object', 'array'],
+          additionalProperties: {},
+          items: { type: 'string' },
+        }),
+      ).toEqual({
+        anyOf: [
+          { type: 'object', additionalProperties: {} },
+          { type: 'array', items: { type: 'string' } },
+          { type: 'string', nullable: true, enum: [null] },
+        ],
+      })
+      expect(
+        downgradeSchemaV31ToV30({ type: ['object', 'string'], patternProperties: { '^a': {} } }),
+      ).toEqual({ anyOf: [{ type: 'object', additionalProperties: true }, { type: 'string' }] })
+    })
+
     it('nests the type anyOf in allOf when the schema has its own anyOf', () => {
       expect(
         downgradeSchemaV31ToV30({
