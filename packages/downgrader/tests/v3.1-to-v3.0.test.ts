@@ -1109,6 +1109,9 @@ describe('downgradeSchemaV31ToV30', () => {
       // NSwag writes a type it never defines for a nullable `oneOf` with an object
       // branch, inline or through a `$ref`, as GitHub and Notion write a tagged union.
       expect(pet({ oneOf: [cat, dog] })).toEqual({ anyOf: [ref, onlyNull] })
+      expect(pet({ oneOf: [cat, dog] }, { ...ref, description: 'd' })).toEqual({
+        anyOf: [{ description: 'd', allOf: [ref] }, onlyNull],
+      })
       expect(pet({ oneOf: [cat, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
       expect(pet({ oneOf: [{ type: ['object'] }, { type: 'string' }] })).toEqual({
         anyOf: [ref, onlyNull],
@@ -1138,6 +1141,77 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ oneOf: [ref, onlyNull] })
       expect(pet({ allOf: [{ $ref: '#/components/schemas/Name' }, { minLength: 1 }] })).toEqual({
         anyOf: [ref, onlyNull],
+      })
+    })
+
+    it('makes an anyOf of an inline union and null a oneOf when each branch rejects null, as Pydantic writes an Optional tagged union', () => {
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      // Pydantic's `Optional[Annotated[Union[Cat, Dog], Field(discriminator='kind')]]`.
+      const tagged = {
+        oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
+        discriminator: { propertyName: 'kind' },
+      }
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Cat: { type: 'object', properties: { kind: { type: 'string', enum: ['Cat'] } } },
+              Dog: { type: 'object', properties: { kind: { type: 'string', enum: ['Dog'] } } },
+              Owner: { anyOf: [tagged, { type: 'null' }] },
+            },
+          },
+        }).components?.schemas?.Owner,
+      ).toEqual({ oneOf: [tagged, onlyNull] })
+      // Valibot's `v.nullable(v.union([A, B]))`, also described, either side of `nullable`.
+      const objects: OpenAPIV3_1.SchemaObject[] = [
+        { type: 'object', properties: { a: { type: 'string' } } },
+        { type: 'object', properties: { b: { type: 'string' } } },
+      ]
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ anyOf: objects }, { type: 'null' }] })).toEqual({
+        oneOf: [{ anyOf: objects }, onlyNull],
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          description: 'd',
+          anyOf: [{ anyOf: objects }, { type: 'null' }],
+        }),
+      ).toEqual({ description: 'd', oneOf: [{ anyOf: objects }, onlyNull] })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ description: 'd', anyOf: objects }, { type: 'null' }],
+        }),
+      ).toEqual({ oneOf: [{ description: 'd', anyOf: objects }, onlyNull] })
+      // A pair that a `$ref` points to keeps the `anyOf`, as Spacefast writes a component.
+      const rule = (schemas: Record<string, OpenAPIV3_1.SchemaObject>) =>
+        convert({
+          components: {
+            schemas: { Rule: { anyOf: [{ anyOf: objects }, { type: 'null' }] }, ...schemas },
+          },
+        }).components?.schemas?.Rule
+      expect(rule({})).toEqual({ oneOf: [{ anyOf: objects }, onlyNull] })
+      expect(
+        rule({
+          Traffic: { type: 'object', properties: { rule: { $ref: '#/components/schemas/Rule' } } },
+        }),
+      ).toEqual({ anyOf: [{ anyOf: objects }, onlyNull] })
+      // A scalar beside an object.
+      const mixed: OpenAPIV3_1.SchemaObject[] = [{ type: 'string' }, { type: 'object' }]
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ anyOf: mixed }, { type: 'null' }] })).toEqual({
+        oneOf: [{ anyOf: mixed }, onlyNull],
+      })
+      // Null can pass a branch.
+      const open: OpenAPIV3_1.SchemaObject[] = [{ type: 'object' }, {}]
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ anyOf: open }, { type: 'null' }] })).toEqual({
+        anyOf: [{ anyOf: open }, onlyNull],
+      })
+      // A union of only scalars is left to become one flat `oneOf`, which it
+      // does not when two branches share a type.
+      const strings: OpenAPIV3_1.SchemaObject[] = [
+        { type: 'string', format: 'email' },
+        { type: 'string', format: 'uri' },
+      ]
+      expect(downgradeSchemaV31ToV30({ anyOf: [{ anyOf: strings }, { type: 'null' }] })).toEqual({
+        anyOf: [{ anyOf: strings }, onlyNull],
       })
     })
 

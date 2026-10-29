@@ -840,10 +840,8 @@ function refRejectsNull(schema: unknown, root: unknown): boolean {
 // A schema with no `type` that rejects null all the same: an `enum` or
 // `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
 // that rejects null, as OData writes a derived object, or a union whose
-// branches each do, as Zod writes a registered union. A `oneOf` with an object
-// branch, as Zod writes a discriminated union, and GitHub and Notion a tagged
-// one, does not count, since NSwag writes a type it never defines for a
-// nullable one, where the `anyOf` pair gives an empty class.
+// branches each do, as Zod writes a registered union, and GitHub and Notion a
+// tagged one.
 function untypedRejectsNull(schema: unknown, root: unknown): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
@@ -858,8 +856,23 @@ function untypedRejectsNull(schema: unknown, root: unknown): boolean {
     (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
     (Array.isArray(branches) &&
       branches.length > 0 &&
-      branches.every((branch) => refRejectsNull(branch, root)) &&
-      !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, root))))
+      branches.every((branch) => refRejectsNull(branch, root)))
+  )
+}
+
+// A `$ref` target with no `type` that rejects null, other than a `oneOf` with
+// an object branch, as Zod writes a discriminated union, and GitHub and Notion
+// a tagged one. NSwag writes a type it never defines for a nullable `$ref` to
+// one, where the `anyOf` pair gives an empty class, though it reads an inline
+// one as its first branch.
+function targetRejectsNull(target: unknown, root: unknown): boolean {
+  return (
+    untypedRejectsNull(target, root) &&
+    !(
+      isRecord(target) &&
+      Array.isArray(target.oneOf) &&
+      target.oneOf.some((branch) => isObjectBranch(branch, root))
+    )
   )
 }
 
@@ -868,6 +881,19 @@ function isObjectBranch(schema: unknown, root: unknown): boolean {
   const ref = getRef(schema)
   const target = ref === undefined ? schema : find(root, ref)
   return isRecord(target) && hasType(target.type, 'object')
+}
+
+// An inline union whose branches each reject null, as Pydantic writes an
+// `Optional` tagged union, and Valibot and Zod a nullable union, with a branch
+// that `scalarOneOf` does not take, which then makes a nullable union of
+// scalars one flat `oneOf` instead, as Effect writes a nullable number.
+function unionRejectsNull(schema: Record<string, unknown>, root: unknown): boolean {
+  const branches = schema.anyOf ?? schema.oneOf
+  return (
+    Array.isArray(branches) &&
+    untypedRejectsNull(schema, root) &&
+    branches.some((branch) => !isRecord(branch) || !ONE_OF_TYPES.has(branch.type as string))
+  )
 }
 
 // Whether two branches hold the same keys with the same values. An object
@@ -941,7 +967,12 @@ function dropEqualBranches(out: Record<string, unknown>): boolean {
 // reads that `oneOf` as nullable, and the `anyOf` as an empty class. typia
 // and Litestar write the pair as a `oneOf`, which means the same when the
 // other branch takes `nullable`, and oapi-codegen reads it as a union.
-function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf' | 'oneOf'): void {
+function mergeNullable(
+  out: Record<string, unknown>,
+  root: unknown,
+  key: 'anyOf' | 'oneOf',
+  isTarget: boolean,
+): void {
   const branches = out[key] as unknown[]
   // Effect writes null twice for a nullish value, once for `undefined`.
   const others = branches.filter((branch) => !isNullBranch(branch, out))
@@ -982,9 +1013,10 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     Object.assign(out, other, { nullable: true })
   } else if (key === 'anyOf' && out.oneOf === undefined) {
     // A `$ref` kept as written rejects null when its target does, with or
-    // without a `type`, and an `allOf` when any of its members does, such as
-    // the `$ref` with siblings that Zod writes for a described reference, or
-    // either side of an intersection.
+    // without a `type`, an inline union when each of its branches does, and an
+    // `allOf` when any of its members does, such as the `$ref` with siblings
+    // that Zod writes for a described reference, or either side of an
+    // intersection.
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
     const held =
@@ -993,10 +1025,18 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
         const memberRef = getRef(member)
         return (
           refRejectsNull(member, root) ||
-          (memberRef !== undefined && untypedRejectsNull(find(root, memberRef), root))
+          (memberRef !== undefined && targetRejectsNull(find(root, memberRef), root))
         )
       })
-    if (rejectsNull(target) || (ref !== undefined && untypedRejectsNull(target, root)) || held) {
+    if (
+      rejectsNull(target) ||
+      // A pair a `$ref` points to keeps an inline union, since NSwag gives each
+      // `$ref` to a `oneOf` with null a type it never defines.
+      (ref === undefined
+        ? !isTarget && unionRejectsNull(other, root)
+        : targetRejectsNull(target, root)) ||
+      held
+    ) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
@@ -1521,13 +1561,14 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     const out = downgrade(root, convert)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
+        const isTarget = refTargets.has(input)
         mergeEnums(schema, key)
         const branches = schema[key]
         // A `oneOf` with null twice rejects null, so only a pair can merge.
         if (Array.isArray(branches) && (key === 'anyOf' || branches.length === 2)) {
-          mergeNullable(schema, root, key)
+          mergeNullable(schema, root, key, isTarget)
         }
-        if (!refTargets.has(input)) {
+        if (!isTarget) {
           scalarOneOf(schema)
         }
       }
