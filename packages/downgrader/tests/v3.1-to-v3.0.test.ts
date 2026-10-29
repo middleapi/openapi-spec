@@ -506,7 +506,7 @@ describe('downgradeSchemaV31ToV30', () => {
           additionalProperties: {},
           items: { type: 'string' },
         }),
-      ).toEqual({
+      ).toStrictEqual({
         anyOf: [
           { type: 'object', additionalProperties: {} },
           { type: 'array', items: { type: 'string' } },
@@ -515,7 +515,9 @@ describe('downgradeSchemaV31ToV30', () => {
       })
       expect(
         downgradeSchemaV31ToV30({ type: ['object', 'string'], patternProperties: { '^a': {} } }),
-      ).toEqual({ anyOf: [{ type: 'object', additionalProperties: true }, { type: 'string' }] })
+      ).toStrictEqual({
+        anyOf: [{ type: 'object', additionalProperties: true }, { type: 'string' }],
+      })
     })
 
     it('nests the type anyOf in allOf when the schema has its own anyOf', () => {
