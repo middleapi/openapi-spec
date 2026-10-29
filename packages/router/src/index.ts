@@ -40,8 +40,8 @@ interface Node<T> {
 interface MethodRoutes<T> {
   readonly root: Node<T>
   /**
-   * The routes without params whose segments hold no `/` or `%` once
-   * decoded, by decoded path, for a request path without `%`.
+   * The routes whose segments hold no `{`, `/`, or `%` once decoded, by
+   * decoded path, for a request path without `%`.
    */
   readonly statics: Map<string, Route<T>>
   /**
@@ -49,8 +49,18 @@ interface MethodRoutes<T> {
    * with `%` looks for them.
    */
   unindexed: string[]
+  /**
+   * The other routes, in the order they were added, not yet in the tree, so
+   * a method that no request looks up in the tree never builds one.
+   */
+  pending: PendingRoute<T>[]
   /** Whether a route can match only through the tree. */
   dynamic: boolean
+}
+
+interface PendingRoute<T> {
+  readonly path: `/${string}`
+  readonly data: T
 }
 
 /** A literal segment's decoded text, or a param. */
@@ -97,73 +107,49 @@ export class Router<T> {
   // Separate from `add`, so V8 compiles it only once a path has `{` or `%`,
   // which keeps cold starts short for route sets without any.
   private addParsed(method: string, path: `/${string}`, data: T): void {
-    const segments = parse(path)
-
-    if (segments.filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1) {
-      throw new TypeError(
-        `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
-      )
-    }
-
-    if (
-      segments.every(
-        (segment) =>
-          typeof segment === 'string' && !segment.includes('/') && !segment.includes('%'),
-      )
-    ) {
-      this.addStatic(method, `/${segments.join('/')}`, data)
-      return
+    if (path.includes('{')) {
+      // Only a path with `{+` twice can have two catch-all params.
+      if (
+        path.indexOf('{+') !== path.lastIndexOf('{+') &&
+        parse(path).filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1
+      ) {
+        throw new TypeError(
+          `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
+        )
+      }
+    } else {
+      const segments = parse(path)
+      // Paths with `{` wait in `pending`, so one whose decoded text has a `{`
+      // waits there too, keeping the first of two that read the same.
+      if (
+        segments.every(
+          (segment) =>
+            typeof segment === 'string' &&
+            !segment.includes('/') &&
+            !segment.includes('%') &&
+            !segment.includes('{'),
+        )
+      ) {
+        this.addStatic(method, `/${segments.join('/')}`, data)
+        return
+      }
     }
 
     const routes = this.routesOf(method)
     routes.dynamic = true
-
-    let node = routes.root
-    let params: RouteParam[] | undefined
-
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]!
-      const index = i + 1
-
-      if (typeof segment === 'string') {
-        node = literalChild(node, segment)
-        continue
-      }
-
-      params ??= []
-
-      if (!segment.catchAll) {
-        params.push({ name: segment.name, index, catchAll: false })
-        node.param ??= createNode()
-        node = node.param
-        continue
-      }
-
-      const rest = segments.slice(i + 1)
-      params.push({ name: segment.name, index, catchAll: true })
-      for (let j = 0; j < rest.length; j++) {
-        const after = rest[j]!
-        if (typeof after !== 'string') {
-          params.push({ name: after.name, index: j - rest.length, catchAll: false })
-        }
-      }
-
-      const tail = rest.map((after) => (typeof after === 'string' ? after : undefined))
-      node.catchAlls ??= []
-      if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
-        node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
-        node.catchAlls.sort(compareCatchAlls)
-      }
-      return
-    }
-
-    node.route ??= { data, params, tail: 0 }
+    routes.pending.push({ path, data })
   }
 
   private routesOf(method: string): MethodRoutes<T> {
     let routes = this.methods.get(method)
     if (routes === undefined) {
-      routes = { root: createNode(), statics: new Map(), unindexed: [], dynamic: false }
+      routes = {
+        root: createNode(),
+        statics: new Map(),
+        unindexed: [],
+        pending: [],
+        dynamic: false,
+      }
       this.methods.set(method, routes)
     }
     return routes
@@ -198,6 +184,10 @@ export class Router<T> {
     const encoded = path.includes('%')
     if (!encoded && !routes.dynamic) {
       return undefined
+    }
+
+    if (routes.pending.length > 0) {
+      indexPending(routes)
     }
 
     if (encoded && routes.unindexed.length > 0) {
@@ -288,6 +278,58 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
   }
 
   routes.unindexed = []
+}
+
+/**
+ * Adds the routes in `pending` to the tree, in one loop rather than a call
+ * per route, which V8 would see as hot and optimize during a cold start.
+ */
+function indexPending<T>(routes: MethodRoutes<T>): void {
+  next: for (const { path, data } of routes.pending) {
+    const segments = parse(path)
+    let node = routes.root
+    let params: RouteParam[] | undefined
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i]!
+      const index = i + 1
+
+      if (typeof segment === 'string') {
+        node = literalChild(node, segment)
+        continue
+      }
+
+      params ??= []
+
+      if (!segment.catchAll) {
+        params.push({ name: segment.name, index, catchAll: false })
+        node.param ??= createNode()
+        node = node.param
+        continue
+      }
+
+      const rest = segments.slice(i + 1)
+      params.push({ name: segment.name, index, catchAll: true })
+      for (let j = 0; j < rest.length; j++) {
+        const after = rest[j]!
+        if (typeof after !== 'string') {
+          params.push({ name: after.name, index: j - rest.length, catchAll: false })
+        }
+      }
+
+      const tail = rest.map((after) => (typeof after === 'string' ? after : undefined))
+      node.catchAlls ??= []
+      if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
+        node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
+        node.catchAlls.sort(compareCatchAlls)
+      }
+      continue next
+    }
+
+    node.route ??= { data, params, tail: 0 }
+  }
+
+  routes.pending = []
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
