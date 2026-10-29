@@ -171,8 +171,12 @@ export class Router<T> {
       return undefined
     }
 
+    // Adds the routes in `pending` to the tree. Once the tree has served a
+    // request, each goes in whole, as routes may no longer wait where the tree
+    // has grown past them.
     if (routes.pending.length > 0) {
-      build(routes)
+      expand(routes.root, routes.pending, 1, routes.unfiltered > 0)
+      routes.pending = []
     }
 
     if (filter === undefined && ++routes.unfiltered >= FILTER_AFTER) {
@@ -357,16 +361,6 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
   }
 
   routes.indexed = indexed
-}
-
-/**
- * Adds the routes in `pending` to the tree. Once the tree has served a
- * request, each goes in whole, as routes may no longer wait where the tree
- * has grown past them.
- */
-function build<T>(routes: MethodRoutes<T>): void {
-  expand(routes.root, routes.pending, 1, routes.unfiltered > 0)
-  routes.pending = []
 }
 
 /**
