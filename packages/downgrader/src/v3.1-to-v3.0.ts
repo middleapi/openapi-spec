@@ -831,21 +831,29 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
-// A union with no `type` whose branches each reject null, or are a `$ref` to
-// a schema that does, as Zod writes a registered union, and GitHub and Notion
-// a tagged one.
-function unionRejectsNull(schema: unknown, root: unknown): boolean {
+// A schema that rejects null by its `type`, read through one `$ref`.
+function refRejectsNull(schema: unknown, root: unknown): boolean {
+  const ref = getRef(schema)
+  return rejectsNull(ref === undefined ? schema : find(root, ref))
+}
+
+// A schema with no `type` that rejects null all the same: an `enum` or
+// `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
+// that rejects null, as OData writes a derived object, or a union whose
+// branches each do, as Zod writes a registered union, and GitHub and Notion a
+// tagged one.
+function untypedRejectsNull(schema: unknown, root: unknown): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
   }
   const branches = schema.anyOf ?? schema.oneOf
   return (
-    Array.isArray(branches) &&
-    branches.length > 0 &&
-    branches.every((branch) => {
-      const branchRef = getRef(branch)
-      return rejectsNull(branchRef === undefined ? branch : find(root, branchRef))
-    })
+    (Array.isArray(schema.enum) && !schema.enum.includes(null)) ||
+    (schema.const !== undefined && schema.const !== null) ||
+    (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
+    (Array.isArray(branches) &&
+      branches.length > 0 &&
+      branches.every((branch) => refRejectsNull(branch, root)))
   )
 }
 
@@ -960,19 +968,15 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     delete out[key]
     Object.assign(out, other, { nullable: true })
   } else if (key === 'anyOf' && out.oneOf === undefined) {
-    // A `$ref` kept as written rejects null when its target does, or is a
-    // union that does, and an `allOf` when any of its members does, such as
+    // A `$ref` kept as written rejects null when its target does, with or
+    // without a `type`, and an `allOf` when any of its members does, such as
     // the `$ref` with siblings that Zod writes for a described reference, or
     // either side of an intersection.
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
     const held =
-      Array.isArray(other.allOf) &&
-      other.allOf.some((member) => {
-        const memberRef = getRef(member)
-        return rejectsNull(memberRef === undefined ? member : find(root, memberRef))
-      })
-    if (rejectsNull(target) || (ref !== undefined && unionRejectsNull(target, root)) || held) {
+      Array.isArray(other.allOf) && other.allOf.some((member) => refRejectsNull(member, root))
+    if (rejectsNull(target) || (ref !== undefined && untypedRejectsNull(target, root)) || held) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
