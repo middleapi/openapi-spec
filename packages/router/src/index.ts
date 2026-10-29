@@ -457,10 +457,16 @@ function trimTrailingSlash(path: string): string {
  * makes cheap only for strings it has interned, unlike request paths.
  */
 function split(path: string, encoded: boolean): string[] {
-  const segments: string[] = []
-  let start = 0
+  // Every path but the root's, which is empty, starts with a slash, so the
+  // first segment needs no search.
+  const segments = ['']
+  if (path === '') {
+    return segments
+  }
 
-  for (let end = path.indexOf('/'); end !== -1; end = path.indexOf('/', start)) {
+  let start = 1
+
+  for (let end = path.indexOf('/', start); end !== -1; end = path.indexOf('/', start)) {
     const segment = path.slice(start, end)
     segments.push(encoded ? decode(segment) : segment)
     start = end + 1
