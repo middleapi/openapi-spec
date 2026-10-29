@@ -378,12 +378,14 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
 
     for (; index < parts.length; index++) {
       const part = parts[index]!
+      let segment: Segment = decode(part)
 
-      // Past its first part, a route waits before a param, and before literal
-      // text starting with `{` once decoded, which keeps the first of two that
-      // read the same. A route added whole goes after the routes waiting there.
-      if (index > start && decode(part).charCodeAt(0) === 123) {
-        if (!whole) {
+      // Only a part starting with `{` once decoded can be a param. Past its
+      // first part, a route waits before one, and before literal text like it,
+      // which keeps the first of two that read the same. A route added whole
+      // goes after the routes waiting there.
+      if (segment.charCodeAt(0) === 123) {
+        if (!whole && index > start) {
           literals = Math.min(literals, index)
           ;(child.pending ??= []).push(parts, data, params)
           continue next
@@ -391,9 +393,8 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
         if (child.pending !== undefined) {
           expand(child, child.pending, index, false)
         }
+        segment = toSegment(part, index)
       }
-
-      const segment = toSegment(part, index)
 
       if (typeof segment === 'string') {
         child = literalChild(child, segment)
