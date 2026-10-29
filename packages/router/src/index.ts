@@ -36,6 +36,13 @@ interface Node<T> {
   /** The routes whose catch-all param starts here, most specific first. */
   catchAlls: CatchAll<T>[] | undefined
   route: Route<T> | undefined
+  /**
+   * The routes waiting here, before a part that starts with `{` once decoded,
+   * until a request needs the tree past this node, so that a cold start builds
+   * only the params its requests need: the split path of each, its data, and
+   * its params so far, in the order they were added.
+   */
+  pending: unknown[] | undefined
 }
 
 interface MethodRoutes<T> {
@@ -61,9 +68,10 @@ interface MethodRoutes<T> {
    */
   indexed: number
   /**
-   * The path, then the data, of each other route not yet in the tree, in the
-   * order they were added, so a method that no request looks up in the tree
-   * never builds one. A flat list is cheaper to add to than an object per route.
+   * The path, the data, and the params, `undefined` so far, of each other
+   * route not yet in the tree, in the order they were added, so a method that
+   * no request looks up in the tree never builds one. A flat list is cheaper
+   * to add to than an object per route.
    */
   pending: unknown[]
   /** Whether a route can match only through the tree. */
@@ -142,7 +150,7 @@ export class Router<T> {
     }
 
     if (routes.pending.length > 0) {
-      indexPending(routes)
+      build(routes)
     }
 
     if (filter === undefined && ++routes.unfiltered >= FILTER_AFTER) {
@@ -203,7 +211,7 @@ function addParsed<T>(
 
   const routes = routesOf(methods, method)
   routes.dynamic = true
-  routes.pending.push(path, data)
+  routes.pending.push(path, data, undefined)
 }
 
 function routesOf<T>(methods: Map<string, MethodRoutes<T>>, method: string): MethodRoutes<T> {
@@ -325,51 +333,79 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
 }
 
 /**
- * Adds the routes in `pending` to the tree, in one loop rather than a call
- * per route, which V8 would see as hot and optimize during a cold start.
+ * Adds the routes in `pending` to the tree. Once the tree has served a
+ * request, each goes in whole, as routes may no longer wait where the tree
+ * has grown past them.
  */
-function indexPending<T>(routes: MethodRoutes<T>): void {
-  const pending = routes.pending
+function build<T>(routes: MethodRoutes<T>): void {
+  expand(routes.root, routes.pending, 1, routes.unfiltered > 0)
+  routes.pending = []
+}
+
+/**
+ * Adds the routes waiting at `node`, which is at `start` in the split path, to
+ * the tree, in one loop rather than a call per route, which V8 would see as
+ * hot and optimize during a cold start. Each route goes in `whole`, or up to
+ * where it waits again.
+ */
+function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: boolean): void {
+  node.pending = undefined
   // The parts of the previous route, how many of them come before its first
-  // param, and the node after each of those, so that the next route skips
-  // parsing the parts it shares with them.
+  // param or wait, and the node after each of those, so that the next route
+  // skips parsing the parts it shares with them.
   let shared: string[] = []
   let literals = 0
-  const nodes: Node<T>[] = [routes.root]
+  const nodes: Node<T>[] = [node]
 
-  next: for (let p = 0; p < pending.length; p += 2) {
-    const path = pending[p] as string
+  next: for (let p = 0; p < pending.length; p += 3) {
+    const path = pending[p]
+    const parts = typeof path === 'string' ? trimTrailingSlash(path).split('/') : (path as string[])
     const data = pending[p + 1] as T
-    const parts = trimTrailingSlash(path).split('/')
-    let start = 1
-    while (start < literals && parts[start] === shared[start]) {
-      start++
+    let params = pending[p + 2] as RouteParam[] | undefined
+    let index = start
+    while (index < literals && parts[index] === shared[index]) {
+      index++
     }
-    let node = nodes[start - 1]!
-    let params: RouteParam[] | undefined
+    let child = nodes[index - start]!
     shared = parts
     literals = parts.length
 
-    for (let index = start; index < parts.length; index++) {
-      const segment = toSegment(parts[index]!, index)
+    for (; index < parts.length; index++) {
+      const part = parts[index]!
+
+      // Past its first part, a route waits before a param, and before literal
+      // text starting with `{` once decoded, which keeps the first of two that
+      // read the same. A route added whole goes after the routes waiting there.
+      if (index > start && decode(part).charCodeAt(0) === 123) {
+        if (!whole) {
+          literals = Math.min(literals, index)
+          ;(child.pending ??= []).push(parts, data, params)
+          continue next
+        }
+        if (child.pending !== undefined) {
+          expand(child, child.pending, index, false)
+        }
+      }
+
+      const segment = toSegment(part, index)
 
       if (typeof segment === 'string') {
-        node = literalChild(node, segment)
-        nodes[index] = node
+        child = literalChild(child, segment)
+        nodes[index - start + 1] = child
         continue
       }
 
+      literals = Math.min(literals, index)
       // An array literal holds just its items, where a push to `[]` reserves 17.
       if (params === undefined) {
-        literals = index
         params = [segment]
       } else {
         params.push(segment)
       }
 
       if (!segment.catchAll) {
-        node.param ??= createNode()
-        node = node.param
+        child.param ??= createNode()
+        child = child.param
         continue
       }
 
@@ -384,17 +420,15 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
         }
       }
 
-      addCatchAll(node, { tail, route: { data, params, tail: tail.length } })
+      addCatchAll(child, { tail, route: { data, params, tail: tail.length } })
       continue next
     }
 
-    node.route ??= { data, params, tail: 0 }
+    child.route ??= { data, params, tail: 0 }
   }
-
-  routes.pending = []
 }
 
-// Separate from `indexPending`, whose loop would otherwise allocate a scope
+// Separate from `expand`, whose loop would otherwise allocate a scope
 // for the closure below on every segment.
 function addCatchAll<T>(node: Node<T>, catchAll: CatchAll<T>): void {
   node.catchAlls ??= []
@@ -436,6 +470,7 @@ function createNode<T>(): Node<T> {
     param: undefined,
     catchAlls: undefined,
     route: undefined,
+    pending: undefined,
   }
 }
 
@@ -524,6 +559,14 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
     }
   }
 
+  // Routes wait here only before a part starting with `{`, and only while the
+  // tree has no such part here, so any literal child beats them, and they can
+  // wait until it fails.
+  if (node.pending !== undefined) {
+    expand(node, node.pending, index, false)
+    return find(node, segments, index)
+  }
+
   if (node.param !== undefined && segment !== '') {
     const route = find(node.param, segments, index + 1)
     if (route !== undefined) {
@@ -531,10 +574,13 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
     }
   }
 
-  if (node.catchAlls !== undefined) {
-    for (const catchAll of node.catchAlls) {
-      if (matchesCatchAll(catchAll.tail, segments, index)) {
-        return catchAll.route
+  // An index loop, unlike `for...of`, keeps `find` small enough for V8 to
+  // inline it into `match`.
+  const catchAlls = node.catchAlls
+  if (catchAlls !== undefined) {
+    for (let i = 0; i < catchAlls.length; i++) {
+      if (matchesCatchAll(catchAlls[i]!.tail, segments, index)) {
+        return catchAlls[i]!.route
       }
     }
   }
