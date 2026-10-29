@@ -371,8 +371,8 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
 function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: boolean): void {
   node.pending = undefined
   // The parts of the previous route, how many of them come before its first
-  // param or wait, and the node after each of those, so that the next route
-  // skips parsing the parts it shares with them.
+  // part starting with `{` once decoded, and the node after each of those, so
+  // that the next route skips parsing the parts it shares with them.
   let shared: string[] = []
   let literals = 0
   const nodes: Node<T>[] = [node]
@@ -399,10 +399,10 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
       // which keeps the first of two that read the same. A route added whole
       // goes after the routes waiting there.
       if (segment[0] === '{') {
+        if (index < literals) {
+          literals = index
+        }
         if (!whole && index > start) {
-          if (index < literals) {
-            literals = index
-          }
           ;(child.pending ??= []).push(parts, data, params)
           continue next
         }
@@ -418,9 +418,6 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
         continue
       }
 
-      if (index < literals) {
-        literals = index
-      }
       // An array literal holds just its items, where a push to `[]` reserves 17.
       if (params === undefined) {
         params = [segment]
