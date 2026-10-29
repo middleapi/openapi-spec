@@ -285,6 +285,16 @@ describe('Router', () => {
 
       expect(router.match('GET', '/a/1')!.params).not.toBe(router.match('GET', '/a/1')!.params)
     })
+
+    it('matches a route that starts like the one added before it', () => {
+      const router = routerOf('/a/{x}', '/{p}/b', '/{p}/c', '/a/b/{y}', '/a/b/{y}/z')
+
+      expect(router.match('GET', '/z/c')).toEqual({ data: '/{p}/c', params: { p: 'z' } })
+      expect(router.match('GET', '/a/b/1/z')).toEqual({
+        data: '/a/b/{y}/z',
+        params: { y: '1' },
+      })
+    })
   })
 
   describe('catch-all params', () => {

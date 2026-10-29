@@ -320,24 +320,38 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
  */
 function indexPending<T>(routes: MethodRoutes<T>): void {
   const pending = routes.pending
+  // The parts of the previous route, how many of them come before its first
+  // param, and the node after each of those, so that the next route skips
+  // parsing the parts it shares with them.
+  let shared: string[] = []
+  let literals = 0
+  const nodes: Node<T>[] = [routes.root]
 
   next: for (let p = 0; p < pending.length; p++) {
     const { path, data } = pending[p]!
     const parts = trimTrailingSlash(path).split('/')
-    let node = routes.root
+    let start = 1
+    while (start < literals && parts[start] === shared[start]) {
+      start++
+    }
+    let node = nodes[start - 1]!
     let params: RouteParam[] | undefined
+    shared = parts
+    literals = parts.length
 
-    for (let index = 1; index < parts.length; index++) {
+    for (let index = start; index < parts.length; index++) {
       const segment = toSegment(parts[index]!)
 
       if (typeof segment === 'string') {
         node = literalChild(node, segment)
+        nodes[index] = node
         continue
       }
 
       const param = { name: segment.name, index, catchAll: segment.catchAll }
       // An array literal holds just its items, where a push to `[]` reserves 17.
       if (params === undefined) {
+        literals = index
         params = [param]
       } else {
         params.push(param)
