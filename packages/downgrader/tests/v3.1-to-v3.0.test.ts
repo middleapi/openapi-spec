@@ -1931,6 +1931,60 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('keeps a $ref beside only annotations bare to a schema with a discriminator', () => {
+      // As OpenAI describes a property holding a tagged union, and Adyen one
+      // holding a base with a `mapping`. 3.0 reads an `allOf` that holds the
+      // `$ref` as one of the schemas the discriminator picks among.
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      const identification = {
+        type: 'object',
+        properties: { type: { type: 'string' } },
+        discriminator: { propertyName: 'type', mapping: { iban: '#/components/schemas/Iban' } },
+      } as const
+      const out = convert({
+        components: {
+          schemas: {
+            Strategy: {
+              oneOf: [ref('Auto'), ref('Static')],
+              discriminator: { propertyName: 'type' },
+            },
+            Identification: identification,
+            // As Pydantic writes a tagged union, whose discriminator 3.0 removes.
+            Pet: {
+              oneOf: [ref('Pet/$defs/Cat')],
+              discriminator: { propertyName: 'kind' },
+              $defs: { Cat: { type: 'object' } },
+            },
+            Request: {
+              type: 'object',
+              properties: {
+                strategy: { ...ref('Strategy'), description: 'The chunking strategy' },
+                identification: { ...ref('Identification'), 'title': 'Account', 'x-a': 1 },
+                typed: { ...ref('Identification'), type: 'object' },
+                pet: { ...ref('Pet'), description: 'Pet' },
+              },
+            },
+          },
+        },
+      })
+      expect(out.components?.schemas?.Request).toEqual({
+        type: 'object',
+        properties: {
+          strategy: ref('Strategy'),
+          identification: ref('Identification'),
+          typed: { type: 'object', allOf: [ref('Identification')] },
+          pet: { description: 'Pet', allOf: [ref('Pet')] },
+        },
+      })
+      // A target that replaces the `$ref` keeps the annotations beside it.
+      expect(
+        downgradeSchemaV31ToV30({
+          properties: { a: { $ref: '#/$defs/A', description: 'A' } },
+          $defs: { A: identification },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({ properties: { a: { description: 'A', allOf: [identification] } } })
+    })
+
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
       expect(
         downgradeSchemaV31ToV30({
