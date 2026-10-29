@@ -1126,6 +1126,34 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('keeps only the $ref of an anyOf with null when the target is a nullable anyOf, as Zod and Pydantic write it', () => {
+      const ref = { $ref: '#/components/schemas/Pet' }
+      // oRPC writes Zod's `Pet.nullable()` this way when `Pet` is nullable and has an id.
+      const owner = (target: OpenAPIV3_1.SchemaObject, extra: object = {}) =>
+        convert({
+          components: {
+            schemas: { Pet: target, Owner: { ...extra, anyOf: [ref, { type: 'null' }] } },
+          },
+        }).components?.schemas?.Owner
+      const pet = { type: 'object', properties: { n: { type: 'string' } } } as const
+      expect(owner({ anyOf: [pet, { type: 'null' }] })).toEqual(ref)
+      // Pydantic writes a `title` beside it.
+      expect(owner({ title: 'Pet', anyOf: [pet, { type: 'null' }] })).toEqual(ref)
+      // A schema that accepts every value accepts null too.
+      expect(owner({})).toEqual(ref)
+      expect(owner({ description: 'Any JSON value' })).toEqual(ref)
+      const onlyNull = { type: 'string', nullable: true, enum: [null] }
+      // Null can fail every branch, or the `enum` beside them.
+      expect(owner({ anyOf: [pet, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
+      expect(owner({ anyOf: [{ type: 'string' }, { type: 'null' }], enum: ['a'] })).toEqual({
+        anyOf: [ref, onlyNull],
+      })
+      expect(owner({ anyOf: [pet, { type: 'null' }] }, { description: 'A' })).toEqual({
+        description: 'A',
+        anyOf: [ref, onlyNull],
+      })
+    })
+
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
       const node: Record<string, any> = { type: 'object', properties: {} }
       node.properties.parent = { anyOf: [node, { type: 'null' }] }

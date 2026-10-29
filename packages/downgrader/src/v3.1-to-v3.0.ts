@@ -789,6 +789,21 @@ function acceptsNull(schema: unknown): boolean {
   )
 }
 
+// A 3.1 schema that null passes: one that `acceptsNull`, or only annotations
+// beside an `anyOf` with such a branch, as Zod and Pydantic write a nullable
+// schema, or beside nothing at all.
+function admitsNull(schema: unknown): boolean {
+  return (
+    acceptsNull(schema) ||
+    (isRecord(schema) &&
+      Object.keys(schema).every(
+        (name) =>
+          isAnnotation(name) ||
+          (name === 'anyOf' && Array.isArray(schema.anyOf) && schema.anyOf.some(acceptsNull)),
+      ))
+  )
+}
+
 // A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.
 function rejectsNull(schema: unknown): boolean {
   if (!isRecord(schema) || schema.nullable === true) {
@@ -928,10 +943,11 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (ref !== undefined && Object.keys(out).length === 1 && acceptsNull(target)) {
+    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(target)) {
       // GitHub writes a nullable reference this way to a schema that already
-      // admits null, which 3.0 writes as the `$ref` alone. NSwag reads the pair
-      // as an empty class, and oapi-codegen as a union.
+      // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
+      // the `$ref` alone. NSwag reads the pair as an empty class, and
+      // oapi-codegen as a union.
       delete out.anyOf
       out.$ref = ref
     }
