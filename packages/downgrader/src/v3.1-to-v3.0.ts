@@ -975,7 +975,14 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
     const held =
-      Array.isArray(other.allOf) && other.allOf.some((member) => refRejectsNull(member, root))
+      Array.isArray(other.allOf) &&
+      other.allOf.some((member) => {
+        const memberRef = getRef(member)
+        return (
+          refRejectsNull(member, root) ||
+          (memberRef !== undefined && untypedRejectsNull(find(root, memberRef), root))
+        )
+      })
     if (rejectsNull(target) || (ref !== undefined && untypedRejectsNull(target, root)) || held) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))

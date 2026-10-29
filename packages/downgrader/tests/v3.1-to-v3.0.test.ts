@@ -1075,7 +1075,7 @@ describe('downgradeSchemaV31ToV30', () => {
     it('makes an anyOf of a $ref and null a oneOf when the target rejects null without a type, as Zod writes a registered union', () => {
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
       const ref = { $ref: '#/components/schemas/Pet' }
-      const pet = (target: OpenAPIV3_1.SchemaObject) =>
+      const pet = (target: OpenAPIV3_1.SchemaObject, branch: OpenAPIV3_1.SchemaObject = ref) =>
         convert({
           components: {
             schemas: {
@@ -1083,19 +1083,22 @@ describe('downgradeSchemaV31ToV30', () => {
               Dog: { type: 'object', properties: { bark: { type: 'string' } } },
               Name: { anyOf: [{ type: 'string' }, { type: 'null' }] },
               Pet: target,
-              Owner: { anyOf: [ref, { type: 'null' }] },
+              Owner: { anyOf: [branch, { type: 'null' }] },
             },
           },
         }).components?.schemas?.Owner
       // Zod's `z.union([z.literal('a'), z.literal('b')]).meta({ id })`.
-      expect(
-        pet({
-          anyOf: [
-            { type: 'string', const: 'a' },
-            { type: 'string', const: 'b' },
-          ],
-        }),
-      ).toEqual({ oneOf: [ref, onlyNull] })
+      const literals: OpenAPIV3_1.SchemaObject = {
+        anyOf: [
+          { type: 'string', const: 'a' },
+          { type: 'string', const: 'b' },
+        ],
+      }
+      expect(pet(literals)).toEqual({ oneOf: [ref, onlyNull] })
+      // Zod writes the description of `U.describe('d').nullable()` beside the `$ref`.
+      expect(pet(literals, { ...ref, description: 'd' })).toEqual({
+        oneOf: [{ description: 'd', allOf: [ref] }, onlyNull],
+      })
       // GitHub and Notion write a tagged union of `$ref`s.
       expect(
         pet({
