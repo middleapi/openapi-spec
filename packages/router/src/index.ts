@@ -59,17 +59,13 @@ interface MethodRoutes<T> {
    */
   indexed: number
   /**
-   * The other routes, in the order they were added, not yet in the tree, so
-   * a method that no request looks up in the tree never builds one.
+   * The path, then the data, of each other route not yet in the tree, in the
+   * order they were added, so a method that no request looks up in the tree
+   * never builds one. A flat list is cheaper to add to than an object per route.
    */
-  pending: PendingRoute<T>[]
+  pending: unknown[]
   /** Whether a route can match only through the tree. */
   dynamic: boolean
-}
-
-interface PendingRoute<T> {
-  readonly path: `/${string}`
-  readonly data: T
 }
 
 /** A literal segment's decoded text, or a param. */
@@ -148,7 +144,7 @@ export class Router<T> {
 
     const routes = this.routesOf(method)
     routes.dynamic = true
-    routes.pending.push({ path, data })
+    routes.pending.push(path, data)
   }
 
   private routesOf(method: string): MethodRoutes<T> {
@@ -327,8 +323,9 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
   let literals = 0
   const nodes: Node<T>[] = [routes.root]
 
-  next: for (let p = 0; p < pending.length; p++) {
-    const { path, data } = pending[p]!
+  next: for (let p = 0; p < pending.length; p += 2) {
+    const path = pending[p] as string
+    const data = pending[p + 1] as T
     const parts = trimTrailingSlash(path).split('/')
     let start = 1
     while (start < literals && parts[start] === shared[start]) {
