@@ -323,7 +323,9 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
         end = pathname.length
       }
 
-      if (!matchesSegment(expected, decode(pathname.slice(start, end)))) {
+      // `undefined` stands for a param, which needs a non-empty segment.
+      const segment = decode(pathname.slice(start, end))
+      if (expected === undefined ? segment === '' : segment !== expected) {
         return false
       }
 
@@ -627,16 +629,15 @@ function matchesCatchAll(
   }
 
   for (let i = 0; i < tail.length; i++) {
-    if (!matchesSegment(tail[i], segments[end + i]!)) {
+    const expected = tail[i]
+    const segment = segments[end + i]!
+    // `undefined` stands for a param, which needs a non-empty segment.
+    if (expected === undefined ? segment === '' : segment !== expected) {
       return false
     }
   }
 
   return true
-}
-
-function matchesSegment(expected: string | undefined, segment: string): boolean {
-  return expected === undefined ? segment !== '' : segment === expected
 }
 
 // `params` is spread only for a param named `__proto__`, not on every pass.
