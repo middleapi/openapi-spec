@@ -348,12 +348,23 @@ function convertBranches(item: unknown, ctx: Context, schema: Record<string, unk
 
 function convertTaggedBranch(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref !== undefined &&
-    Object.keys(value as Record<string, unknown>).every(
-      (key) => key === '$ref' || isAnnotation(key),
-    )
+  return ref !== undefined && isAnnotatedRef(value as Record<string, unknown>)
     ? convertSchemaRef(ref, ctx)
     : convertSchema(value, ctx)
+}
+
+function isAnnotatedRef(value: Record<string, unknown>): boolean {
+  return Object.keys(value).every((key) => key === '$ref' || isAnnotation(key))
+}
+
+// 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
+// as one of the schemas the discriminator picks among, so openapi-typescript
+// leaves out the tag and Hey API pins it to the name of the schema around it.
+// So a `$ref` to one beside only annotations, as OpenAI and Adyen describe a
+// property holding a tagged union, stays the bare `$ref`, as a branch does.
+function isTaggedRef(ref: string, ctx: Context): boolean {
+  const target = resolvePointer(ref, ctx)
+  return isRecord(target) && keepsDiscriminator(target, ctx) && !isInlined(ref, ctx)
 }
 
 function convertSchemaRef(ref: string, ctx: Context): unknown {
@@ -1316,7 +1327,11 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     return value ? {} : { not: {} }
   }
   const ref = getRef(value)
-  if (ref !== undefined && isBareRef(value as Record<string, unknown>)) {
+  if (
+    ref !== undefined &&
+    (isBareRef(value as Record<string, unknown>) ||
+      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
+  ) {
     return convertSchemaRef(ref, ctx)
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
