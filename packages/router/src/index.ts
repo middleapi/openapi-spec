@@ -73,7 +73,7 @@ interface PendingRoute<T> {
 }
 
 /** A literal segment's decoded text, or a param. */
-type Segment = string | { readonly name: string; readonly catchAll: boolean }
+type Segment = string | RouteParam
 
 const PARAM_NAME = /^[\w-]+$/
 
@@ -340,7 +340,7 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
     literals = parts.length
 
     for (let index = start; index < parts.length; index++) {
-      const segment = toSegment(parts[index]!)
+      const segment = toSegment(parts[index]!, index)
 
       if (typeof segment === 'string') {
         node = literalChild(node, segment)
@@ -348,13 +348,12 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
         continue
       }
 
-      const param = { name: segment.name, index, catchAll: segment.catchAll }
       // An array literal holds just its items, where a push to `[]` reserves 17.
       if (params === undefined) {
         literals = index
-        params = [param]
+        params = [segment]
       } else {
-        params.push(param)
+        params.push(segment)
       }
 
       if (!segment.catchAll) {
@@ -365,12 +364,12 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
 
       const tail: (string | undefined)[] = []
       for (let i = index + 1; i < parts.length; i++) {
-        const after = toSegment(parts[i]!)
+        const after = toSegment(parts[i]!, i - parts.length)
         if (typeof after === 'string') {
           tail.push(after)
         } else {
           tail.push(undefined)
-          params.push({ name: after.name, index: i - parts.length, catchAll: false })
+          params.push(after)
         }
       }
 
@@ -419,15 +418,15 @@ function createNode<T>(): Node<T> {
 }
 
 function parse(path: `/${string}`): Segment[] {
-  return trimTrailingSlash(path).split('/').slice(1).map(toSegment)
+  return trimTrailingSlash(path).split('/').map(toSegment).slice(1)
 }
 
-function toSegment(text: string): Segment {
+function toSegment(text: string, index: number): Segment {
   if (text.charCodeAt(0) === 123 && text.charCodeAt(text.length - 1) === 125) {
     const catchAll = text.charCodeAt(1) === 43
     const name = text.slice(catchAll ? 2 : 1, -1)
     if (PARAM_NAME.test(name)) {
-      return { name, catchAll }
+      return { name, index, catchAll }
     }
   }
 
