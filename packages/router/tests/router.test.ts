@@ -24,6 +24,18 @@ describe('Router', () => {
       expect(router.match('POST', '/planet/create/more')).toBeUndefined()
     })
 
+    it('matches a route whose data is `undefined`', () => {
+      const router = new Router<string | undefined>()
+      router.add('GET', '/a', undefined)
+      router.add('GET', '/a', 'second')
+      router.add('GET', '/b/{id}', undefined)
+
+      expect(router.match('GET', '/a')).toStrictEqual({ data: undefined, params: undefined })
+      expect(router.match('GET', '/%61')).toStrictEqual({ data: undefined, params: undefined })
+      expect(router.match('GET', '/b/1')).toStrictEqual({ data: undefined, params: { id: '1' } })
+      expect(router.match('GET', '/c')).toBeUndefined()
+    })
+
     it('ignores one trailing slash in routes and requests', () => {
       const router = routerOf('/', '/ping', '/echo/')
 
