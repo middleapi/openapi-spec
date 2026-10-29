@@ -1122,6 +1122,8 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ const: 'a' })).toEqual({ oneOf: [ref, onlyNull] })
       expect(pet({ enum: ['a', null] })).toEqual({ anyOf: [ref, onlyNull] })
       expect(pet({ const: null })).toEqual({ anyOf: [ref, onlyNull] })
+      // 3.0 writes the `const` in place of the `enum`, so null passes it there.
+      expect(pet({ enum: ['a'], const: null })).toEqual({ anyOf: [ref, onlyNull] })
       // OData writes a derived object as an `allOf` of its base and its own keywords.
       expect(
         pet({ allOf: [{ $ref: '#/components/schemas/Cat' }, { required: ['meow'] }] }),

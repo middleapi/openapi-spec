@@ -846,10 +846,13 @@ function untypedRejectsNull(schema: unknown, root: unknown): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
   }
+  // A `const` takes the place of any `enum` in 3.0, so it decides alone.
+  if (schema.const !== undefined) {
+    return schema.const !== null
+  }
   const branches = schema.anyOf ?? schema.oneOf
   return (
     (Array.isArray(schema.enum) && !schema.enum.includes(null)) ||
-    (schema.const !== undefined && schema.const !== null) ||
     (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
     (Array.isArray(branches) &&
       branches.length > 0 &&
