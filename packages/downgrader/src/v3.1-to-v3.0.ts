@@ -840,9 +840,12 @@ function refRejectsNull(schema: unknown, root: unknown): boolean {
 // A schema with no `type` that rejects null all the same: an `enum` or
 // `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
 // that rejects null, as OData writes a derived object, or a union whose
-// branches each do, as Zod writes a registered union, and GitHub and Notion a
-// tagged one.
-function untypedRejectsNull(schema: unknown, root: unknown): boolean {
+// branches each do, as Zod writes a registered union. Unless `inline`, a
+// `oneOf` with an object branch, as Zod writes a discriminated union, and
+// GitHub and Notion a tagged one, does not count, since NSwag writes a type it
+// never defines for a nullable `$ref` to one, where the `anyOf` pair gives an
+// empty class, though it reads an inline one as its first branch.
+function untypedRejectsNull(schema: unknown, root: unknown, inline = false): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
   }
@@ -856,8 +859,17 @@ function untypedRejectsNull(schema: unknown, root: unknown): boolean {
     (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
     (Array.isArray(branches) &&
       branches.length > 0 &&
-      branches.every((branch) => refRejectsNull(branch, root)))
+      branches.every((branch) => refRejectsNull(branch, root)) &&
+      (inline ||
+        !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, root)))))
   )
+}
+
+// A schema with an `"object"` `type`, read through one `$ref`.
+function isObjectBranch(schema: unknown, root: unknown): boolean {
+  const ref = getRef(schema)
+  const target = ref === undefined ? schema : find(root, ref)
+  return isRecord(target) && hasType(target.type, 'object')
 }
 
 // An inline union whose branches each reject null, as Pydantic writes an
@@ -868,7 +880,7 @@ function unionRejectsNull(schema: Record<string, unknown>, root: unknown): boole
   const branches = schema.anyOf ?? schema.oneOf
   return (
     Array.isArray(branches) &&
-    untypedRejectsNull(schema, root) &&
+    untypedRejectsNull(schema, root, true) &&
     branches.some((branch) => !isRecord(branch) || !ONE_OF_TYPES.has(branch.type as string))
   )
 }
