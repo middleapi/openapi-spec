@@ -1170,6 +1170,19 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ description: 'd', anyOf: objects }, { type: 'null' }],
         }),
       ).toEqual({ oneOf: [{ description: 'd', anyOf: objects }, onlyNull] })
+      // A pair that a `$ref` points to keeps the `anyOf`, as Spacefast writes a component.
+      const rule = (schemas: Record<string, OpenAPIV3_1.SchemaObject>) =>
+        convert({
+          components: {
+            schemas: { Rule: { anyOf: [{ anyOf: objects }, { type: 'null' }] }, ...schemas },
+          },
+        }).components?.schemas?.Rule
+      expect(rule({})).toEqual({ oneOf: [{ anyOf: objects }, onlyNull] })
+      expect(
+        rule({
+          Traffic: { type: 'object', properties: { rule: { $ref: '#/components/schemas/Rule' } } },
+        }),
+      ).toEqual({ anyOf: [{ anyOf: objects }, onlyNull] })
       // A scalar beside an object.
       const mixed: OpenAPIV3_1.SchemaObject[] = [{ type: 'string' }, { type: 'object' }]
       expect(downgradeSchemaV31ToV30({ anyOf: [{ anyOf: mixed }, { type: 'null' }] })).toEqual({

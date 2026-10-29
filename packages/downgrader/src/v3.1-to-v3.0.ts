@@ -944,7 +944,12 @@ function dropEqualBranches(out: Record<string, unknown>): boolean {
 // reads that `oneOf` as nullable, and the `anyOf` as an empty class. typia
 // and Litestar write the pair as a `oneOf`, which means the same when the
 // other branch takes `nullable`, and oapi-codegen reads it as a union.
-function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf' | 'oneOf'): void {
+function mergeNullable(
+  out: Record<string, unknown>,
+  root: unknown,
+  key: 'anyOf' | 'oneOf',
+  isTarget: boolean,
+): void {
   const branches = out[key] as unknown[]
   // Effect writes null twice for a nullish value, once for `undefined`.
   const others = branches.filter((branch) => !isNullBranch(branch, out))
@@ -1002,7 +1007,11 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
       })
     if (
       rejectsNull(target) ||
-      (ref === undefined ? unionRejectsNull(other, root) : untypedRejectsNull(target, root)) ||
+      // A pair a `$ref` points to keeps an inline union, since NSwag gives each
+      // `$ref` to a `oneOf` with null a type it never defines.
+      (ref === undefined
+        ? !isTarget && unionRejectsNull(other, root)
+        : untypedRejectsNull(target, root)) ||
       held
     ) {
       // Null once, since `oneOf` rejects a value that matches two branches.
@@ -1529,13 +1538,14 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     const out = downgrade(root, convert)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
+        const isTarget = refTargets.has(input)
         mergeEnums(schema, key)
         const branches = schema[key]
         // A `oneOf` with null twice rejects null, so only a pair can merge.
         if (Array.isArray(branches) && (key === 'anyOf' || branches.length === 2)) {
-          mergeNullable(schema, root, key)
+          mergeNullable(schema, root, key, isTarget)
         }
-        if (!refTargets.has(input)) {
+        if (!isTarget) {
           scalarOneOf(schema)
         }
       }
