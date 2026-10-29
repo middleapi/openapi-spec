@@ -1297,6 +1297,10 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(owner({ anyOf: [{ type: 'string' }, { type: 'null' }], enum: ['a'] })).toEqual({
         oneOf: [ref, onlyNull],
       })
+      // A `not` beside it can reject null too, so the pair stays.
+      expect(owner({ anyOf: [pet, { type: 'null' }], not: { type: 'null' } })).toEqual({
+        anyOf: [ref, onlyNull],
+      })
       expect(owner({ anyOf: [pet, { type: 'null' }] }, { description: 'A' })).toEqual({
         description: 'A',
         anyOf: [ref, onlyNull],
