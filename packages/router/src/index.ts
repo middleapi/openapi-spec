@@ -22,6 +22,12 @@ interface RouteParam {
 interface CatchAll<T> {
   /** Each segment after the catch-all param: its literal text, or `undefined` for a param. */
   readonly tail: readonly (string | undefined)[]
+  /**
+   * Sorts the more specific of two catch-alls starting at the same segment
+   * first: a digit for each segment after the param, from the last one, `0`
+   * for a literal and `1` for a param, then `2`, for none.
+   */
+  readonly order: string
   readonly route: Route<T>
 }
 
@@ -438,20 +444,23 @@ function addCatchAll<T>(
   params: RouteParam[],
 ): void {
   const tail: (string | undefined)[] = []
+  let order = '2'
   for (let i = index + 1; i < parts.length; i++) {
     const after = toSegment(parts[i]!, i - parts.length)
     if (typeof after === 'string') {
       tail.push(after)
+      order = `0${order}`
     } else {
       tail.push(undefined)
       params.push(after)
+      order = `1${order}`
     }
   }
 
   node.catchAlls ??= []
   if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
-    node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
-    node.catchAlls.sort(compareCatchAlls)
+    node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
+    node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
   }
 }
 
@@ -632,26 +641,6 @@ function matchesSegment(expected: string | undefined, segment: string): boolean 
 
 function sameTail(a: readonly (string | undefined)[], b: readonly (string | undefined)[]): boolean {
   return a.length === b.length && a.every((segment, i) => segment === b[i])
-}
-
-/** Puts first the catch-all whose segments after it are more specific, comparing from the last one: a literal, then a param, then none. */
-function compareCatchAlls<T>(a: CatchAll<T>, b: CatchAll<T>): number {
-  for (let i = 1; i <= Math.max(a.tail.length, b.tail.length); i++) {
-    const order = rank(a.tail, i) - rank(b.tail, i)
-    if (order !== 0) {
-      return order
-    }
-  }
-
-  return 0
-}
-
-function rank(tail: readonly (string | undefined)[], fromEnd: number): number {
-  if (fromEnd > tail.length) {
-    return 2
-  }
-
-  return tail[tail.length - fromEnd] === undefined ? 1 : 0
 }
 
 function toParams<T>(route: Route<T>, segments: readonly string[]): Record<string, string> {
