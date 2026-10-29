@@ -41,10 +41,11 @@ interface Node<T> {
 interface MethodRoutes<T> {
   readonly root: Node<T>
   /**
-   * The routes whose segments hold no `{`, `/`, or `%` once decoded, by
-   * decoded path, for a request path without `%`.
+   * The data of each route whose segments hold no `{`, `/`, or `%` once
+   * decoded, by decoded path, for a request path without `%`. Keeping the
+   * data, not a route object, makes adding these routes cheaper.
    */
-  readonly statics: Map<string, Route<T>>
+  readonly statics: Map<string, T>
   /**
    * Marks the slot of each path in `statics`, so that most request paths for
    * routes with params skip hashing to look there. Building it costs more
@@ -168,7 +169,7 @@ export class Router<T> {
   private addStatic(method: string, path: string, data: T): void {
     const routes = this.routesOf(method)
     if (!routes.statics.has(path)) {
-      routes.statics.set(path, { data, params: undefined, tail: 0 })
+      routes.statics.set(path, data)
       routes.filter = undefined
     }
   }
@@ -189,9 +190,10 @@ export class Router<T> {
     // neither does one whose slot the filter leaves unmarked.
     const filter = routes.filter
     if (filter === undefined || filter[slot(path)] === 1) {
-      const route = routes.statics.get(path)
-      if (route !== undefined) {
-        return { data: route.data, params: undefined }
+      const data = routes.statics.get(path)
+      // A route's data can be `undefined` too.
+      if (data !== undefined || routes.statics.has(path)) {
+        return { data: data as T, params: undefined }
       }
     }
 
@@ -297,7 +299,7 @@ function filterOf(statics: Map<string, unknown>): Uint8Array {
  */
 function indexStatics<T>(routes: MethodRoutes<T>): void {
   let indexed = 0
-  for (const [path, route] of routes.statics) {
+  for (const [path, data] of routes.statics) {
     if (indexed++ < routes.indexed) {
       continue
     }
@@ -305,7 +307,7 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
     for (const segment of path.split('/').slice(1)) {
       node = literalChild(node, segment)
     }
-    node.route = route
+    node.route = { data, params: undefined, tail: 0 }
   }
 
   routes.indexed = indexed
