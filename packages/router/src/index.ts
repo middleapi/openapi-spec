@@ -106,72 +106,11 @@ export class Router<T> {
   add(method: string, path: `/${string}`, data: T): void {
     // Without `{` or `%`, a path has only literal segments, which read the same decoded.
     if (!path.includes('{') && !path.includes('%')) {
-      this.addStatic(method, trimTrailingSlash(path), data)
+      addStatic(this.methods, method, trimTrailingSlash(path), data)
       return
     }
 
-    this.addParsed(method, path, data)
-  }
-
-  // Separate from `add`, so V8 compiles it only once a path has `{` or `%`,
-  // which keeps cold starts short for route sets without any.
-  private addParsed(method: string, path: `/${string}`, data: T): void {
-    if (path.includes('{')) {
-      // Only a path with `{+` twice can have two catch-all params.
-      if (
-        path.indexOf('{+') !== path.lastIndexOf('{+') &&
-        parse(path).filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1
-      ) {
-        throw new TypeError(
-          `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
-        )
-      }
-    } else {
-      const segments = parse(path)
-      // Paths with `{` wait in `pending`, so one whose decoded text has a `{`
-      // waits there too, keeping the first of two that read the same.
-      if (
-        segments.every(
-          (segment) =>
-            typeof segment === 'string' &&
-            !segment.includes('/') &&
-            !segment.includes('%') &&
-            !segment.includes('{'),
-        )
-      ) {
-        this.addStatic(method, `/${segments.join('/')}`, data)
-        return
-      }
-    }
-
-    const routes = this.routesOf(method)
-    routes.dynamic = true
-    routes.pending.push(path, data)
-  }
-
-  private routesOf(method: string): MethodRoutes<T> {
-    let routes = this.methods.get(method)
-    if (routes === undefined) {
-      routes = {
-        root: createNode(),
-        statics: new Map(),
-        filter: undefined,
-        unfiltered: 0,
-        indexed: 0,
-        pending: [],
-        dynamic: false,
-      }
-      this.methods.set(method, routes)
-    }
-    return routes
-  }
-
-  private addStatic(method: string, path: string, data: T): void {
-    const routes = this.routesOf(method)
-    if (!routes.statics.has(path)) {
-      routes.statics.set(path, data)
-      routes.filter = undefined
-    }
+    addParsed(this.methods, method, path, data)
   }
 
   /**
@@ -222,6 +161,78 @@ export class Router<T> {
     }
 
     return { data: found.data, params: found.params && toParams(found, segments) }
+  }
+}
+
+// The helpers of `add` are functions, not methods, which a cold start calls
+// more cheaply. This one is separate from `add`, so V8 compiles it only once a
+// path has `{` or `%`, which keeps cold starts short for route sets without any.
+function addParsed<T>(
+  methods: Map<string, MethodRoutes<T>>,
+  method: string,
+  path: `/${string}`,
+  data: T,
+): void {
+  if (path.includes('{')) {
+    // Only a path with `{+` twice can have two catch-all params.
+    if (
+      path.indexOf('{+') !== path.lastIndexOf('{+') &&
+      parse(path).filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1
+    ) {
+      throw new TypeError(
+        `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
+      )
+    }
+  } else {
+    const segments = parse(path)
+    // Paths with `{` wait in `pending`, so one whose decoded text has a `{`
+    // waits there too, keeping the first of two that read the same.
+    if (
+      segments.every(
+        (segment) =>
+          typeof segment === 'string' &&
+          !segment.includes('/') &&
+          !segment.includes('%') &&
+          !segment.includes('{'),
+      )
+    ) {
+      addStatic(methods, method, `/${segments.join('/')}`, data)
+      return
+    }
+  }
+
+  const routes = routesOf(methods, method)
+  routes.dynamic = true
+  routes.pending.push(path, data)
+}
+
+function routesOf<T>(methods: Map<string, MethodRoutes<T>>, method: string): MethodRoutes<T> {
+  let routes = methods.get(method)
+  if (routes === undefined) {
+    routes = {
+      root: createNode(),
+      statics: new Map(),
+      filter: undefined,
+      unfiltered: 0,
+      indexed: 0,
+      pending: [],
+      dynamic: false,
+    }
+    methods.set(method, routes)
+  }
+  return routes
+}
+
+function addStatic<T>(
+  methods: Map<string, MethodRoutes<T>>,
+  method: string,
+  path: string,
+  data: T,
+): void {
+  const routes = routesOf(methods, method)
+  if (!routes.statics.has(path)) {
+    routes.statics.set(path, data)
+    routes.filter = undefined
   }
 }
 
