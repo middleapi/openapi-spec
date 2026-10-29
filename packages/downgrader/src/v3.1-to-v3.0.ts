@@ -831,6 +831,35 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
+// A schema that rejects null by its `type`, read through one `$ref`.
+function refRejectsNull(schema: unknown, root: unknown): boolean {
+  const ref = getRef(schema)
+  return rejectsNull(ref === undefined ? schema : find(root, ref))
+}
+
+// A schema with no `type` that rejects null all the same: an `enum` or
+// `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
+// that rejects null, as OData writes a derived object, or a union whose
+// branches each do, as Zod writes a registered union, and GitHub and Notion a
+// tagged one.
+function untypedRejectsNull(schema: unknown, root: unknown): boolean {
+  if (!isRecord(schema) || schema.type !== undefined) {
+    return false
+  }
+  // A `const` takes the place of any `enum` in 3.0, so it decides alone.
+  if (schema.const !== undefined) {
+    return schema.const !== null
+  }
+  const branches = schema.anyOf ?? schema.oneOf
+  return (
+    (Array.isArray(schema.enum) && !schema.enum.includes(null)) ||
+    (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
+    (Array.isArray(branches) &&
+      branches.length > 0 &&
+      branches.every((branch) => refRejectsNull(branch, root)))
+  )
+}
+
 // Whether two branches hold the same keys with the same values. An object
 // value matches only itself, since comparing objects in full would cost an
 // object that a dereferenced document shares once for each path to it.
@@ -942,19 +971,22 @@ function mergeNullable(out: Record<string, unknown>, root: unknown, key: 'anyOf'
     delete out[key]
     Object.assign(out, other, { nullable: true })
   } else if (key === 'anyOf' && out.oneOf === undefined) {
-    // A `$ref` kept as written rejects null when its target does, and an
-    // `allOf` when any of its members does, such as the `$ref` with siblings
-    // that Zod writes for a described reference, or either side of an
-    // intersection.
+    // A `$ref` kept as written rejects null when its target does, with or
+    // without a `type`, and an `allOf` when any of its members does, such as
+    // the `$ref` with siblings that Zod writes for a described reference, or
+    // either side of an intersection.
     const ref = getRef(other)
     const target = ref === undefined ? other : find(root, ref)
     const held =
       Array.isArray(other.allOf) &&
       other.allOf.some((member) => {
         const memberRef = getRef(member)
-        return rejectsNull(memberRef === undefined ? member : find(root, memberRef))
+        return (
+          refRejectsNull(member, root) ||
+          (memberRef !== undefined && untypedRejectsNull(find(root, memberRef), root))
+        )
       })
-    if (rejectsNull(target) || held) {
+    if (rejectsNull(target) || (ref !== undefined && untypedRejectsNull(target, root)) || held) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
