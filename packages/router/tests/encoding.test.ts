@@ -102,7 +102,7 @@ describe('percent-encoding', () => {
       'é',
       '日',
       '😀',
-      ' ',
+      String.fromCharCode(0xa0),
     ].filter((char) => char !== '/')
     const escapes = (char: string, hex: (byte: number) => string): string =>
       Array.from(new TextEncoder().encode(char), (byte) => `%${hex(byte).padStart(2, '0')}`).join(
