@@ -433,8 +433,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
 /**
  * Adds a route whose catch-all param is the part at `index`. Keeping this out
  * of `expand` makes the code V8 compiles for a cold start's first request
- * smaller, and keeps the closure below from making `expand` allocate a scope
- * on every segment.
+ * smaller.
  */
 function addCatchAll<T>(
   node: Node<T>,
@@ -457,11 +456,11 @@ function addCatchAll<T>(
     }
   }
 
+  // A stable sort keeps a route with the same segments as an earlier one
+  // after it, where it never matches.
   node.catchAlls ??= []
-  if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
-    node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
-    node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
-  }
+  node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
+  node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
@@ -637,10 +636,6 @@ function matchesCatchAll(
 
 function matchesSegment(expected: string | undefined, segment: string): boolean {
   return expected === undefined ? segment !== '' : segment === expected
-}
-
-function sameTail(a: readonly (string | undefined)[], b: readonly (string | undefined)[]): boolean {
-  return a.length === b.length && a.every((segment, i) => segment === b[i])
 }
 
 function toParams<T>(route: Route<T>, segments: readonly string[]): Record<string, string> {
