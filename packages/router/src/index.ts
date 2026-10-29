@@ -182,9 +182,12 @@ function addParsed<T>(
   data: T,
 ): void {
   if (path.includes('{')) {
-    // Only a path with `{+` twice can have two catch-all params.
+    // Only a path with `{+` twice can have two catch-all params. `lastIndexOf`
+    // would cost more, as V8 runs it outside its fast builtins.
+    const catchAll = path.indexOf('{+')
     if (
-      path.indexOf('{+') !== path.lastIndexOf('{+') &&
+      catchAll !== -1 &&
+      path.includes('{+', catchAll + 2) &&
       parse(path).filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1
     ) {
       throw new TypeError(
