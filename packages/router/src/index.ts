@@ -54,10 +54,10 @@ interface MethodRoutes<T> {
   /** The requests the tree has served without `filter`. */
   unfiltered: number
   /**
-   * The paths in `statics` not yet in the tree, where only a request path
-   * with `%` looks for them.
+   * How many of the paths in `statics`, in the order they were added, are in
+   * the tree too, where only a request path with `%` looks for them.
    */
-  unindexed: string[]
+  indexed: number
   /**
    * The other routes, in the order they were added, not yet in the tree, so
    * a method that no request looks up in the tree never builds one.
@@ -159,7 +159,7 @@ export class Router<T> {
         statics: new Map(),
         filter: undefined,
         unfiltered: 0,
-        unindexed: [],
+        indexed: 0,
         pending: [],
         dynamic: false,
       }
@@ -172,7 +172,6 @@ export class Router<T> {
     const routes = this.routesOf(method)
     if (!routes.statics.has(path)) {
       routes.statics.set(path, { data, params: undefined, tail: 0 })
-      routes.unindexed.push(path)
       routes.filter = undefined
     }
   }
@@ -212,7 +211,7 @@ export class Router<T> {
       routes.filter = filterOf(routes.statics)
     }
 
-    if (encoded && routes.unindexed.length > 0) {
+    if (encoded && routes.indexed !== routes.statics.size) {
       indexStatics(routes)
     }
 
@@ -297,17 +296,22 @@ function filterOf(statics: Map<string, unknown>): Uint8Array {
 /**
  * Adds the routes in `statics` to the tree, once a request path needs
  * decoding, so that adding them stays cheap for apps that never see one.
+ * Counting the paths already added spares `add` from listing the others.
  */
 function indexStatics<T>(routes: MethodRoutes<T>): void {
-  for (const path of routes.unindexed) {
+  let indexed = 0
+  for (const [path, route] of routes.statics) {
+    if (indexed++ < routes.indexed) {
+      continue
+    }
     let node = routes.root
     for (const segment of path.split('/').slice(1)) {
       node = literalChild(node, segment)
     }
-    node.route = routes.statics.get(path)
+    node.route = route
   }
 
-  routes.unindexed = []
+  routes.indexed = indexed
 }
 
 /**
