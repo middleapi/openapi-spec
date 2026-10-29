@@ -840,8 +840,10 @@ function refRejectsNull(schema: unknown, root: unknown): boolean {
 // A schema with no `type` that rejects null all the same: an `enum` or
 // `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
 // that rejects null, as OData writes a derived object, or a union whose
-// branches each do, as Zod writes a registered union, and GitHub and Notion a
-// tagged one.
+// branches each do, as Zod writes a registered union. A `oneOf` with an object
+// branch, as Zod writes a discriminated union, and GitHub and Notion a tagged
+// one, does not count, since NSwag writes a type it never defines for a
+// nullable one, where the `anyOf` pair gives an empty class.
 function untypedRejectsNull(schema: unknown, root: unknown): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
@@ -856,8 +858,16 @@ function untypedRejectsNull(schema: unknown, root: unknown): boolean {
     (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
     (Array.isArray(branches) &&
       branches.length > 0 &&
-      branches.every((branch) => refRejectsNull(branch, root)))
+      branches.every((branch) => refRejectsNull(branch, root)) &&
+      !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, root))))
   )
+}
+
+// A schema with an `"object"` `type`, read through one `$ref`.
+function isObjectBranch(schema: unknown, root: unknown): boolean {
+  const ref = getRef(schema)
+  const target = ref === undefined ? schema : find(root, ref)
+  return isRecord(target) && hasType(target.type, 'object')
 }
 
 // Whether two branches hold the same keys with the same values. An object

@@ -1099,12 +1099,20 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet(literals, { ...ref, description: 'd' })).toEqual({
         oneOf: [{ description: 'd', allOf: [ref] }, onlyNull],
       })
-      // GitHub and Notion write a tagged union of `$ref`s.
-      expect(
-        pet({
-          oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
-        }),
-      ).toEqual({ oneOf: [ref, onlyNull] })
+      // Zod writes a registered union of objects as an `anyOf`.
+      const cat = { $ref: '#/components/schemas/Cat' }
+      const dog = { $ref: '#/components/schemas/Dog' }
+      expect(pet({ anyOf: [cat, dog] })).toEqual({ oneOf: [ref, onlyNull] })
+      expect(pet({ oneOf: [{ type: 'string' }, { type: 'array' }] })).toEqual({
+        oneOf: [ref, onlyNull],
+      })
+      // NSwag writes a type it never defines for a nullable `oneOf` with an object
+      // branch, inline or through a `$ref`, as GitHub and Notion write a tagged union.
+      expect(pet({ oneOf: [cat, dog] })).toEqual({ anyOf: [ref, onlyNull] })
+      expect(pet({ oneOf: [cat, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
+      expect(pet({ oneOf: [{ type: ['object'] }, { type: 'string' }] })).toEqual({
+        anyOf: [ref, onlyNull],
+      })
       // Null can pass a branch, or the target of a branch's `$ref`.
       expect(pet({ anyOf: [{ type: 'string' }, {}] })).toEqual({ anyOf: [ref, onlyNull] })
       expect(
