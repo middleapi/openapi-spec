@@ -50,6 +50,10 @@ describe('Router', () => {
       const root = routerOf('//', '/{id}')
       expect(root.match('GET', '/')).toBeUndefined()
       expect(root.match('GET', '//')).toEqual({ data: '//', params: undefined })
+
+      // also once a request path with `%` has put the static routes in the tree
+      expect(root.match('GET', '/%31')).toEqual({ data: '/{id}', params: { id: '1' } })
+      expect(root.match('GET', '/')).toBeUndefined()
     })
 
     it('matches routes added after earlier matches, raw or percent-encoded', () => {
