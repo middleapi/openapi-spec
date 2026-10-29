@@ -285,44 +285,48 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
  * per route, which V8 would see as hot and optimize during a cold start.
  */
 function indexPending<T>(routes: MethodRoutes<T>): void {
-  next: for (const { path, data } of routes.pending) {
-    const segments = parse(path)
+  const pending = routes.pending
+
+  next: for (let p = 0; p < pending.length; p++) {
+    const { path, data } = pending[p]!
+    const parts = trimTrailingSlash(path).split('/')
     let node = routes.root
     let params: RouteParam[] | undefined
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]!
-      const index = i + 1
+    for (let index = 1; index < parts.length; index++) {
+      const segment = toSegment(parts[index]!)
 
       if (typeof segment === 'string') {
         node = literalChild(node, segment)
         continue
       }
 
-      params ??= []
+      const param = { name: segment.name, index, catchAll: segment.catchAll }
+      // An array literal holds just its items, where a push to `[]` reserves 17.
+      if (params === undefined) {
+        params = [param]
+      } else {
+        params.push(param)
+      }
 
       if (!segment.catchAll) {
-        params.push({ name: segment.name, index, catchAll: false })
         node.param ??= createNode()
         node = node.param
         continue
       }
 
-      const rest = segments.slice(i + 1)
-      params.push({ name: segment.name, index, catchAll: true })
-      for (let j = 0; j < rest.length; j++) {
-        const after = rest[j]!
-        if (typeof after !== 'string') {
-          params.push({ name: after.name, index: j - rest.length, catchAll: false })
+      const tail: (string | undefined)[] = []
+      for (let i = index + 1; i < parts.length; i++) {
+        const after = toSegment(parts[i]!)
+        if (typeof after === 'string') {
+          tail.push(after)
+        } else {
+          tail.push(undefined)
+          params.push({ name: after.name, index: i - parts.length, catchAll: false })
         }
       }
 
-      const tail = rest.map((after) => (typeof after === 'string' ? after : undefined))
-      node.catchAlls ??= []
-      if (!node.catchAlls.some((other) => sameTail(other.tail, tail))) {
-        node.catchAlls.push({ tail, route: { data, params, tail: tail.length } })
-        node.catchAlls.sort(compareCatchAlls)
-      }
+      addCatchAll(node, { tail, route: { data, params, tail: tail.length } })
       continue next
     }
 
@@ -330,6 +334,16 @@ function indexPending<T>(routes: MethodRoutes<T>): void {
   }
 
   routes.pending = []
+}
+
+// Separate from `indexPending`, whose loop would otherwise allocate a scope
+// for the closure below on every segment.
+function addCatchAll<T>(node: Node<T>, catchAll: CatchAll<T>): void {
+  node.catchAlls ??= []
+  if (!node.catchAlls.some((other) => sameTail(other.tail, catchAll.tail))) {
+    node.catchAlls.push(catchAll)
+    node.catchAlls.sort(compareCatchAlls)
+  }
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
