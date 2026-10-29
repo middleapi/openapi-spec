@@ -96,6 +96,7 @@ describe('Router', () => {
         '/{id',
         '/id}',
         '/id}/{x}',
+        '/f/{+p}/id}',
       )
 
       for (const path of [
@@ -117,6 +118,8 @@ describe('Router', () => {
       expect(router.match('GET', '/anything')).toBeUndefined()
       expect(router.match('GET', '/x')).toBeUndefined()
       expect(router.match('GET', '/itemsfoo')).toBeUndefined()
+      expect(router.match('GET', '/f/1/id}')).toEqual({ data: '/f/{+p}/id}', params: { p: '1' } })
+      expect(router.match('GET', '/f/1/id')).toBeUndefined()
 
       // only a whole-segment `{name}` is a param
       expect(router.match('GET', '/a/%7Bid%7D.json')).toEqual({
