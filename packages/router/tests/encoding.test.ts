@@ -95,6 +95,47 @@ describe('percent-encoding', () => {
       }
     }
   })
+
+  it('matches chars however the route and the request write them, raw or percent-encoded', () => {
+    const chars = [
+      ...Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i)),
+      'é',
+      '日',
+      '😀',
+      ' ',
+    ].filter((char) => char !== '/')
+    const escapes = (char: string, hex: (byte: number) => string): string =>
+      Array.from(new TextEncoder().encode(char), (byte) => `%${hex(byte).padStart(2, '0')}`).join(
+        '',
+      )
+    const forms = [
+      (char: string) => char,
+      encodeURIComponent,
+      (char: string) => escapes(char, (byte) => byte.toString(16).toUpperCase()),
+      (char: string) => escapes(char, (byte) => byte.toString(16)),
+    ]
+
+    for (const route of forms) {
+      const router = new Router<string>()
+      for (const char of chars) {
+        router.add('GET', `/x${route(char)}y`, char)
+        router.add('GET', `/p/x${route(char)}y/{id}`, char)
+      }
+
+      for (const request of forms) {
+        for (const char of chars) {
+          expect(router.match('GET', `/x${request(char)}y`)).toStrictEqual({
+            data: char,
+            params: undefined,
+          })
+          expect(router.match('GET', `/p/x${request(char)}y/v${request(char)}`)).toStrictEqual({
+            data: char,
+            params: { id: `v${char}` },
+          })
+        }
+      }
+    }
+  })
 })
 
 describe('trailing and empty segments', () => {
