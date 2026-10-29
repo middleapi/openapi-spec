@@ -26,6 +26,7 @@ interface CatchAll<T> {
 }
 
 interface Node<T> {
+  /** The literal children by their text, once there are two or more. */
   literals: Map<string, Node<T>> | undefined
   /** The text of the only literal child, if there is just one. */
   literal: string | undefined
@@ -391,14 +392,25 @@ function addCatchAll<T>(node: Node<T>, catchAll: CatchAll<T>): void {
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
-  node.literals ??= new Map()
+  if (node.literals === undefined) {
+    if (node.literalNode === undefined) {
+      node.literal = segment
+      node.literalNode = createNode()
+      return node.literalNode
+    }
+    if (segment === node.literal) {
+      return node.literalNode
+    }
+    node.literals = new Map()
+    node.literals.set(node.literal!, node.literalNode)
+    node.literal = undefined
+    node.literalNode = undefined
+  }
+
   let child = node.literals.get(segment)
   if (child === undefined) {
     child = createNode()
     node.literals.set(segment, child)
-    const only = node.literals.size === 1
-    node.literal = only ? segment : undefined
-    node.literalNode = only ? child : undefined
   }
   return child
 }
@@ -479,19 +491,17 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
 
   const segment = segments[index]!
 
-  if (node.literals !== undefined) {
-    // Comparing with an only literal is cheaper than hashing the segment.
-    const child =
-      node.literal === undefined
-        ? node.literals.get(segment)
-        : segment === node.literal
-          ? node.literalNode
-          : undefined
-    if (child !== undefined) {
-      const route = find(child, segments, index + 1)
-      if (route !== undefined) {
-        return route
-      }
+  // Comparing with an only literal is cheaper than hashing the segment.
+  const child =
+    node.literal !== undefined
+      ? segment === node.literal
+        ? node.literalNode
+        : undefined
+      : node.literals?.get(segment)
+  if (child !== undefined) {
+    const route = find(child, segments, index + 1)
+    if (route !== undefined) {
+      return route
     }
   }
 
