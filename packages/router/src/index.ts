@@ -45,6 +45,15 @@ interface MethodRoutes<T> {
    */
   readonly statics: Map<string, Route<T>>
   /**
+   * Marks the slot of each path in `statics`, so that most request paths for
+   * routes with params skip hashing to look there. Building it costs more
+   * than a cold start gains back, so it waits for the tree to serve
+   * `FILTER_AFTER` requests, and is dropped when a path is added to `statics`.
+   */
+  filter: Uint8Array | undefined
+  /** The requests the tree has served without `filter`. */
+  unfiltered: number
+  /**
    * The paths in `statics` not yet in the tree, where only a request path
    * with `%` looks for them.
    */
@@ -67,6 +76,8 @@ interface PendingRoute<T> {
 type Segment = string | { readonly name: string; readonly catchAll: boolean }
 
 const PARAM_NAME = /^[\w-]+$/
+
+const FILTER_AFTER = 1024
 
 /**
  * Matches request paths against OpenAPI path templates, the way oRPC routes
@@ -146,6 +157,8 @@ export class Router<T> {
       routes = {
         root: createNode(),
         statics: new Map(),
+        filter: undefined,
+        unfiltered: 0,
         unindexed: [],
         pending: [],
         dynamic: false,
@@ -160,6 +173,7 @@ export class Router<T> {
     if (!routes.statics.has(path)) {
       routes.statics.set(path, { data, params: undefined, tail: 0 })
       routes.unindexed.push(path)
+      routes.filter = undefined
     }
   }
 
@@ -175,10 +189,14 @@ export class Router<T> {
 
     const path = trimTrailingSlash(pathname)
 
-    // No static path holds `%`, so a path with it never matches here.
-    const route = routes.statics.get(path)
-    if (route !== undefined) {
-      return { data: route.data, params: undefined }
+    // No static path holds `%`, so a path with it never matches here, and
+    // neither does one whose slot the filter leaves unmarked.
+    const filter = routes.filter
+    if (filter === undefined || filter[slot(path)] === 1) {
+      const route = routes.statics.get(path)
+      if (route !== undefined) {
+        return { data: route.data, params: undefined }
+      }
     }
 
     const encoded = path.includes('%')
@@ -188,6 +206,10 @@ export class Router<T> {
 
     if (routes.pending.length > 0) {
       indexPending(routes)
+    }
+
+    if (filter === undefined && ++routes.unfiltered >= FILTER_AFTER) {
+      routes.filter = filterOf(routes.statics)
     }
 
     if (encoded && routes.unindexed.length > 0) {
@@ -262,6 +284,14 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
 
     return true
   }
+}
+
+function filterOf(statics: Map<string, unknown>): Uint8Array {
+  const filter = new Uint8Array(1024)
+  for (const path of statics.keys()) {
+    filter[slot(path)] = 1
+  }
+  return filter
 }
 
 /**
@@ -384,6 +414,11 @@ function toSegment(text: string): Segment {
   }
 
   return decode(text)
+}
+
+/** Paths that share a slot have the same length modulo 8 and last char modulo 128. */
+function slot(path: string): number {
+  return ((path.length & 7) << 7) | (path.charCodeAt(path.length - 1) & 127)
 }
 
 function trimTrailingSlash(path: string): string {

@@ -204,6 +204,27 @@ describe('Router', () => {
         }
       }
     })
+
+    it('matches static routes after many requests, and ones added after them', () => {
+      const router = routerOf('/users/{id}', '/users/all')
+      for (let id = 0; id < 2000; id++) {
+        expect(router.match('GET', `/users/${id}`)).toEqual({
+          data: '/users/{id}',
+          params: { id: `${id}` },
+        })
+      }
+
+      expect(router.match('GET', '/users/all')).toEqual({ data: '/users/all', params: undefined })
+      expect(router.match('GET', '/users/me')).toEqual({
+        data: '/users/{id}',
+        params: { id: 'me' },
+      })
+
+      router.add('GET', '/users/me', '/users/me')
+
+      expect(router.match('GET', '/users/me')).toEqual({ data: '/users/me', params: undefined })
+      expect(router.match('GET', '/users/all')).toEqual({ data: '/users/all', params: undefined })
+    })
   })
 
   describe('params', () => {
