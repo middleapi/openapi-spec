@@ -356,9 +356,7 @@ function convertTaggedBranch(value: unknown, ctx: Context): unknown {
 // The 3.1 annotations `examples` and `$comment` count too, as the Anthropic
 // API writes `examples` beside a `$ref` to a tagged union.
 function isAnnotatedRef(value: Record<string, unknown>): boolean {
-  return Object.keys(value).every(
-    (key) => key === '$ref' || key === 'examples' || key === '$comment' || isAnnotation(key),
-  )
+  return Object.keys(value).every((key) => key === '$ref' || isInputAnnotation(key))
 }
 
 // 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
@@ -488,17 +486,17 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
 }
 
 // The names allowed by a `propertyNames` holding only an `enum`, or a `const`
-// for a single name, as Zod and Valibot write a record with enum or literal
-// keys, when no other keyword names properties. Each becomes a property of its
-// own, which 3.0 can express. A reusable enum is a `$ref` to it.
+// for a single name, and annotations, as Zod and Valibot write a record with
+// enum or literal keys, when no other keyword names properties. Each becomes a
+// property of its own, which 3.0 can express. A reusable enum is a `$ref` to it.
 function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
   const ref = getRef(schema.propertyNames)
-  // Followed alone or beside a `title` or `description`, as Zod writes a
-  // described use, since other keywords beside it narrow the names further.
+  // Followed alone or beside annotations, such as the `description` Zod writes
+  // for a described use, since other keywords beside it narrow the names further.
   const names =
     ref !== undefined &&
     Object.entries(schema.propertyNames as Record<string, unknown>).every(
-      ([name, item]) => item === undefined || ['$ref', 'title', 'description'].includes(name),
+      ([name, item]) => item === undefined || name === '$ref' || isInputAnnotation(name),
     )
       ? resolve(ref, ctx)
       : schema.propertyNames
@@ -517,7 +515,9 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
     !Object.entries(names).every(
       ([name, item]) =>
         item === undefined ||
-        ['enum', 'const', 'title', 'description'].includes(name) ||
+        name === 'enum' ||
+        name === 'const' ||
+        isInputAnnotation(name) ||
         (name === 'type' && item === 'string'),
     )
   ) {
@@ -750,6 +750,11 @@ function isAnnotation(name: string): boolean {
   return ANNOTATION_KEYWORDS.has(name) || name.startsWith('x-')
 }
 
+// An annotation in a 3.1 schema, which can also be `examples` or `$comment`.
+function isInputAnnotation(name: string): boolean {
+  return name === 'examples' || name === '$comment' || isAnnotation(name)
+}
+
 // The schema around a branch holds `name` with the same value, as ArkType
 // writes the description of a described union into every branch too.
 function repeats(
@@ -802,7 +807,7 @@ function admitsNull(schema: unknown): boolean {
     (isRecord(schema) &&
       Object.keys(schema).every(
         (name) =>
-          isAnnotation(name) ||
+          isInputAnnotation(name) ||
           (name === 'anyOf' && Array.isArray(schema.anyOf) && schema.anyOf.some(acceptsNull)),
       ))
   )

@@ -1137,11 +1137,15 @@ describe('downgradeSchemaV31ToV30', () => {
         }).components?.schemas?.Owner
       const pet = { type: 'object', properties: { n: { type: 'string' } } } as const
       expect(owner({ anyOf: [pet, { type: 'null' }] })).toEqual(ref)
-      // Pydantic writes a `title` beside it.
+      // Pydantic writes a `title` beside it, and Zod the `examples` of `.meta`.
       expect(owner({ title: 'Pet', anyOf: [pet, { type: 'null' }] })).toEqual(ref)
+      expect(
+        owner({ examples: [{ n: 'a' }], $comment: 'c', anyOf: [pet, { type: 'null' }] }),
+      ).toEqual(ref)
       // A schema that accepts every value accepts null too.
       expect(owner({})).toEqual(ref)
       expect(owner({ description: 'Any JSON value' })).toEqual(ref)
+      expect(owner({ examples: [1] })).toEqual(ref)
       const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null can fail every branch, or the `enum` beside them.
       expect(owner({ anyOf: [pet, { type: 'string' }] })).toEqual({ anyOf: [ref, onlyNull] })
@@ -2188,10 +2192,21 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ propertyNames: { enum: ['a'], minLength: undefined } }),
     ).toEqual({ properties: { a: {} }, additionalProperties: false })
-    // A title or description changes nothing, and a literal key is a const.
+    // Annotations change nothing, such as the `example` Meilisearch writes or the
+    // `default` ElevenLabs writes, and a literal key is a const.
     expect(
       downgradeSchemaV31ToV30({
-        propertyNames: { enum: ['a'], title: 'Key', description: 'A key' },
+        propertyNames: {
+          'enum': ['a'],
+          'title': 'Key',
+          'description': 'A key',
+          'example': 'a',
+          'examples': ['a'],
+          'default': 'a',
+          'deprecated': true,
+          '$comment': 'c',
+          'x-key': true,
+        },
       }),
     ).toEqual({ properties: { a: {} }, additionalProperties: false })
     expect(
@@ -2296,7 +2311,13 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({
         $defs: { Lang },
-        propertyNames: { $ref: '#/$defs/Lang', title: 'Key', description: 'A key' },
+        propertyNames: {
+          $ref: '#/$defs/Lang',
+          title: 'Key',
+          description: 'A key',
+          examples: ['en'],
+          $comment: 'c',
+        },
       }),
     ).toEqual({ properties: { en: {}, fr: {} }, additionalProperties: false })
   })
