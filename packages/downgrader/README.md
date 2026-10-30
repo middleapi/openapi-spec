@@ -173,6 +173,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
 - A `security` list whose alternatives all use only mutual TLS is removed. On an operation it then falls back to the document's `security`, and on the document it leaves none, so no security is required.
+- A 3.1 document that already uses 3.2 fields, as FastAPI writes `itemSchema` for streaming responses, keeps them as written, and the schemas inside them are not converted. Run `downgradeSpecV32ToV31` on it first.
 
 ### Schema (`downgradeSchemaV31ToV30`)
 
