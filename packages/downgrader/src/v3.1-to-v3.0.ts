@@ -896,7 +896,12 @@ function isSameBranch(a: unknown, b: unknown): boolean {
     return false
   }
   for (const name in a) {
-    if (!Object.hasOwn(b, name) || a[name] !== b[name]) {
+    if (
+      !Object.hasOwn(b, name) ||
+      // Each `{ type: "null" }` becomes its own `enum: [null]`, as Effect
+      // writes null twice for a nullish union.
+      (a[name] !== b[name] && !(name === 'enum' && isOnlyNull(a[name]) && isOnlyNull(b[name])))
+    ) {
       return false
     }
   }
