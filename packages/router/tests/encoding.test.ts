@@ -3,10 +3,12 @@ import { Router } from '@openapi-spec/router'
 import { expectMatches, routerOf } from './helpers'
 
 describe('percent-encoding', () => {
-  it('decodes each escape in a param value once', () => {
-    const router = routerOf('/v/{value}')
+  it('decodes each escape once, in param values and literal text', () => {
+    const router = routerOf('/v/{value}', '/c%2525')
 
     expectMatches(router, {
+      '/c%2525': ['/c%2525'],
+      '/c%25': undefined,
       '/v/%2525': ['/v/{value}', { value: '%25' }],
       '/v/%25': ['/v/{value}', { value: '%' }],
       '/v/%C3%A9t%C3%A9': ['/v/{value}', { value: 'été' }],
@@ -67,10 +69,24 @@ describe('percent-encoding', () => {
       '/files/a%2F%2Fb': ['/files/{+path}', { path: 'a//b' }],
       '/files/%2F%2F': ['/files/{+path}', { path: '//' }],
     })
+
+    expectMatches(routerOf('/docs/a%2Fb', '/docs/a/b', '/a%2Fb'), {
+      '/docs/a%2Fb': ['/docs/a%2Fb'],
+      '/docs/a%2fb': ['/docs/a%2Fb'],
+      '/docs/a/b': ['/docs/a/b'],
+      '/a%2Fb': ['/a%2Fb'],
+      '/a/b': undefined,
+    })
   })
 
   it('matches the same routes for raw and encoded text in a request path', () => {
-    const router = routerOf('/users/{id}', '/users/all', '/users/{id}/posts', '/caf%C3%A9/{x}')
+    const router = routerOf(
+      '/users/{id}',
+      '/users/all',
+      '/users/{id}/posts',
+      '/caf%C3%A9/{x}',
+      '/caf%C3%A9/menu',
+    )
 
     for (const [paths, expected] of [
       [
@@ -89,6 +105,7 @@ describe('percent-encoding', () => {
         ['/café/1', '/caf%C3%A9/1', '/caf%c3%a9/%31'],
         ['/caf%C3%A9/{x}', { x: '1' }],
       ],
+      [['/café/menu', '/caf%C3%A9/menu', '/caf%c3%a9/m%65nu'], ['/caf%C3%A9/menu']],
     ] as const) {
       for (const path of paths) {
         expectMatches(router, { [path]: expected })
@@ -124,13 +141,9 @@ describe('percent-encoding', () => {
 
       for (const request of forms) {
         for (const char of chars) {
-          expect(router.match('GET', `/x${request(char)}y`)).toStrictEqual({
-            data: char,
-            params: undefined,
-          })
-          expect(router.match('GET', `/p/x${request(char)}y/v${request(char)}`)).toStrictEqual({
-            data: char,
-            params: { id: `v${char}` },
+          expectMatches(router, {
+            [`/x${request(char)}y`]: [char],
+            [`/p/x${request(char)}y/v${request(char)}`]: [char, { id: `v${char}` }],
           })
         }
       }
