@@ -1052,6 +1052,9 @@ export interface TagObject extends SpecificationExtensions {
   externalDocs?: ExternalDocumentationObject | undefined
 }
 
+// A type alias, not an interface: an interface gets no implicit index
+// signature, so it would not be assignable to the Schema Object, where
+// `{ $ref }` is a valid schema too.
 /**
  * A simple object to allow referencing other components in the OpenAPI
  * Description, internally and externally.
@@ -1063,7 +1066,7 @@ export interface TagObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#reference-object}
  */
-export interface ReferenceObject {
+export type ReferenceObject = {
   /**
    * REQUIRED. The reference identifier. This MUST be in the form of a URI.
    */

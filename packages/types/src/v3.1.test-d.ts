@@ -4,6 +4,7 @@ import type {
   OpenAPIObject,
   ParameterObject,
   PathItemObject,
+  ReferenceObject,
   ResponseObject,
   ResponsesObject,
   SchemaObject,
@@ -315,3 +316,11 @@ export const numericStatusCode = {
   // @ts-expect-error: A numeric status code key is checked like a quoted one.
   200: { descripton: 'misspelled' },
 } satisfies ResponsesObject
+
+// A value typed as a Reference Object is also a valid Schema Object.
+declare const petReference: ReferenceObject
+
+export const referenceAsSchema = {
+  items: petReference,
+  type: 'array',
+} satisfies SchemaObject
