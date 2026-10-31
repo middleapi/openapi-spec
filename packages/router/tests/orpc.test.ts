@@ -1,6 +1,8 @@
 import type { RouterMatch } from '@openapi-spec/router'
 import { createPrefixMatcher, Router } from '@openapi-spec/router'
 
+import { expectMatches } from './helpers'
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /** Routes the way oRPC adds them: with a method, and the method and path as data. */
@@ -33,59 +35,45 @@ describe('oRPC-style routes', () => {
       ['POST', '/planet/create'],
     ])
 
-    const cases: [Method, `/${string}`, RouterMatch<string> | undefined][] = [
-      ['GET', '/planets', { data: 'GET /planets', params: undefined }],
-      ['GET', '/planets/', { data: 'GET /planets', params: undefined }],
-      ['POST', '/planets', { data: 'POST /planets', params: undefined }],
-      ['GET', '/planets/search', { data: 'GET /planets/search', params: undefined }],
-      ['GET', '/planets/earth', { data: 'GET /planets/{id}', params: { id: 'earth' } }],
-      ['GET', '/planets/s%65arch', { data: 'GET /planets/search', params: undefined }],
-      ['GET', '/planets/search%20me', { data: 'GET /planets/{id}', params: { id: 'search me' } }],
-      ['PUT', '/planets/search', { data: 'PUT /planets/{id}', params: { id: 'search' } }],
-      ['PATCH', '/planets/1', { data: 'PATCH /planets/{id}', params: { id: '1' } }],
-      ['DELETE', '/planets/1/', { data: 'DELETE /planets/{id}', params: { id: '1' } }],
-      [
-        'GET',
-        '/planets/earth/moons/luna',
-        {
-          data: 'GET /planets/{planetId}/moons/{moonId}',
-          params: { planetId: 'earth', moonId: 'luna' },
-        },
+    expectMatches(router, {
+      '/planets': ['GET /planets'],
+      '/planets/': ['GET /planets'],
+      '/planets/search': ['GET /planets/search'],
+      '/planets/earth': ['GET /planets/{id}', { id: 'earth' }],
+      '/planets/s%65arch': ['GET /planets/search'],
+      '/planets/search%20me': ['GET /planets/{id}', { id: 'search me' }],
+      '/planets/earth/moons/luna': [
+        'GET /planets/{planetId}/moons/{moonId}',
+        { planetId: 'earth', moonId: 'luna' },
       ],
-      ['GET', '/planets/earth/moons', undefined],
-      ['GET', '/me', { data: 'GET /me', params: undefined }],
-      [
-        'GET',
-        '/me/settings',
-        { data: 'GET /{workspaceId}/settings', params: { workspaceId: 'me' } },
-      ],
-      [
-        'GET',
-        '/w1/settings',
-        { data: 'GET /{workspaceId}/settings', params: { workspaceId: 'w1' } },
-      ],
-      ['POST', '/auth/sign-in', { data: 'POST /auth/sign-in', params: undefined }],
-      ['GET', '/auth/sign-in', undefined],
-      ['GET', '/files/a.txt', { data: 'GET /files/{+path}', params: { path: 'a.txt' } }],
-      [
-        'GET',
-        '/files/a/b.txt/meta',
-        { data: 'GET /files/{+path}/meta', params: { path: 'a/b.txt' } },
-      ],
-      ['GET', '/files/meta', { data: 'GET /files/{+path}', params: { path: 'meta' } }],
+      '/planets/earth/moons': undefined,
+      '/me': ['GET /me'],
+      '/me/settings': ['GET /{workspaceId}/settings', { workspaceId: 'me' }],
+      '/w1/settings': ['GET /{workspaceId}/settings', { workspaceId: 'w1' }],
+      '/auth/sign-in': undefined,
+      '/files/a.txt': ['GET /files/{+path}', { path: 'a.txt' }],
+      '/files/a/b.txt/meta': ['GET /files/{+path}/meta', { path: 'a/b.txt' }],
+      '/files/meta': ['GET /files/{+path}', { path: 'meta' }],
       // the literal `files` beats `{workspaceId}`, whatever comes after it
-      ['GET', '/files/settings', { data: 'GET /files/{+path}', params: { path: 'settings' } }],
-      ['GET', '/files', undefined],
-      ['GET', '/v1/items:batchGet', { data: 'GET /v1/items:batchGet', params: undefined }],
-      ['GET', '/v1/items%3AbatchGet', { data: 'GET /v1/items:batchGet', params: undefined }],
-      ['POST', '/planet/create', { data: 'POST /planet/create', params: undefined }],
-      ['GET', '/planet/create', undefined],
-      ['OPTIONS' as Method, '/planets', undefined],
-    ]
-
-    for (const [method, path, expected] of cases) {
-      expect(router.match(method, path), `${method} ${path}`).toStrictEqual(expected)
-    }
+      '/files/settings': ['GET /files/{+path}', { path: 'settings' }],
+      '/files': undefined,
+      '/v1/items:batchGet': ['GET /v1/items:batchGet'],
+      '/v1/items%3AbatchGet': ['GET /v1/items:batchGet'],
+      '/planet/create': undefined,
+    })
+    expectMatches(
+      router,
+      {
+        '/planets': ['POST /planets'],
+        '/auth/sign-in': ['POST /auth/sign-in'],
+        '/planet/create': ['POST /planet/create'],
+      },
+      'POST',
+    )
+    expectMatches(router, { '/planets/search': ['PUT /planets/{id}', { id: 'search' }] }, 'PUT')
+    expectMatches(router, { '/planets/1': ['PATCH /planets/{id}', { id: '1' }] }, 'PATCH')
+    expectMatches(router, { '/planets/1/': ['DELETE /planets/{id}', { id: '1' }] }, 'DELETE')
+    expectMatches(router, { '/planets': undefined }, 'OPTIONS')
   })
 
   it('matches the routes of lazy routers loaded by prefix between requests', () => {
@@ -174,22 +162,21 @@ describe('oRPC-style routes', () => {
   it('keeps the routes of a lazy router that failed partway when it loads again', () => {
     const router = new Router<string>()
     router.add('GET', '/planets', 'list')
-    expect(router.match('GET', '/planets/1')).toBeUndefined()
+    expectMatches(router, { '/planets/1': undefined })
 
     // the first load adds one route, then fails
     router.add('GET', '/planets/{id}', 'find')
-    expect(router.match('GET', '/planets/1')).toStrictEqual({ data: 'find', params: { id: '1' } })
+    expectMatches(router, { '/planets/1': ['find', { id: '1' }] })
 
     // the retry adds every route again
     router.add('GET', '/planets', 'list again')
     router.add('GET', '/planets/{id}', 'find again')
     router.add('GET', '/planets/{id}/moons', 'moons')
 
-    expect(router.match('GET', '/planets')).toStrictEqual({ data: 'list', params: undefined })
-    expect(router.match('GET', '/planets/1')).toStrictEqual({ data: 'find', params: { id: '1' } })
-    expect(router.match('GET', '/planets/1/moons')).toStrictEqual({
-      data: 'moons',
-      params: { id: '1' },
+    expectMatches(router, {
+      '/planets': ['list'],
+      '/planets/1': ['find', { id: '1' }],
+      '/planets/1/moons': ['moons', { id: '1' }],
     })
   })
 })

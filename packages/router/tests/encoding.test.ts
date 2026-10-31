@@ -141,13 +141,9 @@ describe('percent-encoding', () => {
 
       for (const request of forms) {
         for (const char of chars) {
-          expect(router.match('GET', `/x${request(char)}y`)).toStrictEqual({
-            data: char,
-            params: undefined,
-          })
-          expect(router.match('GET', `/p/x${request(char)}y/v${request(char)}`)).toStrictEqual({
-            data: char,
-            params: { id: `v${char}` },
+          expectMatches(router, {
+            [`/x${request(char)}y`]: [char],
+            [`/p/x${request(char)}y/v${request(char)}`]: [char, { id: `v${char}` }],
           })
         }
       }
