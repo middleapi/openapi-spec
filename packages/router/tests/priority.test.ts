@@ -83,9 +83,19 @@ describe('priority', () => {
 
   it('orders catch-all params at the same segment by the segments after them, from the last one', () => {
     // added in the opposite of the order they are tried in
-    const router = routerOf('/f/{+p}/{v}', '/f/{+p}/{u}/{v}', '/f/{+p}/x/{b}', '/f/{+p}/{a}/x')
+    const router = routerOf(
+      '/f/{+p}',
+      '/f/{+p}/{v}',
+      '/f/{+p}/{u}/{v}',
+      '/f/{+p}/x/{b}',
+      '/f/{+p}/raw',
+      '/f/{+p}/{a}/x',
+      '/f/{+p}/a/raw',
+    )
 
     expectMatches(router, {
+      '/f/1/a/raw': ['/f/{+p}/a/raw', { p: '1' }],
+      '/f/1/b/raw': ['/f/{+p}/raw', { p: '1/b' }],
       '/f/1/x/x': ['/f/{+p}/{a}/x', { p: '1', a: 'x' }],
       '/f/1/2/3/x': ['/f/{+p}/{a}/x', { p: '1/2', a: '3' }],
       '/f/1/x/y': ['/f/{+p}/x/{b}', { p: '1', b: 'y' }],
@@ -93,7 +103,8 @@ describe('priority', () => {
       '/f/1/y': ['/f/{+p}/{v}', { p: '1', v: 'y' }],
       // the empty segment rules out every route with a param or literal there
       '/f/1//x': ['/f/{+p}/{v}', { p: '1/', v: 'x' }],
-      '/f/1': undefined,
+      '/f/1': ['/f/{+p}', { p: '1' }],
+      '/f': undefined,
     })
   })
 })
@@ -111,6 +122,12 @@ describe('duplicates', () => {
     router.add('GET', '/b/%7Ba.b%7D', 'second')
     router.add('GET', '/caf%C3%A9', 'first')
     router.add('GET', '/café', 'second')
+    router.add('GET', '/static', 'first')
+    router.add('GET', '/st%61tic', 'second')
+    router.add('GET', '/g/{+p}/{a}', 'first')
+    router.add('GET', '/g/{+q}/{b}', 'second')
+    router.add('GET', '/d/%7Bx%7D.json', 'first')
+    router.add('GET', '/d/{x}.json', 'second')
 
     expectMatches(router, {
       '/a/1': ['first', { x: '1' }],
@@ -121,6 +138,11 @@ describe('duplicates', () => {
       '/b/%7Ba.b%7D': ['first'],
       '/café': ['first'],
       '/caf%C3%A9': ['first'],
+      '/static': ['first'],
+      '/st%61tic': ['first'],
+      '/g/1/2': ['first', { p: '1', a: '2' }],
+      '/d/{x}.json': ['first'],
+      '/d/%7Bx%7D.json': ['first'],
     })
   })
 

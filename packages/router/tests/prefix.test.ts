@@ -11,6 +11,49 @@ function expectPrefix(prefix: `/${string}`, expected: Record<`/${string}`, boole
 }
 
 describe('createPrefixMatcher', () => {
+  it('matches the segments of the prefix, then anything', () => {
+    expectPrefix('/users/{userId}', {
+      '/users/din': true,
+      '/users/din/': true,
+      '/users/din/info/settings': true,
+      '/users/%64in': true,
+      '/%75sers/din': true,
+      '/users': false,
+      '/users/': false,
+      '/users//info': false,
+      '/usersx/din': false,
+      '/projects/42/info': false,
+    })
+    expectPrefix('/{workspaceId}/planets', {
+      '/w1/planets': true,
+      '/w1/planets/earth': true,
+      '//planets': false,
+      '/w1/moons': false,
+      '/planets': false,
+    })
+  })
+
+  it('matches a prefix of literal segments, ignoring its trailing slash', () => {
+    expectPrefix('/api/v1', {
+      '/api/v1': true,
+      '/api/v1/': true,
+      '/api/v1/users': true,
+      '/%61pi/v1/users': true,
+      '/api': false,
+      '/api/v1x': false,
+      '/api/v2/users': false,
+      '/api//v1': false,
+    })
+    expectPrefix('/api/', {
+      '/api': true,
+      '/api/': true,
+      '/api/info': true,
+      '/apiinfo': false,
+      '/other/info': false,
+    })
+    expectPrefix('/', { '/': true, '/a/b': true })
+  })
+
   it('matches params and literals before a catch-all param', () => {
     expectPrefix('/{org}/{repo}/files/{+path}', {
       '/o/r/files': true,
@@ -21,6 +64,11 @@ describe('createPrefixMatcher', () => {
       '/o//files': false,
       '/o/r': false,
       '/o/r/blobs/a': false,
+    })
+    expectPrefix('/files/{+path}/{+more}/x', {
+      '/files': true,
+      '/files/a/b/info': true,
+      '/filesx': false,
     })
   })
 
@@ -57,6 +105,11 @@ describe('createPrefixMatcher', () => {
       '/caf%E9': false,
     })
     expectPrefix('/%7Bid%7D', { '/{id}': true, '/%7bid%7d/x': true, '/1': false })
+    expectPrefix('/v1^beta', {
+      '/v1^beta/info': true,
+      '/v1%5Ebeta/info': true,
+      '/v1beta/info': false,
+    })
   })
 
   it('compares a path whose escapes all come after the prefix as written', () => {
@@ -68,6 +121,18 @@ describe('createPrefixMatcher', () => {
       '/api/v1/planetsx/a%20b': false,
       '/api/v1/moons/a%20b': false,
     })
+  })
+
+  it('keeps empty segments and encoded slashes in a prefix', () => {
+    expectPrefix('/x%2Fy', { '/x%2Fy': true, '/x%2fy/z': true, '/x/y': false })
+    expectPrefix('/a//b%2Fc', {
+      '/a//b%2Fc': true,
+      '/a//b%2fc/info': true,
+      '/a/b%2Fc': false,
+      '/a//b/c': false,
+    })
+    expectPrefix('/a//', { '/a//': true, '/a//info': true, '/a/': false, '/a': false })
+    expectPrefix('//', { '//': true, '/': false })
   })
 
   it('matches names that objects inherit as literal text', () => {
