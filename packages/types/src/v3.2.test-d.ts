@@ -123,7 +123,7 @@ export const streamingApi = {
             name: 'filter',
           },
           {
-            explode: false,
+            explode: true,
             in: 'cookie',
             name: 'session',
             schema: { type: 'string' },
@@ -173,11 +173,13 @@ export const streamingApi = {
           content: {
             'application/x-www-form-urlencoded': {
               encoding: {
-                nested: {
+                byName: {
                   contentType: 'application/json',
                   encoding: {
                     inner: { explode: true, style: 'form' },
                   },
+                },
+                byPosition: {
                   itemEncoding: { contentType: 'text/plain' },
                   prefixEncoding: [{ contentType: 'text/plain' }],
                 },

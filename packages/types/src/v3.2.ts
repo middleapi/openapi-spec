@@ -545,7 +545,9 @@ export interface ParameterObject extends SpecificationExtensions {
    * parameters for each value of the array or key-value pair of the map. For
    * other types of parameters, or when `style` is `"deepObject"`, this field
    * has no effect. When `style` is `"form"` or `"cookie"`, the default value
-   * is `true`; for all other styles, the default value is `false`.
+   * is `true`; for all other styles, the default value is `false`. As the
+   * Cookie header prohibits unencoded commas, `explode: false` is invalid
+   * with `in: "cookie"` (both `style: "form"` and `style: "cookie"`).
    */
   explode?: boolean | undefined
   /**
