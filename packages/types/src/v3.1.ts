@@ -1,8 +1,5 @@
 import type {
   ApiKeySecuritySchemeObject,
-  ContactObject,
-  ExampleObject,
-  ExternalDocumentationObject,
   HttpSecuritySchemeObject,
   OAuth2SecuritySchemeObject,
   OpenIdConnectSecuritySchemeObject,
@@ -10,7 +7,6 @@ import type {
   ParameterStyle,
   QueryParameterStyle,
   SpecificationExtensions,
-  TagObject,
   XMLObject,
 } from './v3.0'
 
@@ -18,9 +14,6 @@ export type {
   ApiKeySecuritySchemeObject,
   AuthorizationCodeOAuthFlowObject,
   ClientCredentialsOAuthFlowObject,
-  ContactObject,
-  ExampleObject,
-  ExternalDocumentationObject,
   HttpSecuritySchemeObject,
   ImplicitOAuthFlowObject,
   OAuth2SecuritySchemeObject,
@@ -33,7 +26,6 @@ export type {
   PasswordOAuthFlowObject,
   QueryParameterStyle,
   SpecificationExtensions,
-  TagObject,
   XMLObject,
 } from './v3.0'
 
@@ -205,6 +197,27 @@ export interface InfoObject extends SpecificationExtensions {
    * the version of the OpenAPI Description).
    */
   version: string
+}
+
+/**
+ * Contact information for the exposed API.
+ *
+ * @see {@link https://spec.openapis.org/oas/v3.1.2.html#contact-object}
+ */
+export interface ContactObject extends SpecificationExtensions {
+  /**
+   * The identifying name of the contact person/organization.
+   */
+  name?: string | undefined
+  /**
+   * The URI for the contact information. This MUST be in the form of a URI.
+   */
+  url?: string | undefined
+  /**
+   * The email address of the contact person/organization. This MUST be in the
+   * form of an email address.
+   */
+  email?: string | undefined
 }
 
 /**
@@ -470,6 +483,24 @@ export interface OperationObject extends SpecificationExtensions {
    * will be overridden by this value.
    */
   servers?: ServerObject[] | undefined
+}
+
+/**
+ * Allows referencing an external resource for extended documentation.
+ *
+ * @see {@link https://spec.openapis.org/oas/v3.1.2.html#external-documentation-object}
+ */
+export interface ExternalDocumentationObject extends SpecificationExtensions {
+  /**
+   * A description of the target documentation. CommonMark syntax MAY be used
+   * for rich text representation.
+   */
+  description?: string | undefined
+  /**
+   * REQUIRED. The URI for the target documentation. This MUST be in the form
+   * of a URI.
+   */
+  url: string
 }
 
 /**
@@ -832,6 +863,42 @@ export interface CallbackObject {
 }
 
 /**
+ * An object grouping an internal or external example value with basic
+ * `summary` and `description` metadata.
+ *
+ * In all cases, the example value SHOULD be compatible with the schema of its
+ * associated value; tooling MAY validate compatibility and reject
+ * incompatible examples.
+ *
+ * @see {@link https://spec.openapis.org/oas/v3.1.2.html#example-object}
+ */
+export interface ExampleObject extends SpecificationExtensions {
+  /**
+   * Short description for the example.
+   */
+  summary?: string | undefined
+  /**
+   * Long description for the example. CommonMark syntax MAY be used for rich
+   * text representation.
+   */
+  description?: string | undefined
+  /**
+   * Embedded literal example. The `value` field and `externalValue` field are
+   * mutually exclusive. To represent examples of media types that cannot
+   * naturally be represented in JSON or YAML, use a string value to contain
+   * the example, escaping where necessary.
+   */
+  value?: unknown
+  /**
+   * A URI that identifies the literal example. This provides the capability to
+   * reference examples that cannot easily be included in JSON or YAML
+   * documents. The `value` field and `externalValue` field are mutually
+   * exclusive.
+   */
+  externalValue?: string | undefined
+}
+
+/**
  * The Link Object represents a possible design-time link for a response. The
  * presence of a link does not guarantee the caller's ability to successfully
  * invoke it, rather it provides a known relationship and traversal mechanism
@@ -963,6 +1030,32 @@ export interface HeaderObject extends SpecificationExtensions {
 }
 
 /**
+ * Adds metadata to a single tag that is used by the Operation Object. It is
+ * not mandatory to have a Tag Object per tag defined in the Operation Object
+ * instances.
+ *
+ * @see {@link https://spec.openapis.org/oas/v3.1.2.html#tag-object}
+ */
+export interface TagObject extends SpecificationExtensions {
+  /**
+   * REQUIRED. The name of the tag.
+   */
+  name: string
+  /**
+   * A description for the tag. CommonMark syntax MAY be used for rich text
+   * representation.
+   */
+  description?: string | undefined
+  /**
+   * Additional external documentation for this tag.
+   */
+  externalDocs?: ExternalDocumentationObject | undefined
+}
+
+// A type alias, not an interface: an interface gets no implicit index
+// signature, so it would not be assignable to the Schema Object, where
+// `{ $ref }` is a valid schema too.
+/**
  * A simple object to allow referencing other components in the OpenAPI
  * Description, internally and externally.
  *
@@ -973,7 +1066,7 @@ export interface HeaderObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#reference-object}
  */
-export interface ReferenceObject {
+export type ReferenceObject = {
   /**
    * REQUIRED. The reference identifier. This MUST be in the form of a URI.
    */
