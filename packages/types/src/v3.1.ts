@@ -9,6 +9,7 @@ import type {
   SpecificationExtensions,
   XMLObject,
 } from './v3.0'
+import type * as V3_0 from './v3.0'
 
 export type {
   ApiKeySecuritySchemeObject,
@@ -1521,24 +1522,7 @@ export type SchemaObject<T = unknown> = boolean | SchemaObjectFields<T>
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#discriminator-object}
  */
-export interface DiscriminatorObject extends SpecificationExtensions {
-  /**
-   * REQUIRED. The name of the property in the payload that will hold the
-   * discriminating value. This property SHOULD be required in the payload
-   * schema, as the behavior when the property is absent is undefined.
-   */
-  propertyName: string
-  /**
-   * An object to hold mappings between payload values and schema names or URI
-   * references. The value of the property named in `propertyName` is used as
-   * the name of the associated schema under the Components Object unless a
-   * `mapping` is present for that value. To force a value to be treated as a
-   * relative URI reference rather than a schema name, authors MUST prefix it
-   * with the `"."` path segment (e.g. `"./foo"`). Mapping keys MUST be string
-   * values.
-   */
-  mapping?: Record<string, string> | undefined
-}
+export interface DiscriminatorObject extends V3_0.DiscriminatorObject, SpecificationExtensions {}
 
 /**
  * The type of a security scheme. OpenAPI 3.1 adds `"mutualTLS"`.
