@@ -48,12 +48,6 @@
     "rou3": "^1.0.0"
   },
   "unbuild": {
-    "declaration": "node16",
-    "sourcemap": true,
-    "rollup": {
-      "esbuild": {
-        "minify": true
-      }
-    }
+    "declaration": "node16"
   }
 }
