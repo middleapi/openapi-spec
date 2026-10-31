@@ -1935,6 +1935,26 @@ describe('downgradeSchemaV31ToV30', () => {
       described,
     )
     expect(downgradeSchemaV31ToV30({ anyOf: [null, null] } as never)).toEqual({ anyOf: [null] })
+    // Null once, as Effect writes a nullish union with null twice.
+    const refB = { $ref: '#/components/schemas/B' }
+    const nullBranch = { type: 'string', nullable: true, enum: [null] }
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [ref, refB, { type: 'null' }, { type: 'null' }] }),
+    ).toEqual({ anyOf: [ref, refB, nullBranch] })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [ref, refB, { type: 'null', description: 'a' }, { type: 'null', description: 'b' }],
+      }),
+    ).toEqual({
+      anyOf: [ref, refB, { ...nullBranch, description: 'a' }, { ...nullBranch, description: 'b' }],
+    })
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [ref, { type: 'null' }, refB, { type: 'null' }] }),
+    ).toEqual({ anyOf: [ref, nullBranch, refB, nullBranch] })
+    // Other `enum`s that are copies still differ.
+    expect(
+      downgradeSchemaV31ToV30({ anyOf: [ref, { enum: ['a', null] }, { enum: ['a', null] }] }),
+    ).toEqual({ anyOf: [ref, { enum: ['a', null] }, { enum: ['a', null] }] })
     // A `oneOf` rejects a value that two branches match.
     expect(downgradeSchemaV31ToV30({ oneOf: file.anyOf })).toEqual({ oneOf: [binary, binary] })
   })
