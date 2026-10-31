@@ -1,4 +1,4 @@
-// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/petstore-expanded-3.0.json
+// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.0/petstore-expanded.json
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.0'
 
