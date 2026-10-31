@@ -1,7 +1,9 @@
 import type {
+  CallbackObject,
   HeaderObject,
   MediaTypeObject,
   OpenAPIObject,
+  PathItemObject,
   RequestBodyObject,
   ResponseObject,
   ResponsesObject,
@@ -277,3 +279,28 @@ export const numericStatusCode = {
   // @ts-expect-error: A numeric status code key is checked like a quoted one.
   200: { descripton: 'misspelled' },
 } satisfies ResponsesObject
+
+export const callbackExtensions = {
+  '{$request.body#/callbackUrl}': {
+    post: { responses: { 200: { description: 'OK' } } },
+  },
+  'x-internal': true,
+} satisfies CallbackObject
+
+export const callbackKeyIsExpression = {
+  // @ts-expect-error: A Callback Object key is a runtime expression or a URL.
+  onEvent: {},
+} satisfies CallbackObject
+
+export const statusCodeRangeIsUppercase = {
+  // @ts-expect-error: Only the uppercase ranges `1XX` to `5XX` are allowed.
+  '2xx': { description: 'Success' },
+} satisfies ResponsesObject
+
+export const additionalOperationsWithoutFixedMethods = {
+  additionalOperations: {
+    COPY: { responses: { 204: { description: 'Copied' } } },
+    // @ts-expect-error: `GET` has its own `get` field, so `additionalOperations` MUST NOT hold it.
+    GET: { responses: { 200: { description: 'OK' } } },
+  },
+} satisfies PathItemObject

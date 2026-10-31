@@ -778,6 +778,13 @@ export interface ResponsesObject extends SpecificationExtensions, StatusCodeResp
    * HTTP response codes. Use this field to cover undeclared responses.
    */
   default?: ResponseObject | ReferenceObject | undefined
+}
+
+// Every code from 100 to 599 and every range is declared as a field rather than
+// matched by a template index signature: TypeScript checks a numeric key such
+// as `200` only against declared fields, and a template such as
+// `${1 | 2 | 3 | 4 | 5}${string}` would also accept keys like `2xx` or `2000`.
+type StatusCodeResponses = {
   /**
    * Any HTTP status code can be used as the property name, but only one
    * property per code, to describe the expected response for that HTTP status
@@ -790,14 +797,7 @@ export interface ResponsesObject extends SpecificationExtensions, StatusCodeResp
    * explicit code definition takes precedence over the range definition for
    * that code.
    */
-  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject | undefined
-}
-
-// TypeScript checks a numeric key such as `200` only against declared fields,
-// never against the template index signature above, so every code from 100 to
-// 599 is also declared as a field.
-type StatusCodeResponses = {
-  [statusCode in `${1 | 2 | 3 | 4 | 5}${Digit}${Digit}`]?:
+  [statusCode in `${1 | 2 | 3 | 4 | 5}${Digit}${Digit}` | `${1 | 2 | 3 | 4 | 5}XX`]?:
     | ResponseObject
     | ReferenceObject
     | undefined
@@ -845,13 +845,13 @@ export interface ResponseObject extends SpecificationExtensions {
  * responses. To describe incoming requests from the API provider independent
  * from another API call, use the OpenAPI Object's `webhooks` field.
  *
- * Note: this object MAY be extended with Specification Extensions (`x-`
- * prefixed fields), which cannot be represented in TypeScript alongside the
- * arbitrary runtime-expression keys.
+ * This object MAY be extended with Specification Extensions. Each key that
+ * holds a Path Item Object contains a `$` (a runtime expression) or a `/` (a
+ * URL), which keeps it apart from the `x-` extension keys.
  *
  * @see {@link https://spec.openapis.org/oas/v3.1.2.html#callback-object}
  */
-export interface CallbackObject {
+export interface CallbackObject extends SpecificationExtensions {
   /**
    * A Path Item Object used to define a callback request and expected
    * responses. The key is a runtime expression, evaluated in the context of a
@@ -859,7 +859,7 @@ export interface CallbackObject {
    * callback request (e.g. `$request.body#/url`); expressions can be embedded
    * into string values by surrounding them with `{}` curly braces.
    */
-  [expression: string]: PathItemObject
+  [expression: `${string}$${string}` | `${string}/${string}`]: PathItemObject
 }
 
 /**
