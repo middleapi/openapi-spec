@@ -353,10 +353,21 @@ function convertTaggedBranch(value: unknown, ctx: Context): unknown {
     : convertSchema(value, ctx)
 }
 
+// Whether each key of `value` that holds a value passes `test`, since a key
+// holding `undefined` counts as missing.
+function hasOnly(value: Record<string, unknown>, test: (key: string) => boolean): boolean {
+  for (const key in value) {
+    if (Object.hasOwn(value, key) && value[key] !== undefined && !test(key)) {
+      return false
+    }
+  }
+  return true
+}
+
 // The 3.1 annotations `examples` and `$comment` count too, as the Anthropic
 // API writes `examples` beside a `$ref` to a tagged union.
 function isAnnotatedRef(value: Record<string, unknown>): boolean {
-  return Object.keys(value).every((key) => key === '$ref' || isInputAnnotation(key))
+  return hasOnly(value, (key) => key === '$ref' || isInputAnnotation(key))
 }
 
 // 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
@@ -801,7 +812,7 @@ function acceptsNull(schema: unknown): boolean {
     isRecord(schema) &&
     hasType(schema.type, 'null') &&
     schema.const === undefined &&
-    !NOT_NULLABLE_KEYWORDS.some((name) => Object.hasOwn(schema, name))
+    !NOT_NULLABLE_KEYWORDS.some((name) => schema[name] !== undefined)
   )
 }
 
@@ -812,7 +823,8 @@ function admitsNull(schema: unknown): boolean {
   return (
     acceptsNull(schema) ||
     (isRecord(schema) &&
-      Object.keys(schema).every(
+      hasOnly(
+        schema,
         (name) =>
           isInputAnnotation(name) ||
           (name === 'anyOf' && Array.isArray(schema.anyOf) && schema.anyOf.some(acceptsNull)),
