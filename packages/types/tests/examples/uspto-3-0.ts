@@ -1,4 +1,4 @@
-// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/uspto-3.0.json
+// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.0/uspto.json
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.0'
 

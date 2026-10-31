@@ -1,4 +1,4 @@
-// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/3.2-tags-example.json
+// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.2/3.2-tags-example.json
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.2'
 

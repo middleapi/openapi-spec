@@ -1,4 +1,4 @@
-// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/webhook-example-3.1.json
+// Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.1/webhook-example.json
 // Do not edit by hand; regenerate instead.
 import type { OpenAPIObject } from '../../src/v3.1'
 
