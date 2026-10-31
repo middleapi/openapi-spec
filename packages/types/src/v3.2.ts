@@ -944,8 +944,10 @@ export interface ExampleObject extends SpecificationExtensions {
    * naturally be represented in JSON or YAML, use a string value to contain
    * the example, escaping where necessary.
    *
-   * @deprecated For non-JSON serialization targets, use `dataValue` and/or
+   * Deprecated for non-JSON serialization targets: use `dataValue` and/or
    * `serializedValue`, which have unambiguous syntax and semantics, instead.
+   * For `application/json` and `+json` media types, `value` behaves like
+   * `dataValue` and is safe to use.
    */
   value?: unknown
 }
