@@ -304,7 +304,9 @@ export interface PathItemObject extends SpecificationExtensions {
    * by the other fixed fields with Operation Object values (e.g. no `POST`
    * entry, as the `post` field is used for that method).
    */
-  additionalOperations?: Record<string, OperationObject> | undefined
+  additionalOperations?:
+    | (Record<string, OperationObject> & { [method in FixedFieldMethod]?: never })
+    | undefined
   /**
    * An alternative `servers` array to service all operations in this path.
    * If a `servers` array is specified at the OpenAPI Object level, it will be
@@ -321,6 +323,18 @@ export interface PathItemObject extends SpecificationExtensions {
    */
   parameters?: (ParameterObject | ReferenceObject)[] | undefined
 }
+
+// The methods that have their own fixed field in the Path Item Object.
+type FixedFieldMethod =
+  | 'DELETE'
+  | 'GET'
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'PATCH'
+  | 'POST'
+  | 'PUT'
+  | 'QUERY'
+  | 'TRACE'
 
 /**
  * Describes a single API operation on a path.
