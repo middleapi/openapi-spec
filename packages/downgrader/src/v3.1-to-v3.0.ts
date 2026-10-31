@@ -9,6 +9,7 @@ import {
   downgrade,
   DROP,
   find,
+  finishSummary,
   getRef,
   hasType,
   HTTP_METHODS,
@@ -172,12 +173,8 @@ const convertReference = refOr(clone)
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
   // It would reject the properties that `patternProperties` allowed.
-  additionalProperties: (item, ctx, schema) => {
-    if (schema.patternProperties !== undefined) {
-      return DROP
-    }
-    return typeof item === 'boolean' ? item : convertSchema(item, ctx)
-  },
+  additionalProperties: (item, ctx, schema) =>
+    schema.patternProperties === undefined ? convertAdditional(item, ctx) : DROP,
   allOf: list(convertSchema),
   // Zod writes a file with several media types as an `anyOf` of branches
   // that hold only `contentMediaType`, an annotation, so it matches every
@@ -265,16 +262,9 @@ const INFO_FIELDS = defineFields({
   summary: DROP,
 })
 
-// A summary stands in for the description it lacks.
-function finishInfo(out: Record<string, unknown>, info: Record<string, unknown>): void {
-  if (out.description === undefined && typeof info.summary === 'string') {
-    out.description = info.summary
-  }
-}
-
 const DOCUMENT_FIELDS = defineFields({
   components: (item, ctx) => convertObject(item, ctx, COMPONENTS_FIELDS),
-  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS, finishInfo),
+  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS, finishSummary),
   jsonSchemaDialect: DROP,
   paths: map(convertPathItem, isPath),
   security: convertSecurity,
@@ -471,12 +461,22 @@ function includesJson(items: unknown[], value: unknown): boolean {
   return items.some((item) => jsonKey(item) === key)
 }
 
+// After the members the `allOf` already holds.
+function addAllOf(out: Record<string, unknown>, member: unknown): void {
+  out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), member]
+}
+
 function addAnyOf(out: Record<string, unknown>, variants: unknown[]): void {
   if (out.anyOf === undefined) {
     out.anyOf = variants
   } else {
-    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
+    addAllOf(out, { anyOf: variants })
   }
+}
+
+// 3.0 allows a boolean `additionalProperties`, unlike other subschemas.
+function convertAdditional(value: unknown, ctx: Context): unknown {
+  return typeof value === 'boolean' ? value : convertSchema(value, ctx)
 }
 
 function loosened(out: object): object {
@@ -742,7 +742,7 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     if (out.enum === undefined || (Array.isArray(out.enum) && out.enum.includes(null))) {
       out.enum = [null]
     } else {
-      out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+      addAllOf(out, { not: {} })
     }
   }
 }
@@ -1315,14 +1315,12 @@ function finishSchema(
     out.enum = [clone(schema.const)]
   }
   if (Array.isArray(schema.enum) && schema.enum.length === 0) {
-    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+    addAllOf(out, { not: {} })
   }
   const exactTuple =
     Array.isArray(schema.prefixItems) && convertTuple(out, schema.prefixItems, schema, ctx)
   if (isUnevaluatedAdditional(schema)) {
-    const additional = schema.unevaluatedProperties
-    out.additionalProperties =
-      typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
+    out.additionalProperties = convertAdditional(schema.unevaluatedProperties, ctx)
   }
   const names = enumNames(schema, ctx)
   if (names !== undefined) {

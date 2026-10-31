@@ -153,6 +153,13 @@ export function convertObject(
   return out
 }
 
+/** Lets a `summary` stand in for the `description` that the output lacks. */
+export function finishSummary(out: Record<string, unknown>, source: Record<string, unknown>): void {
+  if (out.description === undefined && typeof source.summary === 'string') {
+    out.description = source.summary
+  }
+}
+
 /** Converts each entry of a map, or only those whose key passes `isEntry`, copying the rest. */
 export function map(convert: Convert, isEntry: (key: string) => boolean = () => true): Convert {
   return (value, ctx) => {
