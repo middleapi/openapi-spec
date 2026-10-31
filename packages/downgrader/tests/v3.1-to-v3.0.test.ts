@@ -3258,6 +3258,22 @@ describe('unusual input', () => {
     })
   })
 
+  it('treats keys holding undefined as missing beside a $ref and in its target', () => {
+    const schemas = (target: OpenAPIV3_1.SchemaObject, owner: OpenAPIV3_1.SchemaObject) =>
+      convert({ components: { schemas: { Target: target, Owner: owner } } }).components?.schemas
+    const ref = { $ref: '#/components/schemas/Target' }
+    const tagged: OpenAPIV3_1.SchemaObject = {
+      oneOf: [{ type: 'object', properties: { kind: { const: 'a' } }, required: ['kind'] }],
+      discriminator: { propertyName: 'kind' },
+    }
+    expect(schemas(tagged, { ...ref, description: 'A', items: undefined })?.Owner).toEqual(ref)
+    const nullable = { anyOf: [ref, { type: 'null' }] } satisfies OpenAPIV3_1.SchemaObject
+    expect(
+      schemas({ anyOf: [{ type: 'string' }, { type: 'null' }], items: undefined }, nullable)?.Owner,
+    ).toEqual(ref)
+    expect(schemas({ type: ['string', 'null'], enum: undefined }, nullable)?.Owner).toEqual(ref)
+  })
+
   it('tolerates malformed input without throwing', () => {
     const doc = {
       openapi: '3.1.2',
