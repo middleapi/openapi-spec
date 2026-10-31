@@ -592,9 +592,10 @@ export interface ParameterObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the parameter's potential value. Each example SHOULD contain
-   * a value in the correct format as specified in the parameter encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the parameter's potential value. Each example SHOULD match
+   * the specified schema and follow the prescribed serialization strategy for
+   * the parameter. The `examples` field is mutually exclusive of the
+   * `example` field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -982,9 +983,10 @@ export interface HeaderObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the header's potential value. Each example SHOULD contain a
-   * value in the correct format as specified in the header encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the header's potential value. Each example SHOULD match the
+   * specified schema and follow the prescribed serialization strategy for the
+   * header. The `examples` field is mutually exclusive of the `example`
+   * field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -1207,10 +1209,10 @@ export interface SchemaObject<T = unknown> extends SpecificationExtensions {
   /**
    * The format of the data type. While relying on JSON Schema's defined
    * formats, the OAS offers a few additional predefined formats: `"int32"`,
-   * `"int64"`, `"float"`, `"double"` (with `type: "number"`); `"byte"`
-   * (base64-encoded), `"binary"` (any sequence of octets), `"date"` (RFC3339
-   * full-date), `"date-time"` (RFC3339 date-time), and `"password"` (a hint
-   * to obscure the value) (with `type: "string"`). `format` is a
+   * `"int64"`, `"float"`, `"double"` (with `type: "integer"` or `"number"`);
+   * `"byte"` (base64-encoded), `"binary"` (any sequence of octets), `"date"`
+   * (RFC3339 full-date), `"date-time"` (RFC3339 date-time), and `"password"`
+   * (a hint to obscure the value) (with `type: "string"`). `format` is a
    * non-validating annotation by default; tools that do not recognize a
    * format MAY default back to `type` alone.
    */
@@ -1368,7 +1370,7 @@ export interface XMLObject extends SpecificationExtensions {
 /**
  * The type of a security scheme.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect'
 
@@ -1376,7 +1378,7 @@ export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect'
  * Defines an API key security scheme that can be used by the operations. The
  * API key can be sent via a header, cookie, or query parameter.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1403,7 +1405,7 @@ export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
  * Defines an HTTP authentication security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface HttpSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1436,7 +1438,7 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
  * OAuth2's common flows (implicit, password, client credentials, and
  * authorization code) as defined in RFC6749.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1459,7 +1461,7 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
  * Defines an OpenID Connect security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1483,13 +1485,13 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  * schemes are HTTP authentication, an API key (either as a header, a cookie
  * parameter, or as a query parameter), OAuth2's common flows (implicit,
  * password, client credentials, and authorization code) as defined in
- * RFC6749, and OpenID Connect Discovery.
+ * RFC6749, and OpenID Connect Core.
  *
  * The implicit flow is subject to deprecation by the OAuth 2.0 Security Best
  * Current Practice; the Authorization Code Grant flow with PKCE is
  * recommended for most use cases.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export type SecuritySchemeObject =
   | ApiKeySecuritySchemeObject

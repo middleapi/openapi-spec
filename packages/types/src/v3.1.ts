@@ -103,7 +103,8 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * REQUIRED. This string MUST be the version number of the OpenAPI
    * Specification that the OpenAPI Document uses. The `openapi` field SHOULD
    * be used by tooling to interpret the OpenAPI Document. This is not related
-   * to the API `info.version` string.
+   * to the `info.version` string, which is the version of the OpenAPI
+   * Document.
    */
   openapi: `3.1.${string}`
   /**
@@ -573,9 +574,10 @@ export interface ParameterObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the parameter's potential value. Each example SHOULD contain
-   * a value in the correct format as specified in the parameter encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the parameter's potential value. Each example SHOULD match
+   * the specified schema and follow the prescribed serialization strategy for
+   * the parameter. The `examples` field is mutually exclusive of the
+   * `example` field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -945,9 +947,10 @@ export interface HeaderObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the header's potential value. Each example SHOULD contain a
-   * value in the correct format as specified in the header encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the header's potential value. Each example SHOULD match the
+   * specified schema and follow the prescribed serialization strategy for the
+   * header. The `examples` field is mutually exclusive of the `example`
+   * field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -1303,11 +1306,12 @@ export interface SchemaObjectFields<T = unknown> {
    */
   deprecated?: boolean | undefined
   /**
-   * Indicates the value is managed by the owning authority: it MAY be sent in
-   * a response but SHOULD NOT be sent in a request. Note that the behavior of
-   * `readOnly` in particular differs from that of OpenAPI 3.0: per JSON
-   * Schema Validation Draft 2020-12 §9.4, the owning authority MAY either
-   * ignore a `readOnly` field sent in a request or treat it as an error.
+   * Indicates the value is managed exclusively by the owning authority, and
+   * attempts by an application to modify it are expected to be ignored or
+   * rejected by that authority. Note that the behavior of `readOnly` in
+   * particular differs from that of OpenAPI 3.0: per JSON Schema Validation
+   * Draft 2020-12 §9.4, the owning authority MAY either ignore a `readOnly`
+   * field sent in a request or treat it as an error.
    *
    * @default false
    */
@@ -1329,8 +1333,8 @@ export interface SchemaObjectFields<T = unknown> {
   /**
    * The format of the data type. While relying on JSON Schema's defined
    * formats, the OAS offers a few additional predefined formats: `"int32"`,
-   * `"int64"`, `"float"`, `"double"` (with `type: "number"`), and
-   * `"password"` (a hint to obscure the value, with `type: "string"`).
+   * `"int64"`, `"float"`, `"double"` (with `type: "integer"` or `"number"`),
+   * and `"password"` (a hint to obscure the value, with `type: "string"`).
    * `format` is a non-validating annotation by default; tools that do not
    * recognize a format MAY default back to `type` alone. Support for any
    * format registered in the OpenAPI Format Registry is strictly OPTIONAL.
@@ -1473,8 +1477,7 @@ export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
  * schemes are HTTP authentication, an API key (either as a header, a cookie
  * parameter, or as a query parameter), mutual TLS (use of a client
  * certificate), OAuth2's common flows (implicit, password, client credentials,
- * and authorization code) as defined in RFC6749, and OpenID Connect
- * Discovery.
+ * and authorization code) as defined in RFC6749, and OpenID Connect Core.
  *
  * The implicit flow is subject to deprecation by the OAuth 2.0 Security Best
  * Current Practice; the Authorization Code Grant flow with PKCE is
