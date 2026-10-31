@@ -535,14 +535,18 @@ function split(path: string, encoded: boolean): string[] {
 
   let start = 1
 
+  // Each value is ready before `segments.push` is read: V8 inlines the push
+  // only when no call, such as to `decode`, runs between the two.
   for (let end = path.indexOf('/', start); end !== -1; end = path.indexOf('/', start)) {
     const segment = path.slice(start, end)
-    segments.push(encoded ? decode(segment) : segment)
+    const value = encoded ? decode(segment) : segment
+    segments.push(value)
     start = end + 1
   }
 
   const segment = path.slice(start)
-  segments.push(encoded ? decode(segment) : segment)
+  const value = encoded ? decode(segment) : segment
+  segments.push(value)
 
   return segments
 }
