@@ -300,43 +300,56 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
   }
 
   // oRPC tests each pending lazy router's prefix on every request, so a prefix
-  // of only literal text is compared at once for a path without `%`, and other
-  // paths are read only as far as the prefix goes. A `const` lets V8 fold it
-  // into the matcher.
+  // of only literal text is compared at once for a path without `%` before the
+  // prefix's length, and other paths are read only as far as the prefix goes.
+  // The second `%` search runs only for a path with one. A `const` lets V8
+  // fold `literal` into the matcher.
   const literal = text
 
   return (pathname) => {
-    if (literal !== undefined && !pathname.includes('%')) {
+    if (
+      literal !== undefined &&
+      (!pathname.includes('%') || pathname.indexOf('%') >= literal.length)
+    ) {
       return (
         pathname.startsWith(literal) &&
         (pathname.length === literal.length || pathname.charCodeAt(literal.length) === 47)
       )
     }
 
-    let start = 1
+    return matchesHead(head, pathname)
+  }
+}
 
-    for (const expected of head) {
-      // At the end, or at a trailing slash, the path has no more segments.
-      if (start >= pathname.length) {
-        return false
-      }
+/**
+ * Whether `pathname` starts with the segments in `head`, `undefined` standing
+ * for a param. Kept out of the prefix matcher, so that a cold start compiles it
+ * only for a prefix with params or a path with `%` inside the prefix.
+ */
+function matchesHead(head: readonly (string | undefined)[], pathname: string): boolean {
+  let start = 1
 
-      let end = pathname.indexOf('/', start)
-      if (end === -1) {
-        end = pathname.length
-      }
-
-      // `undefined` stands for a param, which needs a non-empty segment.
-      const segment = decode(pathname.slice(start, end))
-      if (expected === undefined ? segment === '' : segment !== expected) {
-        return false
-      }
-
-      start = end + 1
+  for (const expected of head) {
+    // At the end, or at a trailing slash, the path has no more segments.
+    if (start >= pathname.length) {
+      return false
     }
 
-    return true
+    let end = pathname.indexOf('/', start)
+    if (end === -1) {
+      end = pathname.length
+    }
+
+    // `undefined` stands for a param, which needs a non-empty segment.
+    const segment = decode(pathname.slice(start, end))
+    if (expected === undefined ? segment === '' : segment !== expected) {
+      return false
+    }
+
+    start = end + 1
   }
+
+  return true
 }
 
 function filterOf(statics: Map<string, unknown>): Uint8Array {
