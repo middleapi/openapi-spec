@@ -505,10 +505,7 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
   // Followed alone or beside annotations, such as the `description` Zod writes
   // for a described use, since other keywords beside it narrow the names further.
   const names =
-    ref !== undefined &&
-    Object.entries(schema.propertyNames as Record<string, unknown>).every(
-      ([name, item]) => item === undefined || name === '$ref' || isInputAnnotation(name),
-    )
+    ref !== undefined && isAnnotatedRef(schema.propertyNames as Record<string, unknown>)
       ? resolve(ref, ctx)
       : schema.propertyNames
   if (!isRecord(names)) {
@@ -523,13 +520,10 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
     schema.patternProperties !== undefined ||
     schema.unevaluatedProperties !== undefined ||
     schema.additionalProperties === false ||
-    !Object.entries(names).every(
-      ([name, item]) =>
-        item === undefined ||
-        name === 'enum' ||
-        name === 'const' ||
-        isInputAnnotation(name) ||
-        (name === 'type' && item === 'string'),
+    !(names.type === undefined || names.type === 'string') ||
+    !hasOnly(
+      names,
+      (name) => name === 'enum' || name === 'const' || name === 'type' || isInputAnnotation(name),
     )
   ) {
     return undefined
@@ -555,9 +549,8 @@ function losesRestriction(
         names === true ||
         enumNames(schema, ctx) !== undefined ||
         (isRecord(names) &&
-          Object.entries(names).every(
-            ([name, item]) => item === undefined || (name === 'type' && item === 'string'),
-          ))
+          (names.type === undefined || names.type === 'string') &&
+          hasOnly(names, (name) => name === 'type'))
       )
     }
     case 'unevaluatedProperties':
@@ -1271,7 +1264,7 @@ function isMediaTypeOnly(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.contentMediaType === 'string' &&
-    Object.entries(value).every(([key, item]) => key === 'contentMediaType' || item === undefined)
+    hasOnly(value, (key) => key === 'contentMediaType')
   )
 }
 
@@ -1440,6 +1433,7 @@ function finishSchema(
   }
 }
 
+// Spelled out, not through `hasOnly`, since it runs for every `$ref`.
 function isBareRef(value: Record<string, unknown>): boolean {
   for (const key in value) {
     if (key !== '$ref' && Object.hasOwn(value, key) && value[key] !== undefined) {
