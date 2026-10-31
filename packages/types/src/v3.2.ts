@@ -12,6 +12,7 @@ import type {
   ServerVariableObject,
   SpecificationExtensions,
 } from './v3.1'
+import type * as V3_1 from './v3.1'
 
 export type {
   AuthorizationCodeOAuthFlowObject,
@@ -1638,16 +1639,7 @@ export interface XMLObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
-export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
-  /**
-   * REQUIRED. The type of the security scheme.
-   */
-  type: 'apiKey'
-  /**
-   * A description for security scheme. CommonMark syntax MAY be used for rich
-   * text representation.
-   */
-  description?: string | undefined
+export interface ApiKeySecuritySchemeObject extends V3_1.ApiKeySecuritySchemeObject {
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
@@ -1655,15 +1647,6 @@ export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
    * @default false
    */
   deprecated?: boolean | undefined
-  /**
-   * REQUIRED. The name of the header, query or cookie parameter to be used.
-   */
-  name: string
-  /**
-   * REQUIRED. The location of the API key. Valid values are `"query"`,
-   * `"header"`, or `"cookie"`.
-   */
-  in: 'cookie' | 'header' | 'query'
 }
 
 /**
@@ -1711,16 +1694,7 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
-export interface MutualTlsSecuritySchemeObject extends SpecificationExtensions {
-  /**
-   * REQUIRED. The type of the security scheme.
-   */
-  type: 'mutualTLS'
-  /**
-   * A description for security scheme. CommonMark syntax MAY be used for rich
-   * text representation.
-   */
-  description?: string | undefined
+export interface MutualTlsSecuritySchemeObject extends V3_1.MutualTlsSecuritySchemeObject {
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
@@ -1773,16 +1747,7 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
-export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensions {
-  /**
-   * REQUIRED. The type of the security scheme.
-   */
-  type: 'openIdConnect'
-  /**
-   * A description for security scheme. CommonMark syntax MAY be used for rich
-   * text representation.
-   */
-  description?: string | undefined
+export interface OpenIdConnectSecuritySchemeObject extends V3_1.OpenIdConnectSecuritySchemeObject {
   /**
    * Declares this security scheme to be deprecated. Consumers SHOULD refrain
    * from usage of the declared scheme.
@@ -1790,11 +1755,6 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
    * @default false
    */
   deprecated?: boolean | undefined
-  /**
-   * REQUIRED. Well-known URL to discover the OpenID Connect Discovery
-   * provider metadata.
-   */
-  openIdConnectUrl: string
 }
 
 /**
@@ -1819,25 +1779,7 @@ export type SecuritySchemeObject =
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#oauth-flows-object}
  */
-export interface OAuthFlowsObject extends SpecificationExtensions {
-  /**
-   * Configuration for the OAuth Implicit flow.
-   */
-  implicit?: ImplicitOAuthFlowObject | undefined
-  /**
-   * Configuration for the OAuth Resource Owner Password flow.
-   */
-  password?: PasswordOAuthFlowObject | undefined
-  /**
-   * Configuration for the OAuth Client Credentials flow. Previously called
-   * `application` in OpenAPI 2.0.
-   */
-  clientCredentials?: ClientCredentialsOAuthFlowObject | undefined
-  /**
-   * Configuration for the OAuth Authorization Code flow. Previously called
-   * `accessCode` in OpenAPI 2.0.
-   */
-  authorizationCode?: AuthorizationCodeOAuthFlowObject | undefined
+export interface OAuthFlowsObject extends V3_1.OAuthFlowsObject {
   /**
    * Configuration for the OAuth Device Authorization flow.
    */
