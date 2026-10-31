@@ -646,10 +646,11 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   for (const { name, index, catchAll } of route.params!) {
     let value = segments[index < 0 ? segments.length + index : index]!
 
-    // Faster than `segments.slice(index, end).join('/')`.
+    // Faster than `segments.slice(index, end).join('/')`. A template literal
+    // would call `ToString` on each segment, which is already a string.
     if (catchAll) {
       for (let i = index + 1; i < end; i++) {
-        value += `/${segments[i]}`
+        value += '/' + segments[i]
       }
     }
 
