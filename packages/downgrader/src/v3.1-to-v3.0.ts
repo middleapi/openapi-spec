@@ -836,10 +836,24 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
+// The schema that `schema` stands for, read through one `$ref`.
+function throughRef(schema: unknown, root: unknown): unknown {
+  const ref = getRef(schema)
+  return ref === undefined ? schema : find(root, ref)
+}
+
 // A schema that rejects null by its `type`, read through one `$ref`.
 function refRejectsNull(schema: unknown, root: unknown): boolean {
-  const ref = getRef(schema)
-  return rejectsNull(ref === undefined ? schema : find(root, ref))
+  return rejectsNull(throughRef(schema, root))
+}
+
+// A schema that rejects null by its `type`, or a `$ref` to one that rejects
+// null with or without a `type`.
+function keptRejectsNull(schema: unknown, root: unknown): boolean {
+  return (
+    refRejectsNull(schema, root) ||
+    (getRef(schema) !== undefined && untypedRejectsNull(throughRef(schema, root), root))
+  )
 }
 
 // A schema with no `type` that rejects null all the same: an `enum` or
@@ -872,8 +886,7 @@ function untypedRejectsNull(schema: unknown, root: unknown, inline = false): boo
 
 // A schema with an `"object"` `type`, read through one `$ref`.
 function isObjectBranch(schema: unknown, root: unknown): boolean {
-  const ref = getRef(schema)
-  const target = ref === undefined ? schema : find(root, ref)
+  const target = throughRef(schema, root)
   return isRecord(target) && hasType(target.type, 'object')
 }
 
@@ -1017,30 +1030,18 @@ function mergeNullable(
     // that Zod writes for a described reference, or either side of an
     // intersection.
     const ref = getRef(other)
-    const target = ref === undefined ? other : find(root, ref)
-    const held =
-      Array.isArray(other.allOf) &&
-      other.allOf.some((member) => {
-        const memberRef = getRef(member)
-        return (
-          refRejectsNull(member, root) ||
-          (memberRef !== undefined && untypedRejectsNull(find(root, memberRef), root))
-        )
-      })
     if (
-      rejectsNull(target) ||
+      keptRejectsNull(other, root) ||
       // A pair a `$ref` points to keeps an inline union, since NSwag gives each
       // `$ref` to a `oneOf` with null a type it never defines.
-      (ref === undefined
-        ? !isTarget && unionRejectsNull(other, root)
-        : untypedRejectsNull(target, root)) ||
-      held
+      (!isTarget && unionRejectsNull(other, root)) ||
+      (Array.isArray(other.allOf) && other.allOf.some((member) => keptRejectsNull(member, root)))
     ) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(target)) {
+    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(find(root, ref))) {
       // GitHub writes a nullable reference this way to a schema that already
       // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
       // the `$ref` alone. NSwag reads the pair as an empty class, and
