@@ -279,25 +279,31 @@ function addStatic<T>(
  */
 export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string}`) => boolean {
   const head: (string | undefined)[] = []
+  // Built in this loop rather than with `every` and `map`, which a cold start
+  // would compile as two more functions.
+  let text: string | undefined = ''
 
   for (const segment of parse(prefix)) {
     if (typeof segment === 'string') {
       head.push(segment)
+      if (segment === '' || segment.includes('/')) {
+        text = undefined
+      } else if (text !== undefined) {
+        text += '/' + segment
+      }
     } else if (segment.catchAll) {
       break
     } else {
       head.push(undefined)
+      text = undefined
     }
   }
 
   // oRPC tests each pending lazy router's prefix on every request, so a prefix
   // of only literal text is compared at once for a path without `%`, and other
-  // paths are read only as far as the prefix goes.
-  const literal = head.every(
-    (segment) => segment !== undefined && segment !== '' && !segment.includes('/'),
-  )
-    ? head.map((segment) => `/${segment}`).join('')
-    : undefined
+  // paths are read only as far as the prefix goes. A `const` lets V8 fold it
+  // into the matcher.
+  const literal = text
 
   return (pathname) => {
     if (literal !== undefined && !pathname.includes('%')) {
