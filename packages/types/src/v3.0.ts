@@ -592,9 +592,10 @@ export interface ParameterObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the parameter's potential value. Each example SHOULD contain
-   * a value in the correct format as specified in the parameter encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the parameter's potential value. Each example SHOULD match
+   * the specified schema and follow the prescribed serialization strategy for
+   * the parameter. The `examples` field is mutually exclusive of the
+   * `example` field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -982,9 +983,10 @@ export interface HeaderObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the header's potential value. Each example SHOULD contain a
-   * value in the correct format as specified in the header encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the header's potential value. Each example SHOULD match the
+   * specified schema and follow the prescribed serialization strategy for the
+   * header. The `examples` field is mutually exclusive of the `example`
+   * field.
    * Furthermore, if referencing a `schema` that contains an example, the
    * `examples` value SHALL override the example provided by the schema.
    */
@@ -1483,7 +1485,7 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  * schemes are HTTP authentication, an API key (either as a header, a cookie
  * parameter, or as a query parameter), OAuth2's common flows (implicit,
  * password, client credentials, and authorization code) as defined in
- * RFC6749, and OpenID Connect Discovery.
+ * RFC6749, and OpenID Connect Core.
  *
  * The implicit flow is subject to deprecation by the OAuth 2.0 Security Best
  * Current Practice; the Authorization Code Grant flow with PKCE is
