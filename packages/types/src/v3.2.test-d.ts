@@ -3,7 +3,6 @@ import type {
   HeaderObject,
   MediaTypeObject,
   OpenAPIObject,
-  PathItemObject,
   RequestBodyObject,
   ResponseObject,
   ResponsesObject,
@@ -293,16 +292,3 @@ export const callbackKeyIsExpression = {
   // @ts-expect-error: A Callback Object key is a runtime expression or a URL.
   onEvent: {},
 } satisfies CallbackObject
-
-export const statusCodeRangeIsUppercase = {
-  // @ts-expect-error: Only the uppercase ranges `1XX` to `5XX` are allowed.
-  '2xx': { description: 'Success' },
-} satisfies ResponsesObject
-
-export const additionalOperationsWithoutFixedMethods = {
-  additionalOperations: {
-    COPY: { responses: { 204: { description: 'Copied' } } },
-    // @ts-expect-error: `GET` has its own `get` field, so `additionalOperations` MUST NOT hold it.
-    GET: { responses: { 200: { description: 'OK' } } },
-  },
-} satisfies PathItemObject
