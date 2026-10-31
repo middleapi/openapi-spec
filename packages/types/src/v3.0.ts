@@ -1368,7 +1368,7 @@ export interface XMLObject extends SpecificationExtensions {
 /**
  * The type of a security scheme.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect'
 
@@ -1376,7 +1376,7 @@ export type SecuritySchemeType = 'apiKey' | 'http' | 'oauth2' | 'openIdConnect'
  * Defines an API key security scheme that can be used by the operations. The
  * API key can be sent via a header, cookie, or query parameter.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1403,7 +1403,7 @@ export interface ApiKeySecuritySchemeObject extends SpecificationExtensions {
  * Defines an HTTP authentication security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface HttpSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1436,7 +1436,7 @@ export interface HttpSecuritySchemeObject extends SpecificationExtensions {
  * OAuth2's common flows (implicit, password, client credentials, and
  * authorization code) as defined in RFC6749.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1459,7 +1459,7 @@ export interface OAuth2SecuritySchemeObject extends SpecificationExtensions {
  * Defines an OpenID Connect security scheme that can be used by the
  * operations.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensions {
   /**
@@ -1489,7 +1489,7 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  * Current Practice; the Authorization Code Grant flow with PKCE is
  * recommended for most use cases.
  *
- * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object}
+ * @see {@link https://spec.openapis.org/oas/v3.0.4.html#security-scheme-object-0}
  */
 export type SecuritySchemeObject =
   | ApiKeySecuritySchemeObject
