@@ -1,4 +1,5 @@
 import type {
+  CallbackObject,
   HeaderObject,
   MediaTypeObject,
   OpenAPIObject,
@@ -277,3 +278,15 @@ export const numericStatusCode = {
   // @ts-expect-error: A numeric status code key is checked like a quoted one.
   200: { descripton: 'misspelled' },
 } satisfies ResponsesObject
+
+export const callbackExtensions = {
+  '{$request.body#/callbackUrl}': {
+    post: { responses: { 200: { description: 'OK' } } },
+  },
+  'x-internal': true,
+} satisfies CallbackObject
+
+export const callbackKeyIsExpression = {
+  // @ts-expect-error: A Callback Object key is a runtime expression or a URL.
+  onEvent: {},
+} satisfies CallbackObject

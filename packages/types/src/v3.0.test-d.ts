@@ -1,4 +1,5 @@
 import type {
+  CallbackObject,
   HeaderObject,
   OpenAPIObject,
   ReferenceObject,
@@ -489,3 +490,15 @@ export const headerStyleMustBeSimple = {
   // @ts-expect-error: Header Objects only allow the `simple` style.
   style: 'form',
 } satisfies HeaderObject
+
+export const callbackExtensions = {
+  '{$request.body#/callbackUrl}': {
+    post: { responses: { 200: { description: 'OK' } } },
+  },
+  'x-internal': true,
+} satisfies CallbackObject
+
+export const callbackKeyIsExpression = {
+  // @ts-expect-error: A Callback Object key is a runtime expression or a URL.
+  onEvent: {},
+} satisfies CallbackObject
