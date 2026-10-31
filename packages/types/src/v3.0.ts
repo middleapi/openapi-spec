@@ -751,13 +751,6 @@ export interface ResponsesObject extends SpecificationExtensions, StatusCodeResp
    * HTTP response codes. Use this field to cover undeclared responses.
    */
   default?: ResponseObject | ReferenceObject | undefined
-}
-
-// Every code from 100 to 599 and every range is declared as a field rather than
-// matched by a template index signature: TypeScript checks a numeric key such
-// as `200` only against declared fields, and a template such as
-// `${1 | 2 | 3 | 4 | 5}${string}` would also accept keys like `2xx` or `2000`.
-type StatusCodeResponses = {
   /**
    * Any HTTP status code can be used as the property name, but only one
    * property per code, to describe the expected response for that HTTP status
@@ -770,7 +763,14 @@ type StatusCodeResponses = {
    * explicit code definition takes precedence over the range definition for
    * that code.
    */
-  [statusCode in `${1 | 2 | 3 | 4 | 5}${Digit}${Digit}` | `${1 | 2 | 3 | 4 | 5}XX`]?:
+  [statusCode: `${1 | 2 | 3 | 4 | 5}${string}`]: ResponseObject | ReferenceObject | undefined
+}
+
+// TypeScript checks a numeric key such as `200` only against declared fields,
+// never against the template index signature above, so every code from 100 to
+// 599 is also declared as a field.
+type StatusCodeResponses = {
+  [statusCode in `${1 | 2 | 3 | 4 | 5}${Digit}${Digit}`]?:
     | ResponseObject
     | ReferenceObject
     | undefined
