@@ -1207,10 +1207,10 @@ export interface SchemaObject<T = unknown> extends SpecificationExtensions {
   /**
    * The format of the data type. While relying on JSON Schema's defined
    * formats, the OAS offers a few additional predefined formats: `"int32"`,
-   * `"int64"`, `"float"`, `"double"` (with `type: "number"`); `"byte"`
-   * (base64-encoded), `"binary"` (any sequence of octets), `"date"` (RFC3339
-   * full-date), `"date-time"` (RFC3339 date-time), and `"password"` (a hint
-   * to obscure the value) (with `type: "string"`). `format` is a
+   * `"int64"`, `"float"`, `"double"` (with `type: "integer"` or `"number"`);
+   * `"byte"` (base64-encoded), `"binary"` (any sequence of octets), `"date"`
+   * (RFC3339 full-date), `"date-time"` (RFC3339 date-time), and `"password"`
+   * (a hint to obscure the value) (with `type: "string"`). `format` is a
    * non-validating annotation by default; tools that do not recognize a
    * format MAY default back to `type` alone.
    */
