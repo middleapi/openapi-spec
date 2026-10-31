@@ -290,3 +290,8 @@ export const callbackKeyIsExpression = {
   // @ts-expect-error: A Callback Object key is a runtime expression or a URL.
   onEvent: {},
 } satisfies CallbackObject
+
+export const statusCodeRangeIsUppercase = {
+  // @ts-expect-error: Only the uppercase ranges `1XX` to `5XX` are allowed.
+  '2xx': { description: 'Success' },
+} satisfies ResponsesObject
