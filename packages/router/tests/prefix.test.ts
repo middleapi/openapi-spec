@@ -59,6 +59,17 @@ describe('createPrefixMatcher', () => {
     expectPrefix('/%7Bid%7D', { '/{id}': true, '/%7bid%7d/x': true, '/1': false })
   })
 
+  it('compares a path whose escapes all come after the prefix as written', () => {
+    expectPrefix('/api/v1/planets', {
+      '/api/v1/planets/a%20b': true,
+      '/api/v1/planets/%ZZ/x': true,
+      '/api/v1/planet%73/a%20b': true,
+      '/api/v1/planets%2Fx': false,
+      '/api/v1/planetsx/a%20b': false,
+      '/api/v1/moons/a%20b': false,
+    })
+  })
+
   it('matches names that objects inherit as literal text', () => {
     expectPrefix('/__proto__/{id}', {
       '/__proto__/1': true,
