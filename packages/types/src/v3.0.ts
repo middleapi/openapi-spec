@@ -817,13 +817,13 @@ export interface ResponseObject extends SpecificationExtensions {
  * requests that may be initiated by the API provider and the expected
  * responses.
  *
- * Note: this object MAY be extended with Specification Extensions (`x-`
- * prefixed fields), which cannot be represented in TypeScript alongside the
- * arbitrary runtime-expression keys.
+ * This object MAY be extended with Specification Extensions. Each key that
+ * holds a Path Item Object contains a `$` (a runtime expression) or a `/` (a
+ * URL), which keeps it apart from the `x-` extension keys.
  *
  * @see {@link https://spec.openapis.org/oas/v3.0.4.html#callback-object}
  */
-export interface CallbackObject {
+export interface CallbackObject extends SpecificationExtensions {
   /**
    * A Path Item Object used to define a callback request and expected
    * responses. The key is a runtime expression, evaluated in the context of a
@@ -831,7 +831,7 @@ export interface CallbackObject {
    * callback request (e.g. `$request.body#/url`); expressions can be embedded
    * into string values by surrounding them with `{}` curly braces.
    */
-  [expression: string]: PathItemObject
+  [expression: `${string}$${string}` | `${string}/${string}`]: PathItemObject
 }
 
 /**
