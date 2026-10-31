@@ -44,7 +44,8 @@ export interface OpenAPIObject extends SpecificationExtensions {
    * REQUIRED. This string MUST be the version number of the OpenAPI
    * Specification that the OpenAPI document uses. The `openapi` field SHOULD
    * be used by tooling to interpret the OpenAPI document. This is not related
-   * to the API `info.version` string.
+   * to the `info.version` string, which describes the OpenAPI document's
+   * version.
    */
   openapi: `3.2.${string}`
   /**
@@ -364,8 +365,8 @@ export interface OperationObject extends SpecificationExtensions {
   parameters?: (ParameterObject | ReferenceObject)[] | undefined
   /**
    * The request body applicable for this operation. The `requestBody` is
-   * fully supported in HTTP methods where the HTTP 1.1 specification RFC9110
-   * has explicitly defined semantics for request bodies. In other cases where
+   * fully supported in HTTP methods where the HTTP specification RFC9110 has
+   * explicitly defined semantics for request bodies. In other cases where
    * the HTTP spec discourages message content (such as GET and DELETE),
    * `requestBody` is permitted but does not have well-defined semantics and
    * SHOULD be avoided if possible.
@@ -559,9 +560,8 @@ export interface ParameterObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the parameter's potential value. Each example SHOULD contain
-   * a value in the correct format as specified in the parameter encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the parameter's potential value. The `examples` field is
+   * mutually exclusive of the `example` field.
    */
   examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
@@ -601,8 +601,8 @@ export interface RequestBodyObject extends SpecificationExtensions {
 }
 
 /**
- * Each Media Type Object provides schema and examples for the media type
- * identified by its key.
+ * Each Media Type Object describes content structured in accordance with the
+ * media type identified by its key.
  *
  * Sequential media types (e.g. `application/jsonl`, `application/x-ndjson`,
  * `application/json-seq`, `text/event-stream`, `multipart/mixed`) MUST be
@@ -613,7 +613,7 @@ export interface RequestBodyObject extends SpecificationExtensions {
  */
 export interface MediaTypeObject extends SpecificationExtensions {
   /**
-   * A description of the media type. Absent from the 3.2.0 Fixed Fields
+   * A description of the media type. Absent from the 3.2 Fixed Fields
    * table, but defined by the official OAS 3.2 JSON Schema
    * (`$defs/media-type`).
    *
@@ -1047,9 +1047,8 @@ export interface HeaderObject extends SpecificationExtensions {
    */
   example?: unknown
   /**
-   * Examples of the header's potential value. Each example SHOULD contain a
-   * value in the correct format as specified in the header encoding. The
-   * `examples` field is mutually exclusive of the `example` field.
+   * Examples of the header's potential value. The `examples` field is
+   * mutually exclusive of the `example` field.
    */
   examples?: Record<string, ExampleObject | ReferenceObject> | undefined
   /**
@@ -1575,8 +1574,8 @@ export type XMLNodeType = 'attribute' | 'cdata' | 'element' | 'none' | 'text'
 /**
  * A metadata object that allows for more fine-tuned XML model definitions.
  *
- * When using arrays, XML element names are not inferred (for singular/plural
- * forms) and the `name` field SHOULD be used to add that information.
+ * Note that when using arrays, singular vs plural forms are not inferred, and
+ * must be set explicitly.
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#xml-object}
  */
@@ -1800,8 +1799,7 @@ export interface OpenIdConnectSecuritySchemeObject extends SpecificationExtensio
  * parameter, or as a query parameter), mutual TLS (use of a client
  * certificate), OAuth2's common flows (implicit, password, client
  * credentials, and authorization code) as defined in RFC6749, the OAuth2
- * Device Authorization flow as defined in RFC8628, and OpenID Connect
- * Discovery.
+ * Device Authorization flow as defined in RFC8628, and OpenID Connect Core.
  *
  * @see {@link https://spec.openapis.org/oas/v3.2.1.html#security-scheme-object}
  */
