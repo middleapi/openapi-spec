@@ -1428,8 +1428,8 @@ export interface SchemaObjectFields<T = unknown> {
   /**
    * The format of the data type. While relying on JSON Schema's defined
    * formats, the OAS offers a few additional predefined formats: `"int32"`,
-   * `"int64"`, `"float"`, `"double"` (with `type: "number"`), and
-   * `"password"` (a hint to obscure the value, with `type: "string"`).
+   * `"int64"`, `"float"`, `"double"` (with `type: "integer"` or `"number"`),
+   * and `"password"` (a hint to obscure the value, with `type: "string"`).
    * `format` is a non-validating annotation by default; tools that do not
    * recognize a format MAY default back to `type` alone. Support for any
    * format registered in the OpenAPI Format Registry is strictly OPTIONAL.
