@@ -1303,11 +1303,12 @@ export interface SchemaObjectFields<T = unknown> {
    */
   deprecated?: boolean | undefined
   /**
-   * Indicates the value is managed by the owning authority: it MAY be sent in
-   * a response but SHOULD NOT be sent in a request. Note that the behavior of
-   * `readOnly` in particular differs from that of OpenAPI 3.0: per JSON
-   * Schema Validation Draft 2020-12 §9.4, the owning authority MAY either
-   * ignore a `readOnly` field sent in a request or treat it as an error.
+   * Indicates the value is managed exclusively by the owning authority, and
+   * attempts by an application to modify it are expected to be ignored or
+   * rejected by that authority. Note that the behavior of `readOnly` in
+   * particular differs from that of OpenAPI 3.0: per JSON Schema Validation
+   * Draft 2020-12 §9.4, the owning authority MAY either ignore a `readOnly`
+   * field sent in a request or treat it as an error.
    *
    * @default false
    */
