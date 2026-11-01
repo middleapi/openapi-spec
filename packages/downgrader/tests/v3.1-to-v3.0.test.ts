@@ -3010,7 +3010,7 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({})
     })
 
-    it('includes a schema that loses it only around a cycle of $refs, whichever comes first', () => {
+    it('includes a schema that loses it only around a cycle of $refs or objects, whichever comes first', () => {
       const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
       const lost = { type: 'object', propertyNames: { pattern: '^a' } } as const
       // A not and a oneOf over a $ref back into the schema around them.
@@ -3053,6 +3053,62 @@ describe('downgradeSchemaV31ToV30', () => {
         }).components?.schemas
         expect(out?.Outer).toEqual({})
       }
+      // Entered through a component that is only a $ref to the one that loses it.
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Start: ref('Alias'),
+              Alias: ref('Node'),
+              Node: { ...lost, properties: { a: { not: ref('Alias') } } },
+            },
+          },
+        }).components?.schemas?.Node,
+      ).toEqual({ type: 'object', properties: { a: {} } })
+      // Also when the alias reaches it through a $ref the conversion inlines.
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Start: { not: ref('Alias') },
+              Alias: ref('Node/$defs/Sub'),
+              Node: { $defs: { Sub: { ...lost, properties: { a: { not: ref('Alias') } } } } },
+            },
+          },
+        }).components?.schemas?.Alias,
+      ).toEqual({ type: 'object', properties: { a: {} } })
+      // Or is a $ref to a tagged union beside only annotations.
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Start: { not: ref('Tagged') },
+              Tagged: { ...ref('Union'), description: 'A tagged union' },
+              Union: { oneOf: [ref('A'), ref('B')], discriminator: { propertyName: 'k' } },
+              A: {
+                type: 'object',
+                propertyNames: { pattern: '^[kx]$' },
+                required: ['k'],
+                properties: { k: { const: 'a' }, x: { not: ref('Tagged') } },
+              },
+              B: { type: 'object', required: ['k'], properties: { k: { const: 'b' } } },
+            },
+          },
+        }).components?.schemas?.A,
+      ).toEqual({
+        type: 'object',
+        required: ['k'],
+        properties: { k: { type: 'string', enum: ['a'] }, x: {} },
+      })
+      // And around a cycle of objects, as a dereferencing parser leaves.
+      const node: Record<string, unknown> = { ...lost }
+      node.properties = {
+        a: { not: node },
+        b: { oneOf: [node, { type: 'object', required: ['z'] }] },
+      }
+      const out = downgradeSchemaV31ToV30(node) as Record<string, Record<string, unknown>>
+      expect(out.properties?.a).toEqual({})
+      expect(out.properties?.b).toEqual({ anyOf: [out, { type: 'object', required: ['z'] }] })
     })
 
     it('counts a $defs target cut at recursion as telling no branch apart', () => {
