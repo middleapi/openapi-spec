@@ -6,6 +6,8 @@ import { expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }
+// What `{ type: "null" }` becomes.
+const onlyNull = { type: 'string', nullable: true, enum: [null] } satisfies OpenAPIV3_0.SchemaObject
 
 function convert(fields: Omit<OpenAPIV3_1.OpenAPIObject, 'info' | 'openapi'>) {
   return downgradeSpecV31ToV30({ openapi: '3.1.2', info, ...fields })
@@ -465,11 +467,7 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({
         maxLength: 3,
-        oneOf: [
-          { type: 'array', items: { type: 'number' } },
-          { type: 'string' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'array', items: { type: 'number' } }, { type: 'string' }, onlyNull],
       })
     })
 
@@ -510,7 +508,7 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [
           { type: 'object', additionalProperties: {} },
           { type: 'array', items: { type: 'string' } },
-          { type: 'string', nullable: true, enum: [null] },
+          onlyNull,
         ],
       })
       expect(
@@ -539,11 +537,7 @@ describe('downgradeSchemaV31ToV30', () => {
         downgradeSchemaV31ToV30({ type: ['integer', 'string'], format: 'int32', pattern }),
       ).toEqual({ format: 'int32', pattern, oneOf: [{ type: 'integer' }, { type: 'string' }] })
       expect(downgradeSchemaV31ToV30({ type: ['string', 'boolean', 'null'] })).toEqual({
-        oneOf: [
-          { type: 'string' },
-          { type: 'boolean' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string' }, { type: 'boolean' }, onlyNull],
       })
       // ArkType and Valibot write a union of scalars as an `anyOf` of them.
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'number' }, { type: 'string' }] })).toEqual({
@@ -570,11 +564,7 @@ describe('downgradeSchemaV31ToV30', () => {
           ],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string', maxLength: 5 },
-          { type: 'boolean' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string', maxLength: 5 }, { type: 'boolean' }, onlyNull],
       })
       expect(
         downgradeSchemaV31ToV30({ anyOf: [{ type: 'boolean' }, { anyOf: effectNumber }] }),
@@ -586,11 +576,7 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({
         description: 'd',
-        oneOf: [
-          { type: 'string' },
-          { type: 'number' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string' }, { type: 'number' }, onlyNull],
       })
       expect(
         downgradeSchemaV31ToV30({
@@ -605,27 +591,19 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }, { type: 'boolean' }],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string', minLength: 1 },
-          { type: 'string', nullable: true, enum: [null] },
-          { type: 'boolean' },
-        ],
+        oneOf: [{ type: 'string', minLength: 1 }, onlyNull, { type: 'boolean' }],
       })
       // Effect writes null twice for a nullish value, and Zod a nullable nullish
       // union as a nullable union of them, which the `oneOf` takes once.
       expect(
         downgradeSchemaV31ToV30({ anyOf: [...effectNumber, { type: 'null' }, { type: 'null' }] }),
-      ).toEqual({ oneOf: [...effectNumber, { type: 'string', nullable: true, enum: [null] }] })
+      ).toEqual({ oneOf: [...effectNumber, onlyNull] })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: ['string', 'number', 'null'] }, { type: 'null' }],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string' },
-          { type: 'number' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string' }, { type: 'number' }, onlyNull],
       })
       // An integer is a number too, NSwag reads an `enum` only beside an
       // `anyOf`, and a `oneOf` with a type or null twice would match no value
@@ -689,7 +667,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('turns type null into a nullable type that only null matches', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       expect(Object.keys(downgradeSchemaV31ToV30({ type: 'null' }))).toEqual([
         'type',
         'nullable',
@@ -738,31 +715,21 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'null' }, { type: 'string', enum: ['a'] }, { type: 'null' }],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string', nullable: true, enum: [null] },
-          { type: 'string', enum: ['a'] },
-        ],
+        oneOf: [onlyNull, { type: 'string', enum: ['a'] }],
       })
       // One null object twice still gives null once, or the oneOf rejects it.
       const nullType: OpenAPIV3_1.SchemaObject = { type: 'null' }
       expect(
         downgradeSchemaV31ToV30({ anyOf: [{ type: 'string', enum: ['a'] }, nullType, nullType] }),
       ).toEqual({
-        oneOf: [
-          { type: 'string', enum: ['a'] },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string', enum: ['a'] }, onlyNull],
       })
       expect(
         downgradeSchemaV31ToV30({
           anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string' },
-          { type: 'number' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string' }, { type: 'number' }, onlyNull],
       })
     })
 
@@ -795,17 +762,17 @@ describe('downgradeSchemaV31ToV30', () => {
         }),
       ).toEqual({
         description: 'A',
-        anyOf: [{ description: 'B' }, { type: 'string', nullable: true, enum: [null] }],
+        anyOf: [{ description: 'B' }, onlyNull],
       })
       expect(downgradeSchemaV31ToV30({ anyOf: [{ minLength: 1 }, { type: 'null' }] })).toEqual({
-        anyOf: [{ minLength: 1 }, { type: 'string', nullable: true, enum: [null] }],
+        anyOf: [{ minLength: 1 }, onlyNull],
       })
       // Null matches both branches of the oneOf, which then rejects it.
       expect(downgradeSchemaV31ToV30({ oneOf: [{}, { type: 'null' }] })).toEqual({
-        oneOf: [{}, { type: 'string', nullable: true, enum: [null] }],
+        oneOf: [{}, onlyNull],
       })
       expect(downgradeSchemaV31ToV30({ oneOf: [{ description: 'B' }, { type: 'null' }] })).toEqual({
-        oneOf: [{ description: 'B' }, { type: 'string', nullable: true, enum: [null] }],
+        oneOf: [{ description: 'B' }, onlyNull],
       })
     })
 
@@ -820,10 +787,7 @@ describe('downgradeSchemaV31ToV30', () => {
       })
       // Null matches both branches of the oneOf, which then rejects it.
       expect(downgradeSchemaV31ToV30({ oneOf: [nullable, { type: 'null' }] })).toEqual({
-        oneOf: [
-          { type: 'string', maxLength: 5, nullable: true },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string', maxLength: 5, nullable: true }, onlyNull],
       })
     })
 
@@ -945,7 +909,6 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(
         downgradeSchemaV31ToV30({ description: 'A', oneOf: [object, { type: 'null' }] }),
       ).toEqual({ description: 'A', ...object, nullable: true })
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null twice matches two branches, so the oneOf rejects it.
       expect(
         downgradeSchemaV31ToV30({
@@ -979,7 +942,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('keeps an anyOf with null whose other branch null would not pass, or shares a key', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null matches only the null branch here, so it becomes a oneOf.
       const typed: OpenAPIV3_1.SchemaObject[] = [
         { type: 'string', enum: ['a', 'b'] },
@@ -1036,7 +998,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('makes an anyOf of a $ref and null a oneOf when the target rejects null', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       const pet = (target: OpenAPIV3_1.SchemaObject) =>
         convert({
           components: {
@@ -1073,7 +1034,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('makes an anyOf of a $ref and null a oneOf when the target rejects null without a type, as Zod writes a registered union', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       const ref = { $ref: '#/components/schemas/Pet' }
       const pet = (target: OpenAPIV3_1.SchemaObject, branch: OpenAPIV3_1.SchemaObject = ref) =>
         convert({
@@ -1147,7 +1107,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('makes an anyOf of an inline union and null a oneOf when each branch rejects null, as Pydantic writes an Optional tagged union', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Pydantic's `Optional[Annotated[Union[Cat, Dog], Field(discriminator='kind')]]`.
       const tagged = {
         oneOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/components/schemas/Dog' }],
@@ -1218,7 +1177,6 @@ describe('downgradeSchemaV31ToV30', () => {
     })
 
     it('makes an anyOf of an allOf and null a oneOf when any member rejects null', () => {
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       const base = { type: 'object', properties: { b: { type: 'string' } } } as const
       const open = { properties: { b: { type: 'string' } } } as const
       const ref = { $ref: '#/components/schemas/Pet' }
@@ -1261,7 +1219,6 @@ describe('downgradeSchemaV31ToV30', () => {
         ref,
       )
       expect(owner({ type: 'null' })).toEqual(ref)
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null can still fail the `enum` or `const`, and the `$ref` can take no description in 3.0.
       expect(owner({ type: ['string', 'null'], enum: ['a'] })).toEqual({ anyOf: [onlyNull, ref] })
       expect(owner({ type: ['string', 'null'], const: 'a' })).toEqual({ anyOf: [onlyNull, ref] })
@@ -1291,7 +1248,6 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(owner({})).toEqual(ref)
       expect(owner({ description: 'Any JSON value' })).toEqual(ref)
       expect(owner({ examples: [1] })).toEqual(ref)
-      const onlyNull = { type: 'string', nullable: true, enum: [null] }
       // Null can fail every branch, or the `enum` beside them, which makes the pair a `oneOf`.
       expect(owner({ anyOf: [pet, { type: 'string' }] })).toEqual({ oneOf: [ref, onlyNull] })
       expect(owner({ anyOf: [{ type: 'string' }, { type: 'null' }], enum: ['a'] })).toEqual({
@@ -1465,18 +1421,12 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ anyOf: [{ const: 'a' }, { const: 'b' }, { type: 'null' }] }),
     ).toEqual({
-      oneOf: [
-        { type: 'string', enum: ['a', 'b'] },
-        { type: 'string', nullable: true, enum: [null] },
-      ],
+      oneOf: [{ type: 'string', enum: ['a', 'b'] }, onlyNull],
     })
     expect(
       downgradeSchemaV31ToV30({ oneOf: [{ type: 'null' }, { const: 'a' }, { const: 'b' }] }),
     ).toEqual({
-      oneOf: [
-        { type: 'string', nullable: true, enum: [null] },
-        { type: 'string', enum: ['a', 'b'] },
-      ],
+      oneOf: [onlyNull, { type: 'string', enum: ['a', 'b'] }],
     })
     // Beside other types, as Zod writes `'a' | 'b' | number`, the enums of each
     // type become one, and a union of scalars then becomes a `oneOf`.
@@ -1490,11 +1440,7 @@ describe('downgradeSchemaV31ToV30', () => {
         anyOf: [{ anyOf: [{ const: 'a' }, { const: 1 }, { const: 'b' }] }, { type: 'null' }],
       }),
     ).toEqual({
-      oneOf: [
-        { type: 'string', enum: ['a', 'b'] },
-        { type: 'integer', enum: [1] },
-        { type: 'string', nullable: true, enum: [null] },
-      ],
+      oneOf: [{ type: 'string', enum: ['a', 'b'] }, { type: 'integer', enum: [1] }, onlyNull],
     })
     // utoipa writes the unit variants of a Rust enum beside its other variants.
     expect(
@@ -1541,7 +1487,7 @@ describe('downgradeSchemaV31ToV30', () => {
         { type: 'string', enum: ['a'] },
         { description: 'B', type: 'string', enum: ['b'] },
         { type: 'string', enum: ['c'] },
-        { type: 'string', nullable: true, enum: [null] },
+        onlyNull,
       ],
     })
     // A branch stays as written when no other enum shares its `type`.
@@ -1906,7 +1852,7 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(
       downgradeSchemaV31ToV30({ anyOf: [...file.anyOf!, { type: 'integer' }, { type: 'null' }] }),
     ).toEqual({
-      oneOf: [binary, { type: 'integer' }, { type: 'string', nullable: true, enum: [null] }],
+      oneOf: [binary, { type: 'integer' }, onlyNull],
     })
     // Only neighbors are compared.
     const [pdf, png] = file.anyOf!
@@ -1937,7 +1883,7 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ anyOf: [null, null] } as never)).toEqual({ anyOf: [null] })
     // Null once, as Effect writes a nullish union with null twice.
     const refB = { $ref: '#/components/schemas/B' }
-    const nullBranch = { type: 'string', nullable: true, enum: [null] }
+    const nullBranch = onlyNull
     expect(
       downgradeSchemaV31ToV30({ anyOf: [ref, refB, { type: 'null' }, { type: 'null' }] }),
     ).toEqual({ anyOf: [ref, refB, nullBranch] })
@@ -2257,12 +2203,9 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({
         type: 'object',
         properties: {
-          home: { anyOf: [address, { type: 'string', nullable: true, enum: [null] }] },
+          home: { anyOf: [address, onlyNull] },
           work: {
-            oneOf: [
-              { $ref: '#/properties/home/anyOf/0' },
-              { type: 'string', nullable: true, enum: [null] },
-            ],
+            oneOf: [{ $ref: '#/properties/home/anyOf/0' }, onlyNull],
           },
         },
       })
@@ -2274,7 +2217,7 @@ describe('downgradeSchemaV31ToV30', () => {
         properties: { children: { type: 'array', items: { $ref: '#/anyOf/0' } } },
       } as const
       const out = downgradeSchemaV31ToV30({ anyOf: [node, { type: 'null' }] })
-      expect(out).toEqual({ anyOf: [node, { type: 'string', nullable: true, enum: [null] }] })
+      expect(out).toEqual({ anyOf: [node, onlyNull] })
       expect(() => JSON.stringify(out)).not.toThrow()
     })
 
@@ -2697,12 +2640,7 @@ describe('downgradeSchemaV31ToV30', () => {
           oneOf: [{ type: 'string' }, { type: 'integer' }, metadata, { type: 'null' }],
         }),
       ).toEqual({
-        oneOf: [
-          { type: 'string' },
-          { type: 'integer' },
-          { type: 'object' },
-          { type: 'string', nullable: true, enum: [null] },
-        ],
+        oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'object' }, onlyNull],
       })
       // A value can match both when they share a value, or neither holds the
       // property to some values, or requires it, or takes only objects, or
