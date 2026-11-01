@@ -1,6 +1,6 @@
 {
   "name": "@openapi-spec/router",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Fast HTTP router for OpenAPI path templates, with {name} and {+name} params, built for oRPC",
   "keywords": [
     "oas",
