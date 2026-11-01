@@ -1750,10 +1750,11 @@ describe('downgradeSchemaV31ToV30', () => {
       type: 'string',
       format: 'binary',
     })
+    // An untyped one still takes every value, which `type: "string"` would narrow.
     expect(downgradeSchemaV31ToV30({ contentMediaType: 'image/png' })).toEqual({
-      type: 'string',
       format: 'binary',
     })
+    expect(downgradeSchemaV31ToV30({ contentEncoding: 'base64' })).toEqual({ format: 'byte' })
     expect(downgradeSchemaV31ToV30({ type: 'string', contentEncoding: 'binary' })).toEqual({
       type: 'string',
       format: 'binary',
