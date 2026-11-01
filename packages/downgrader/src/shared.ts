@@ -123,7 +123,7 @@ export function convertObject(
   ctx: Context,
   fields: Fields,
   finish?: Finish,
-  revisit?: (value: object, out: object) => void,
+  revisit?: (out: object) => void,
 ): unknown {
   if (!isRecord(value)) {
     return clone(value)
@@ -135,7 +135,7 @@ export function convertObject(
   }
   const known = seen.get(value)
   if (known !== undefined) {
-    revisit?.(value, known)
+    revisit?.(known)
     return known
   }
   const out: Record<string, unknown> = {}
