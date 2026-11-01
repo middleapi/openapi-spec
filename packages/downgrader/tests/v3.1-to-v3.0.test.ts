@@ -403,6 +403,38 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  it('writes */* as the contentType of an Encoding Object that sets style, explode, or allowReserved', () => {
+    // 3.1 ignores contentType there, also its default, and 3.0 ignores the
+    // others in multipart instead.
+    const encoding = {
+      id: { contentType: 'text/plain', explode: true },
+      tag: { style: 'form' },
+      key: { contentType: 'application/json', allowReserved: false },
+      photo: { contentType: 'image/png', headers: { 'X-Size': { schema: { type: 'integer' } } } },
+    } as const
+    const schema = { type: 'object' } as const
+    const body = convert({
+      paths: {
+        '/a': {
+          post: { requestBody: { content: { 'multipart/form-data': { schema, encoding } } } },
+        },
+      },
+    }).paths['/a']?.post?.requestBody
+    expect(body).toEqual({
+      content: {
+        'multipart/form-data': {
+          schema,
+          encoding: {
+            id: { contentType: '*/*', explode: true },
+            tag: { contentType: '*/*', style: 'form' },
+            key: { contentType: '*/*', allowReserved: false },
+            photo: encoding.photo,
+          },
+        },
+      },
+    })
+  })
+
   it('copies extensions in paths, responses, and callbacks as they are', () => {
     const extension = { $ref: '#/paths/~1a', get: {} }
     const operation = { responses: { 'x-a': extension }, callbacks: { cb: { 'x-a': extension } } }
