@@ -169,7 +169,6 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target refers back to one it is being copied into, that inner reference becomes `{}`, or is removed where `{}` is not a valid value.
-- `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
 - A requirement that uses only mutual TLS becomes `{}`, so 3.0 tools read its operation as needing no security, and a requirement that pairs it with another scheme asks for that scheme alone.
@@ -254,7 +253,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 #### Limitations
 
-- `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment.
+- `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment. One that percent-encodes a character, such as `#/%24defs/Pet`, is replaced by its target wherever it points.
 - An `anyOf` or `oneOf` of `{ type: "null" }` and a branch that a `$ref` points into stays as written, so the `$ref` still resolves, and code generators read it as a union.
 - `$ref`s into a keyword 3.0 removes, such as `prefixItems/0` or `propertyNames`, into a `oneOf` that becomes `anyOf`, or into the `items` or `properties` of a schema whose `type` list names more than one type besides `"null"`, which move into the branches of the `anyOf` or `oneOf` that takes the place of the list, are left as written and dangle. A `$ref` into the `allOf` of a schema that also holds a `$ref` resolves one member off, since that `$ref` becomes the first member of the `allOf`.
 - Recursion through `$defs` is cut to `{}` after one level. Where several `$ref`s enter the same cycle, the first copy made is reused, so a later one can be cut sooner. Such a cut `$ref` tells no `oneOf` branch apart, and counts as taking null, wherever its copy is reused.

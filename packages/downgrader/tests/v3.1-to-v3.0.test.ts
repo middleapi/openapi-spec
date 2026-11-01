@@ -2595,6 +2595,31 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(out?.Count).toEqual(ref('Bag/properties/itemsLeft'))
   })
 
+  it('replaces a percent-encoded $ref with its target', () => {
+    // find decodes it, so it can point into $defs, a removed part, or items
+    // that the conversion replaces, unseen.
+    const ref = (path: string) => ({ $ref: `#/components/schemas/${path}` })
+    const doc = convert({
+      paths: { '/pets': { $ref: '#/components/path%49tems/Pets' } },
+      components: {
+        pathItems: { Pets: { get: { responses: { 200: { description: 'OK' } } } } },
+        schemas: {
+          Pair: { type: 'array', prefixItems: [{ type: 'number' }], items: { type: 'string' } },
+          Box: { type: 'object', $defs: { Id: { type: ['string', 'null'] } } },
+          Rates: { type: 'object', properties: { '50%': { type: 'integer' } } },
+          NotRest: { not: ref('Pair/%69tems') },
+          Id: ref('Box/%24defs/Id'),
+          Rate: ref('Rates/properties/50%25'),
+        },
+      },
+    })
+    expect(doc.paths?.['/pets']).toEqual({ get: { responses: { 200: { description: 'OK' } } } })
+    const out = doc.components?.schemas
+    expect(out?.NotRest).toEqual({ not: { type: 'string' } })
+    expect(out?.Id).toEqual({ type: 'string', nullable: true })
+    expect(out?.Rate).toEqual({ type: 'integer' })
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(
