@@ -2922,6 +2922,45 @@ describe('downgradeSchemaV31ToV30', () => {
       }
     })
 
+    it('includes a $ref into the items of a tuple, or into additionalProperties beside patternProperties', () => {
+      // They read the items built from every item schema, and true.
+      const out = convert({
+        components: {
+          schemas: {
+            Pair: { type: 'array', prefixItems: [{ type: 'number' }], items: { type: 'string' } },
+            Notes: {
+              type: 'object',
+              patternProperties: { '^x-': {} },
+              additionalProperties: { type: 'string' },
+            },
+            NotRest: { not: { $ref: '#/components/schemas/Pair/items' } },
+            NotOther: { not: { $ref: '#/components/schemas/Notes/additionalProperties' } },
+            // Not into a tuple, nor into items at all.
+            List: {
+              type: 'array',
+              items: { type: 'object', properties: { a: { type: 'string' } } },
+            },
+            Bag: { type: 'object', properties: { itemsLeft: { type: 'integer' } } },
+            NotItem: { not: { $ref: '#/components/schemas/List/items/properties/a' } },
+            NotCount: { not: { $ref: '#/components/schemas/Bag/properties/itemsLeft' } },
+          },
+        },
+      }).components?.schemas
+      expect(out?.Pair).toEqual({
+        type: 'array',
+        items: { oneOf: [{ type: 'number' }, { type: 'string' }] },
+      })
+      expect(out?.Notes).toEqual({ type: 'object', additionalProperties: true })
+      expect(out?.NotRest).toEqual({})
+      expect(out?.NotOther).toEqual({})
+      expect(out?.NotItem).toEqual({
+        not: { $ref: '#/components/schemas/List/items/properties/a' },
+      })
+      expect(out?.NotCount).toEqual({
+        not: { $ref: '#/components/schemas/Bag/properties/itemsLeft' },
+      })
+    })
+
     it('counts a $defs target cut at recursion as telling no branch apart', () => {
       // As Pydantic writes a tree as a tagged union of a leaf and a group of them.
       const leaf = { type: 'object', properties: { kind: { const: 'leaf' } }, required: ['kind'] }

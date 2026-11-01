@@ -292,6 +292,30 @@ function isInlined(ref: string, ctx: Context): boolean {
   )
 }
 
+// The `items` of a tuple and the `additionalProperties` beside
+// `patternProperties`, where a `$ref` kept as written reads what the
+// conversion puts there instead: the `items` built from every item schema,
+// and `true`.
+const LOOSENED_VALUES = [
+  ['/items', 'prefixItems'],
+  ['/additionalProperties', 'patternProperties'],
+] as const
+
+function isIntoLoosened(ref: string, ctx: Context): boolean {
+  for (const [key, beside] of LOOSENED_VALUES) {
+    for (let at = ref.indexOf(key); at !== -1; at = ref.indexOf(key, at + 1)) {
+      const end = at + key.length
+      if (end === ref.length || ref[end] === '/') {
+        const holder = resolvePointer(ref.slice(0, at), ctx)
+        if (isRecord(holder) && holder[beside] !== undefined) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 function isIntoNamedValue(ref: string, ctx: Context): boolean {
   for (
     let at = ref.indexOf('/additionalProperties');
@@ -393,7 +417,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     // where the target is still being converted.
     const out = { $ref: ref }
     const converted = inline(ref, ctx, convertSchema, true)
-    if (isLoose(converted) || looseTargets.has(target)) {
+    if (isLoose(converted) || looseTargets.has(target) || isIntoLoosened(ref, ctx)) {
       return loosened(out)
     }
     refOutputs.set(
