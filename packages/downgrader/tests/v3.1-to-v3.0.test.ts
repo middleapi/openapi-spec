@@ -2873,6 +2873,51 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({})
     })
 
+    it('includes a schema that loses it only around a cycle of $refs, whichever comes first', () => {
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      const lost = { type: 'object', propertyNames: { pattern: '^a' } } as const
+      // A not and a oneOf over a $ref back into the schema around them.
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Node: {
+                ...lost,
+                properties: {
+                  a: { not: ref('Node') },
+                  b: { oneOf: [ref('Node'), { type: 'object', required: ['z'] }] },
+                },
+              },
+            },
+          },
+        }).components?.schemas,
+      ).toEqual({
+        Node: {
+          type: 'object',
+          properties: {
+            a: {},
+            b: { anyOf: [ref('Node'), { type: 'object', required: ['z'] }] },
+          },
+        },
+      })
+      // Outer reaches Inner, which loses it only through its $ref to Lost.
+      // Converting Lost first meets Inner while Lost is still being converted.
+      const schemas = {
+        Lost: { ...lost, properties: { a: ref('Inner') } },
+        Inner: { type: 'object', properties: { a: ref('Lost') } },
+        Outer: { not: ref('Inner') },
+      } satisfies Record<string, OpenAPIV3_1.SchemaObject>
+      for (const order of [
+        ['Lost', 'Inner', 'Outer'],
+        ['Outer', 'Lost', 'Inner'],
+      ] as const) {
+        const out = convert({
+          components: { schemas: Object.fromEntries(order.map((name) => [name, schemas[name]])) },
+        }).components?.schemas
+        expect(out?.Outer).toEqual({})
+      }
+    })
+
     it('counts a $defs target cut at recursion as telling no branch apart', () => {
       // As Pydantic writes a tree as a tagged union of a leaf and a group of them.
       const leaf = { type: 'object', properties: { kind: { const: 'leaf' } }, required: ['kind'] }
