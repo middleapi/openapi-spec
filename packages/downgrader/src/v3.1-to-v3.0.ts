@@ -292,6 +292,30 @@ function isInlined(ref: string, ctx: Context): boolean {
   )
 }
 
+// The `items` of a tuple and the `additionalProperties` beside
+// `patternProperties`, where a `$ref` kept as written reads what the
+// conversion puts there instead: the `items` built from every item schema,
+// and `true`.
+const LOOSENED_VALUES = [
+  ['/items', 'prefixItems'],
+  ['/additionalProperties', 'patternProperties'],
+] as const
+
+function isIntoLoosened(ref: string, ctx: Context): boolean {
+  for (const [key, beside] of LOOSENED_VALUES) {
+    for (let at = ref.indexOf(key); at !== -1; at = ref.indexOf(key, at + 1)) {
+      const end = at + key.length
+      if (end === ref.length || ref[end] === '/') {
+        const holder = resolvePointer(ref.slice(0, at), ctx)
+        if (isRecord(holder) && holder[beside] !== undefined) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 function isIntoNamedValue(ref: string, ctx: Context): boolean {
   for (
     let at = ref.indexOf('/additionalProperties');
@@ -393,7 +417,7 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     // where the target is still being converted.
     const out = { $ref: ref }
     const converted = inline(ref, ctx, convertSchema, true)
-    if (isLoose(converted) || looseTargets.has(target)) {
+    if (isLoose(converted) || looseTargets.has(target) || isIntoLoosened(ref, ctx)) {
       return loosened(out)
     }
     refOutputs.set(
@@ -638,12 +662,16 @@ function isApart(a: Tags, b: Tags): boolean {
 
 // The schema that a chain of `$ref`s from `value` ends at. A `$ref` back into
 // a target being inlined is cut to `{}`, which keeps nothing, and so is a
-// `$ref` whose chain of `$ref`s reaches one.
+// `$ref` whose chain of `$ref`s reaches one. So is a kept `$ref` into a spot
+// that `isIntoLoosened` names, where 3.0 reads a looser schema.
 function follow(value: unknown, ctx: Context): unknown {
   const visited = new Set<string>()
   let target = value
   for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
-    if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
+    if (
+      visited.has(ref) ||
+      (isInlined(ref, ctx) ? ctx.inlining.has(resolvePointer(ref, ctx)) : isIntoLoosened(ref, ctx))
+    ) {
       return undefined
     }
     visited.add(ref)
