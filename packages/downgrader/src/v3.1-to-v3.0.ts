@@ -679,40 +679,23 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   return { type: schema.type, values }
 }
 
-// Whether an object requires a property that 3.0 requires in one direction
-// only, as it applies `required` to a `readOnly` property in responses only,
-// and to a `writeOnly` one in requests only, which 2020-12 does not. Spelled
-// out, as it runs for every schema with `required`.
-function requiresOneWay(required: unknown[], properties: unknown, ctx: Context): boolean {
-  if (isRecord(properties)) {
-    for (let i = 0; i < required.length; i++) {
-      if (isOneWay(properties[required[i] as string], ctx)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-// Read through `$ref`s too, as 3.0 reads each target in its place.
-function isOneWay(property: unknown, ctx: Context): boolean {
-  let part = property
-  let visited: Set<unknown> | undefined
-  while (typeof part === 'object' && part !== null) {
-    const { readOnly, writeOnly, $ref } = part as Record<string, unknown>
-    if (readOnly === true || writeOnly === true) {
+// Whether 3.0 requires the property in one direction only, as it applies
+// `required` to a `readOnly` property in responses only, and to a `writeOnly`
+// one in requests only. Read through `$ref`s, as 3.0 reads each target in its
+// place.
+function isOneWay(value: unknown, ctx: Context): boolean {
+  const visited = new Set<unknown>()
+  let part = value
+  while (isRecord(part) && !visited.has(part)) {
+    if (part.readOnly === true || part.writeOnly === true) {
       return true
     }
-    if (typeof $ref !== 'string') {
+    const ref = getRef(part)
+    if (ref === undefined) {
       return false
     }
-    if (part !== property) {
-      if (visited?.has(part)) {
-        return false
-      }
-      ;(visited ??= new Set()).add(part)
-    }
-    part = resolvePointer($ref, ctx)
+    visited.add(part)
+    part = resolvePointer(ref, ctx)
   }
   return false
 }
@@ -1482,10 +1465,13 @@ function finishSchema(
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
     !includesJson(schema.enum, schema.const)
+  // 3.0 requires a `readOnly` property in responses only and a `writeOnly` one
+  // in requests only, where 2020-12 requires both everywhere.
   let loose =
     loosen(out, schema, exactTuple, ctx) ||
     constOutsideEnum ||
-    (Array.isArray(schema.required) && requiresOneWay(schema.required, schema.properties, ctx))
+    schema.readOnly === true ||
+    schema.writeOnly === true
   // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
   // dropped, as it would reject the properties `patternProperties` allowed.
   // Code generators read a missing one as allowing no other properties.
@@ -1719,8 +1705,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     let out = downgrade(root, convert)
     // A `not` or `oneOf` over a `$ref` around a cycle read its target before
     // that target lost a restriction, so the conversion runs again, reading
-    // such targets as loose from the start, until no other target does so,
-    // or the pass kept no `not` or `oneOf` that one could change.
+    // such targets as loose from the start, until no other target does so.
     while (keptStrict && markLooseTargets()) {
       keptStrict = false
       nullableUnions.length = 0
