@@ -359,16 +359,20 @@ describe('downgradeSpecV32ToV31', () => {
       expect(out.components).toEqual({ schemas: { Pet: { type: 'object' } } })
     })
 
-    it('drops a content $ref that does not resolve or loops', () => {
+    it('writes {} for a content $ref that does not resolve or loops', () => {
       const out = convertOperation({
         requestBody: {
           content: {
             'application/json': { $ref: '#/components/mediaTypes/Missing' },
             'text/plain': { $ref: '#/paths/~1a/get/requestBody/content/text~1plain' },
+            'text/csv': { $ref: 'https://example.com/other.json#/components/mediaTypes/Csv' },
           },
         },
       })
-      expect(out?.requestBody).toStrictEqual({ content: {} })
+      // A media type with no schema takes any payload.
+      expect(out?.requestBody).toStrictEqual({
+        content: { 'application/json': {}, 'text/plain': {}, 'text/csv': {} },
+      })
     })
   })
 

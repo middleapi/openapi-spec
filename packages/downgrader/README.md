@@ -59,7 +59,7 @@ The output `openapi` is the latest patch release, `3.1.2` from `downgradeSpecV32
 
 The input is never changed, and the output shares no plain objects or arrays with it. Input is read as JSON would see it: an object counts whatever realm it comes from or null prototype it has, as in a document oRPC returns, and a key holding `undefined`, as spreading options often leaves, counts as missing. Other values, such as a `Date`, are kept as they are.
 
-External `$ref`s are left as written, except in a 3.2 `content` map, where 3.1 allows none and the entry is removed. The files they point at are not converted, so bundle a multi-file document into one first.
+External `$ref`s are left as written, except in a 3.2 `content` map, where 3.1 allows none and the entry becomes `{}`, which takes any payload. The files they point at are not converted, so bundle a multi-file document into one first.
 
 ## 3.2 → 3.1
 
@@ -120,7 +120,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
-- A `content` `$ref` that does not resolve is removed, which can leave a parameter or header without the one entry it needs.
+- A `content` `$ref` that does not resolve, such as an external one or one through `$self`, becomes `{}`, which takes any payload.
 - A security requirement that names its scheme by URI reference loses it, so 3.1 tools can read the operation as needing no credentials for it.
 - `$self`-relative references pass through unchanged.
 

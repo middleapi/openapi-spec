@@ -286,9 +286,13 @@ function convertMediaType(value: unknown, ctx: Context): unknown {
 }
 
 // A 3.1 content map cannot hold a `$ref`, such as one to `components.mediaTypes`.
+// One that does not resolve, such as an external one, becomes `{}`, which takes
+// any payload, where removing the entry would take none of that media type.
 function convertMediaTypeEntry(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref === undefined ? convertMediaType(value, ctx) : inline(ref, ctx, convertMediaTypeEntry)
+  const out =
+    ref === undefined ? convertMediaType(value, ctx) : inline(ref, ctx, convertMediaTypeEntry)
+  return out === DROP ? {} : out
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {
