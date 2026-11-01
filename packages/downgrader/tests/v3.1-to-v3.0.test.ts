@@ -2430,6 +2430,32 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
+  it('follows a propertyNames $ref on through a $ref beside only annotations, and no further', () => {
+    const r = '#/components/schemas/'
+    const schemas = convert({
+      components: {
+        schemas: {
+          Lang: { type: 'string', enum: ['en', 'fr'] },
+          Alias: { $ref: `${r}Lang`, description: 'A language' },
+          // The enum beside it allows only "en".
+          English: { $ref: `${r}Lang`, enum: ['en'] },
+          ByAlias: {
+            type: 'object',
+            propertyNames: { $ref: `${r}Alias` },
+            additionalProperties: { type: 'string' },
+          },
+          NotEnglish: { not: { type: 'object', propertyNames: { $ref: `${r}English` } } },
+        },
+      },
+    }).components?.schemas
+    expect(schemas?.ByAlias).toEqual({
+      type: 'object',
+      properties: { en: { type: 'string' }, fr: { type: 'string' } },
+      additionalProperties: false,
+    })
+    expect(schemas?.NotEnglish).toEqual({})
+  })
+
   it('turns a propertyNames $ref to an enum, as Zod writes a record keyed by a reusable enum, into one property per name', () => {
     const value = { type: 'number' } as const
     const Lang = { type: 'string' as const, enum: ['en', 'fr'], title: 'Lang' }

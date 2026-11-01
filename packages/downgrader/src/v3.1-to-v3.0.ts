@@ -544,13 +544,19 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
 // enum or literal keys, when no other keyword names properties. Each becomes a
 // property of its own, which 3.0 can express. A reusable enum is a `$ref` to it.
 function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
-  const ref = getRef(schema.propertyNames)
   // Followed alone or beside annotations, such as the `description` Zod writes
-  // for a described use, since other keywords beside it narrow the names further.
-  const names =
-    ref !== undefined && isAnnotatedRef(schema.propertyNames as Record<string, unknown>)
-      ? resolve(ref, ctx)
-      : schema.propertyNames
+  // for a described use, also on along a chain of them, since other keywords
+  // beside a `$ref` narrow the names further.
+  let names = schema.propertyNames
+  const visited = new Set<unknown>()
+  for (
+    let ref = getRef(names);
+    ref !== undefined && isAnnotatedRef(names as Record<string, unknown>) && !visited.has(names);
+    ref = getRef(names)
+  ) {
+    visited.add(names)
+    names = resolvePointer(ref, ctx)
+  }
   if (!isRecord(names)) {
     return undefined
   }
