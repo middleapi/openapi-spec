@@ -3034,6 +3034,62 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ anyOf: [{}, { type: 'object' }] })
     })
 
+    it('counts a copy cut at recursion and reused later as telling no branch apart', () => {
+      // Derived extends Base, which holds a Derived child. Inlining Base first
+      // cuts Derived's $ref back to it, and that copy of Derived is reused
+      // after Base is done, though it no longer requires kind "base".
+      const p = '#/$defs/'
+      const extra = { type: 'object', properties: { extra: { type: 'string' } } } as const
+      const out = downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: {
+          first: { $ref: `${p}Base` },
+          either: { oneOf: [{ $ref: `${p}Derived` }, { $ref: `${p}Other` }] },
+        },
+        $defs: {
+          Base: {
+            type: 'object',
+            properties: { kind: { const: 'base' }, child: { $ref: `${p}Derived` } },
+            required: ['kind'],
+          },
+          Derived: { allOf: [{ $ref: `${p}Base` }, extra] },
+          Other: { type: 'object', properties: { kind: { const: 'other' } }, required: ['kind'] },
+        },
+      })
+      expect(out).toHaveProperty(['properties', 'either'], {
+        anyOf: [
+          { allOf: [{}, extra] },
+          {
+            type: 'object',
+            properties: { kind: { type: 'string', enum: ['other'] } },
+            required: ['kind'],
+          },
+        ],
+      })
+      // Nor does such a copy reject null, so the pair of it and null stays.
+      const r = '#/components/schemas/'
+      const schemas = convert({
+        components: {
+          schemas: {
+            Tree: { $ref: `${r}Forest/$defs/Node` },
+            Forest: {
+              $defs: {
+                Node: {
+                  type: 'object',
+                  properties: { next: { anyOf: [{ $ref: `${r}Link` }, { type: 'null' }] } },
+                },
+              },
+            },
+            Link: { allOf: [{ $ref: `${r}Forest/$defs/Node` }] },
+          },
+        },
+      }).components?.schemas
+      expect(schemas?.Link).toEqual({ allOf: [{}] })
+      expect(schemas?.Tree).toHaveProperty(['properties', 'next'], {
+        anyOf: [{ $ref: `${r}Link` }, { type: 'string', nullable: true, enum: [null] }],
+      })
+    })
+
     it('includes the target of a $ref kept in the output', () => {
       // As zod emits z.xor over tuples registered as components.
       const tuple = (
