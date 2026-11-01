@@ -2462,6 +2462,57 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30(map)).toEqual(map)
   })
 
+  it('replaces a $ref into the items of a tuple, or into additionalProperties beside patternProperties, with its target', () => {
+    // The conversion puts other schemas there: the items built from every item
+    // schema, none for a closed tuple, and true.
+    const ref = (path: string) => ({ $ref: `#/components/schemas/${path}` })
+    const out = convert({
+      components: {
+        schemas: {
+          Pair: { type: 'array', prefixItems: [{ type: 'number' }], items: { type: 'string' } },
+          Closed: {
+            type: 'array',
+            prefixItems: [{ type: 'string' }],
+            items: { type: 'number' },
+            maxItems: 1,
+          },
+          Union: {
+            type: 'array',
+            prefixItems: [{ type: 'integer' }],
+            items: { anyOf: [{ type: 'boolean' }, { type: 'string' }] },
+          },
+          Notes: {
+            type: 'object',
+            patternProperties: { '^x-': {} },
+            additionalProperties: { type: 'string' },
+          },
+          Rest: ref('Pair/items'),
+          ClosedRest: ref('Closed/items'),
+          UnionBranch: ref('Union/items/anyOf/1'),
+          NotRest: { not: ref('Pair/items') },
+          RestOrNumber: { oneOf: [ref('Pair/items'), { type: 'number' }] },
+          NotOther: { not: ref('Notes/additionalProperties') },
+          // Not into a tuple, nor into items at all.
+          List: {
+            type: 'array',
+            items: { type: 'object', properties: { a: { type: 'string' } } },
+          },
+          Bag: { type: 'object', properties: { itemsLeft: { type: 'integer' } } },
+          Item: ref('List/items/properties/a'),
+          Count: ref('Bag/properties/itemsLeft'),
+        },
+      },
+    }).components?.schemas
+    expect(out?.Rest).toEqual({ type: 'string' })
+    expect(out?.ClosedRest).toEqual({ type: 'number' })
+    expect(out?.UnionBranch).toEqual({ type: 'string' })
+    expect(out?.NotRest).toEqual({ not: { type: 'string' } })
+    expect(out?.RestOrNumber).toEqual({ oneOf: [{ type: 'string' }, { type: 'number' }] })
+    expect(out?.NotOther).toEqual({ not: { type: 'string' } })
+    expect(out?.Item).toEqual(ref('List/items/properties/a'))
+    expect(out?.Count).toEqual(ref('Bag/properties/itemsLeft'))
+  })
+
   it('turns unevaluatedProperties into additionalProperties where nothing else evaluates properties', () => {
     const properties = { name: { type: 'string' } } as const
     expect(
@@ -2920,86 +2971,6 @@ describe('downgradeSchemaV31ToV30', () => {
         }).components?.schemas
         expect(out?.Outer).toEqual({})
       }
-    })
-
-    it('includes a $ref into the items of a tuple, or into additionalProperties beside patternProperties', () => {
-      // They read the items built from every item schema, and true.
-      const out = convert({
-        components: {
-          schemas: {
-            Pair: { type: 'array', prefixItems: [{ type: 'number' }], items: { type: 'string' } },
-            Notes: {
-              type: 'object',
-              patternProperties: { '^x-': {} },
-              additionalProperties: { type: 'string' },
-            },
-            NotRest: { not: { $ref: '#/components/schemas/Pair/items' } },
-            NotOther: { not: { $ref: '#/components/schemas/Notes/additionalProperties' } },
-            // Nor do they tell branches apart, by type or by a tag.
-            RestOrNumber: {
-              oneOf: [{ $ref: '#/components/schemas/Pair/items' }, { type: 'number' }],
-            },
-            OtherOrNumber: {
-              oneOf: [
-                { $ref: '#/components/schemas/Notes/additionalProperties' },
-                { type: 'number' },
-              ],
-            },
-            Kinds: { type: 'array', prefixItems: [{ const: 'b' }], items: { const: 'a' } },
-            Tagged: {
-              oneOf: [
-                {
-                  type: 'object',
-                  properties: { kind: { $ref: '#/components/schemas/Kinds/items' } },
-                  required: ['kind'],
-                },
-                { type: 'object', properties: { kind: { const: 'b' } }, required: ['kind'] },
-              ],
-            },
-            // Not into a tuple, nor into items at all.
-            List: {
-              type: 'array',
-              items: { type: 'object', properties: { a: { type: 'string' } } },
-            },
-            Bag: { type: 'object', properties: { itemsLeft: { type: 'integer' } } },
-            NotItem: { not: { $ref: '#/components/schemas/List/items/properties/a' } },
-            NotCount: { not: { $ref: '#/components/schemas/Bag/properties/itemsLeft' } },
-          },
-        },
-      }).components?.schemas
-      expect(out?.Pair).toEqual({
-        type: 'array',
-        items: { oneOf: [{ type: 'number' }, { type: 'string' }] },
-      })
-      expect(out?.Notes).toEqual({ type: 'object', additionalProperties: true })
-      expect(out?.NotRest).toEqual({})
-      expect(out?.NotOther).toEqual({})
-      expect(out?.RestOrNumber).toEqual({
-        anyOf: [{ $ref: '#/components/schemas/Pair/items' }, { type: 'number' }],
-      })
-      expect(out?.OtherOrNumber).toEqual({
-        anyOf: [{ $ref: '#/components/schemas/Notes/additionalProperties' }, { type: 'number' }],
-      })
-      expect(out?.Tagged).toEqual({
-        anyOf: [
-          {
-            type: 'object',
-            properties: { kind: { $ref: '#/components/schemas/Kinds/items' } },
-            required: ['kind'],
-          },
-          {
-            type: 'object',
-            properties: { kind: { type: 'string', enum: ['b'] } },
-            required: ['kind'],
-          },
-        ],
-      })
-      expect(out?.NotItem).toEqual({
-        not: { $ref: '#/components/schemas/List/items/properties/a' },
-      })
-      expect(out?.NotCount).toEqual({
-        not: { $ref: '#/components/schemas/Bag/properties/itemsLeft' },
-      })
     })
 
     it('counts a $defs target cut at recursion as telling no branch apart', () => {
