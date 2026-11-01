@@ -122,10 +122,6 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Converted schemas whose conversion is done. One met again before that,
-// around a cycle, counts as loose, since what it loses is not known yet.
-const DONE = new WeakSet<object>()
-
 // Converted schemas with an `anyOf` or `oneOf` of several branches, for
 // `mergeEnums` and `mergeNullable`. They run once the whole input is converted,
 // since a cycle can meet a branch before its conversion is done.
@@ -1496,13 +1492,12 @@ function finishSchema(
   if (loose) {
     LOOSE.add(out)
   }
-  DONE.add(out)
 }
 
+// Met again before its conversion is done, around a cycle, a schema counts as
+// loose, since what it loses is not known yet.
 function revisitSchema(out: object): void {
-  if (!DONE.has(out)) {
-    LOOSE.add(out)
-  }
+  LOOSE.add(out)
 }
 
 // Spelled out, not through `hasOnly`, since it runs for every `$ref`.
