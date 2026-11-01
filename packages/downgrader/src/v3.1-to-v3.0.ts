@@ -213,7 +213,7 @@ const ENCODING_FIELDS = defineFields({
 })
 
 const MEDIA_TYPE_FIELDS = defineFields({
-  encoding: map((item, ctx) => convertObject(item, ctx, ENCODING_FIELDS)),
+  encoding: map((item, ctx) => convertObject(item, ctx, ENCODING_FIELDS, finishEncoding)),
   examples: map(convertReference),
   schema: convertSchema,
 })
@@ -1536,6 +1536,19 @@ function convertParameter(value: unknown, ctx: Context): unknown {
 
 function convertMediaType(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, MEDIA_TYPE_FIELDS)
+}
+
+// 3.1 ignores `contentType`, also its default, where `style`, `explode`, or
+// `allowReserved` is set, and 3.0 ignores those in `multipart` instead, so
+// the part takes any type.
+function finishEncoding(out: Record<string, unknown>, source: Record<string, unknown>): void {
+  if (
+    source.style !== undefined ||
+    source.explode !== undefined ||
+    source.allowReserved !== undefined
+  ) {
+    out.contentType = '*/*'
+  }
 }
 
 function convertRequestBody(value: unknown, ctx: Context): unknown {

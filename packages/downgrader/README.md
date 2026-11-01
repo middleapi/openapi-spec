@@ -153,6 +153,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 | Reference Object [`summary`][3.1-reference-summary] and [`description`][3.1-reference-description] | Removed. A 3.0 Reference Object holds only `$ref`.                                                                                                                            |
 | [`mutualTLS`][3.1-security-scheme-type] security schemes                                           | Removed, with the `$ref`s to them and their names in security requirements. A requirement left empty stays and needs no security, since 3.0 cannot ask for mutual TLS at all. |
 | [Security requirement][3.1-security-requirement] scopes on `apiKey` and `http` schemes             | `[]`. 3.0 allows scopes only for OAuth2 and OpenID Connect.                                                                                                                   |
+| Encoding Object `contentType` beside `style`, `explode`, or `allowReserved`                        | `*/*`. 3.1 ignores it there, also its default, and 3.0 ignores the others in `multipart` instead.                                                                             |
 
 [3.1-json-schema-dialect]: https://spec.openapis.org/oas/v3.1.2.html#oas-json-schema-dialect
 [3.1-webhooks]: https://spec.openapis.org/oas/v3.1.2.html#oas-webhooks
@@ -170,7 +171,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 - A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target refers back to one it is being copied into, that inner reference becomes `{}`, or is removed where `{}` is not a valid value.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
-- Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
+- Other Encoding Objects pass through, although 3.0 gives an untyped `multipart` part no `application/octet-stream` default.
 - A requirement that uses only mutual TLS becomes `{}`, so 3.0 tools read its operation as needing no security, and a requirement that pairs it with another scheme asks for that scheme alone.
 - A 3.1 document that already uses 3.2 fields, as FastAPI writes `itemSchema` for streaming responses, keeps them as written, and the schemas inside them are not converted. Run `downgradeSpecV32ToV31` on it first.
 
