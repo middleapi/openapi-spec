@@ -3353,8 +3353,9 @@ describe('downgradeSchemaV31ToV30', () => {
           { type: 'array', items: { type: 'string' } },
         ],
       })
+      // A $ref met again while its target is still being converted counts as loose.
       expect(schemas?.Cycle).toEqual({
-        oneOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }],
+        anyOf: [{ $ref: '#/components/schemas/A' }, { type: 'string' }],
       })
     })
   })

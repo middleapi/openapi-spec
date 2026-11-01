@@ -122,10 +122,9 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
-// Whether a `not` or `oneOf` kept its form, since nothing under it was loose.
-// Only such a choice changes when more schemas read as loose, so without one
-// the conversion need not run again.
-let keptStrict = false
+// Converted schemas whose conversion is done. One met again before that,
+// around a cycle, counts as loose, since what it loses is not known yet.
+const DONE = new WeakSet<object>()
 
 // Converted schemas with an `anyOf` or `oneOf` of several branches, for
 // `mergeEnums` and `mergeNullable`. They run once the whole input is converted,
@@ -139,21 +138,6 @@ const unionTargets = new Set<unknown>()
 
 // Input schemas a `$ref` kept as written points to, for `scalarOneOf`.
 const refTargets = new Set<unknown>()
-
-// The output of each target a `$ref` kept as written read as not loose. Around
-// a cycle, that output was still being converted, and can lose a restriction
-// after the `$ref` read it.
-const refOutputs = new Map<unknown, unknown>()
-
-// Targets that did so, which the next pass reads as loose from the start.
-const looseTargets = new Set<unknown>()
-
-// The same for a cycle of objects, as a dereferencing parser leaves: each
-// schema met again, also where a document shares it, with its output, not
-// loose yet, and the schemas whose output then lost a restriction, which the
-// next pass reads as loose when it meets them again.
-const revisits: [object, object][] = []
-const looseInputs = new Set<object>()
 
 // Schemas whose `$ref` a copy cut to `{}` at recursion. The copy is reused
 // wherever its target is inlined again, or a `$ref` reads the component that
@@ -416,14 +400,10 @@ function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
     refTargets.add(target)
     // A `$ref` kept as written loses what its target loses. Converting the
     // target here reuses the copy the components get, and stops at a cycle,
-    // where the target is still being converted.
+    // where the target is still being converted, so it counts as loose.
     const out = { $ref: ref }
     const converted = inline(ref, ctx, convertSchema, true)
-    if (isLoose(converted) || looseTargets.has(target)) {
-      return loosened(out)
-    }
-    refOutputs.set(target, converted === DROP ? sharedOutput(target, ctx) : converted)
-    return out
+    return isLoose(converted) || (converted === DROP && target !== undefined) ? loosened(out) : out
   }
   const out = inline(ref, ctx, convertSchema)
   if (out === DROP) {
@@ -431,26 +411,6 @@ function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
     return loosened({})
   }
   return out
-}
-
-// The output of a target still being converted. A target that converts to the
-// output of the target of its `$ref`, an alias, has none of its own, so it is
-// the output of the target its chain of `$ref`s ends at: the copy the
-// components get, or for a `$ref` the conversion inlines, its inlined copy.
-function sharedOutput(target: unknown, ctx: Context): unknown {
-  const visited = new Set<unknown>()
-  let at = target
-  let seen: Context['seen'] | undefined = ctx.shared
-  for (
-    let ref = aliasRef(at, ctx);
-    ref !== undefined && !visited.has(at);
-    ref = aliasRef(at, ctx)
-  ) {
-    visited.add(at)
-    at = resolvePointer(ref, ctx)
-    seen = isInlined(ref, ctx) ? ctx.apart.get(at) : ctx.shared
-  }
-  return isRecord(at) ? seen?.get(SCHEMA_FIELDS)?.get(at) : undefined
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -785,19 +745,13 @@ function loosen(
   if (isLoose(out.not)) {
     delete out.not
     loose = true
-  } else if (out.not !== undefined) {
-    keptStrict = true
   }
-  if (Array.isArray(out.oneOf)) {
-    if (out.oneOf.some(isLoose)) {
-      if (!isDisjoint(schema.oneOf as unknown[], ctx)) {
-        addAnyOf(out, out.oneOf)
-        delete out.oneOf
-      }
-      loose = true
-    } else {
-      keptStrict = true
+  if (Array.isArray(out.oneOf) && out.oneOf.some(isLoose)) {
+    if (!isDisjoint(schema.oneOf as unknown[], ctx)) {
+      addAnyOf(out, out.oneOf)
+      delete out.oneOf
     }
+    loose = true
   }
   return (
     loose ||
@@ -1565,15 +1519,12 @@ function finishSchema(
   if (loose) {
     LOOSE.add(out)
   }
+  DONE.add(out)
 }
 
-// Met again before its output was done, around a cycle, a schema not loose
-// yet may lose a restriction after a `not` or `oneOf` around it read it.
-function revisitSchema(value: object, out: object): void {
-  if (looseInputs.has(value)) {
+function revisitSchema(out: object): void {
+  if (!DONE.has(out)) {
     LOOSE.add(out)
-  } else if (!isLoose(out)) {
-    revisits.push([value, out])
   }
 }
 
@@ -1591,22 +1542,15 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = aliasRef(value, ctx)
-  if (ref !== undefined) {
+  const ref = getRef(value)
+  if (
+    ref !== undefined &&
+    (isBareRef(value as Record<string, unknown>) ||
+      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
+  ) {
     return convertSchemaRef(ref, ctx, value)
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema, revisitSchema)
-}
-
-// The `$ref` of a schema that becomes its target's output: a bare `$ref`, or
-// one to a tagged union beside only annotations.
-function aliasRef(value: unknown, ctx: Context): string | undefined {
-  const ref = getRef(value)
-  return ref !== undefined &&
-    (isBareRef(value as Record<string, unknown>) ||
-      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
-    ? ref
-    : undefined
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
@@ -1702,20 +1646,7 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
-    let out = downgrade(root, convert)
-    // A `not` or `oneOf` over a `$ref` around a cycle read its target before
-    // that target lost a restriction, so the conversion runs again, reading
-    // such targets as loose from the start, until no other target does so.
-    while (keptStrict && markLooseTargets()) {
-      keptStrict = false
-      nullableUnions.length = 0
-      unionTargets.clear()
-      refTargets.clear()
-      refOutputs.clear()
-      cutHolders.clear()
-      revisits.length = 0
-      out = downgrade(root, convert)
-    }
+    const out = downgrade(root, convert)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
         const isTarget = refTargets.has(input)
@@ -1733,34 +1664,11 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     return out
   } finally {
     // Cleared even when conversion throws, so nothing keeps the input alive.
-    keptStrict = false
     nullableUnions.length = 0
     unionTargets.clear()
     refTargets.clear()
-    refOutputs.clear()
-    looseTargets.clear()
     cutHolders.clear()
-    revisits.length = 0
-    looseInputs.clear()
   }
-}
-
-// Adds each target whose output became loose after a `$ref` read it.
-function markLooseTargets(): boolean {
-  let added = false
-  for (const [target, out] of refOutputs) {
-    if (isLoose(out)) {
-      looseTargets.add(target)
-      added = true
-    }
-  }
-  for (const [input, out] of revisits) {
-    if (isLoose(out) && !looseInputs.has(input)) {
-      looseInputs.add(input)
-      added = true
-    }
-  }
-  return added
 }
 
 /** Downgrades an OpenAPI 3.1 document to 3.0, setting `openapi` to `3.0.4`. The input is never changed. */
