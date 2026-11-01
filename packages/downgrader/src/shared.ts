@@ -14,6 +14,8 @@ export interface Context {
   readonly apart: Map<unknown, Context['seen']>
   /** The targets of the `$ref`s being inlined, so a reference back into one stops there. */
   readonly inlining: Set<unknown>
+  /** The outputs whose conversion is running, innermost last. */
+  readonly converting: object[]
 }
 
 export type Convert = (value: unknown, ctx: Context) => unknown
@@ -116,7 +118,7 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
  * Converts the object `value` key by key: a key listed in `fields` goes
  * through its converter or is dropped, and any other key is copied. `finish`
  * then edits the output in place. An object met again gives the same output,
- * which `revisit` is told of.
+ * and `revisit` is told of one met again before its conversion is done.
  */
 export function convertObject(
   value: unknown,
@@ -135,11 +137,14 @@ export function convertObject(
   }
   const known = seen.get(value)
   if (known !== undefined) {
-    revisit?.(known)
+    if (revisit !== undefined && ctx.converting.includes(known)) {
+      revisit(known)
+    }
     return known
   }
   const out: Record<string, unknown> = {}
   seen.set(value, out)
+  ctx.converting.push(out)
   for (const key of Object.keys(value)) {
     const item = value[key]
     if (item === undefined) {
@@ -153,6 +158,7 @@ export function convertObject(
     }
   }
   finish?.(out, value, ctx)
+  ctx.converting.pop()
   return out
 }
 
@@ -282,6 +288,7 @@ export function downgrade(root: unknown, convert: Convert): unknown {
   const seen: Context['seen'] = new Map()
   return convert(root, {
     apart: new Map(),
+    converting: [],
     inlining: new Set(),
     root,
     seen,
