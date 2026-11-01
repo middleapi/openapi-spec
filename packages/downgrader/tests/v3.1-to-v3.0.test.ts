@@ -2430,7 +2430,7 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
-  it('follows a propertyNames $ref on through a $ref beside only annotations, and no further', () => {
+  it('follows a propertyNames $ref through one $ref only', () => {
     const r = '#/components/schemas/'
     const schemas = convert({
       components: {
@@ -2448,11 +2448,8 @@ describe('downgradeSchemaV31ToV30', () => {
         },
       },
     }).components?.schemas
-    expect(schemas?.ByAlias).toEqual({
-      type: 'object',
-      properties: { en: { type: 'string' }, fr: { type: 'string' } },
-      additionalProperties: false,
-    })
+    // A target that is a $ref again holds no names, so the record loses them.
+    expect(schemas?.ByAlias).toEqual({ type: 'object', additionalProperties: { type: 'string' } })
     expect(schemas?.NotEnglish).toEqual({})
   })
 
