@@ -1526,11 +1526,11 @@ function schemeType(scheme: unknown, ctx: Context): unknown {
 }
 
 // 3.0 has no mutual TLS, so security requirements lose the schemes that use
-// it. A requirement left empty is removed, because an empty one would mean
-// that no security is needed. A list left empty is removed too, so an
-// operation falls back to the document's `security`, though the document's
-// own list then needs no security either way. 3.0 also allows scopes only for
-// OAuth2 and OpenID Connect.
+// it. A requirement that used only them becomes empty, which needs no
+// security: 3.0 cannot ask for mutual TLS, and removing the requirement would
+// reject the clients that met it, or make an operation fall back to the
+// document's `security`. 3.0 also allows scopes only for OAuth2 and OpenID
+// Connect.
 function convertSecurity(value: unknown, ctx: Context): unknown {
   if (!Array.isArray(value)) {
     return clone(value)
@@ -1538,28 +1538,21 @@ function convertSecurity(value: unknown, ctx: Context): unknown {
   const schemes = resolvePointer('#/components/securitySchemes', ctx)
   const typeOf = (name: string): unknown =>
     isRecord(schemes) && Object.hasOwn(schemes, name) ? schemeType(schemes[name], ctx) : undefined
-  const out: unknown[] = []
-  for (const requirement of value) {
+  return value.map((requirement) => {
     if (!isRecord(requirement)) {
-      out.push(clone(requirement))
-      continue
+      return clone(requirement)
     }
-    const entries = Object.keys(requirement)
+    const kept = Object.keys(requirement)
       .filter((name) => requirement[name] !== undefined)
       .map((name) => [name, typeOf(name)] as const)
-    const kept = entries.filter(([, type]) => type !== 'mutualTLS')
-    if (kept.length > 0 || entries.length === 0) {
-      out.push(
-        Object.fromEntries(
-          kept.map(([name, type]) => [
-            name,
-            type === 'apiKey' || type === 'http' ? [] : clone(requirement[name]),
-          ]),
-        ),
-      )
-    }
-  }
-  return out.length === 0 && value.length > 0 ? DROP : out
+      .filter(([, type]) => type !== 'mutualTLS')
+    return Object.fromEntries(
+      kept.map(([name, type]) => [
+        name,
+        type === 'apiKey' || type === 'http' ? [] : clone(requirement[name]),
+      ]),
+    )
+  })
 }
 
 function finishDocument(out: Record<string, unknown>): void {

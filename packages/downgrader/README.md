@@ -151,7 +151,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 | A missing [`paths`][3.1-paths] or Operation [`responses`][3.1-operation-responses]                 | Added, as `{}` and as a `default` response, since 3.0 requires them.                                                                                                          |
 | Info [`summary`][3.1-info-summary] and License [`identifier`][3.1-license-identifier]              | Removed. An Info summary becomes the `description` when that is missing.                                                                                                      |
 | Reference Object [`summary`][3.1-reference-summary] and [`description`][3.1-reference-description] | Removed. A 3.0 Reference Object holds only `$ref`.                                                                                                                            |
-| [`mutualTLS`][3.1-security-scheme-type] security schemes                                           | Removed, with the `$ref`s to them and their names in security requirements. A requirement or `security` list left empty is removed too, since an empty one means no security. |
+| [`mutualTLS`][3.1-security-scheme-type] security schemes                                           | Removed, with the `$ref`s to them and their names in security requirements. A requirement left empty stays and needs no security, since 3.0 cannot ask for mutual TLS at all. |
 | [Security requirement][3.1-security-requirement] scopes on `apiKey` and `http` schemes             | `[]`. 3.0 allows scopes only for OAuth2 and OpenID Connect.                                                                                                                   |
 
 [3.1-json-schema-dialect]: https://spec.openapis.org/oas/v3.1.2.html#oas-json-schema-dialect
@@ -172,7 +172,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 - `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
-- A `security` list whose alternatives all use only mutual TLS is removed. On an operation it then falls back to the document's `security`, and on the document it leaves none, so no security is required.
+- A requirement that uses only mutual TLS becomes `{}`, so 3.0 tools read its operation as needing no security, and a requirement that pairs it with another scheme asks for that scheme alone.
 - A 3.1 document that already uses 3.2 fields, as FastAPI writes `itemSchema` for streaming responses, keeps them as written, and the schemas inside them are not converted. Run `downgradeSpecV32ToV31` on it first.
 
 ### Schema (`downgradeSchemaV31ToV30`)

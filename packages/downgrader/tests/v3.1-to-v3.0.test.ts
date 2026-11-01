@@ -287,7 +287,7 @@ describe('downgradeSpecV31ToV30', () => {
       })
     })
 
-    it('drops their names from security requirements, then emptied requirements and lists', () => {
+    it('drops their names from security requirements, which need no security once emptied', () => {
       const out = convert({
         security: [{ mtls: [] }],
         paths: {
@@ -305,9 +305,10 @@ describe('downgradeSpecV31ToV30', () => {
           },
         },
       })
-      expect(out.security).toBeUndefined()
-      expect(out.paths['/a']?.get?.security).toEqual([{ key: [] }, {}])
-      expect(out.paths['/a']?.put).toEqual({ responses })
+      // 3.0 cannot ask for mutual TLS, so a client that used only it needs nothing.
+      expect(out.security).toEqual([{}])
+      expect(out.paths['/a']?.get?.security).toEqual([{ key: [] }, {}, {}])
+      expect(out.paths['/a']?.put?.security).toEqual([{}])
       expect(out.paths['/a']?.post?.security).toEqual([])
     })
   })
