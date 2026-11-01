@@ -135,6 +135,14 @@ const unionTargets = new Set<unknown>()
 // Input schemas a `$ref` kept as written points to, for `scalarOneOf`.
 const refTargets = new Set<unknown>()
 
+// The output of each target a `$ref` kept as written read as not loose. Around
+// a cycle, that output was still being converted, and can lose a restriction
+// after the `$ref` read it.
+const refOutputs = new Map<unknown, unknown>()
+
+// Targets that did so, which the next pass reads as loose from the start.
+const looseTargets = new Set<unknown>()
+
 // The 3.0 keywords that apply only to objects, which `convertType` moves into
 // the `"object"` branch of a `type` list.
 const OBJECT_KEYWORDS = [
@@ -378,11 +386,21 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
         unionTargets.add(resolvePointer(ref.slice(0, at), ctx))
       }
     }
-    refTargets.add(resolvePointer(ref, ctx))
+    const target = resolvePointer(ref, ctx)
+    refTargets.add(target)
     // A `$ref` kept as written loses what its target loses. Converting the
-    // target here reuses the copy the components get, and stops at a cycle.
+    // target here reuses the copy the components get, and stops at a cycle,
+    // where the target is still being converted.
     const out = { $ref: ref }
-    return isLoose(inline(ref, ctx, convertSchema, true)) ? loosened(out) : out
+    const converted = inline(ref, ctx, convertSchema, true)
+    if (isLoose(converted) || looseTargets.has(target)) {
+      return loosened(out)
+    }
+    refOutputs.set(
+      target,
+      converted === DROP ? ctx.shared.get(SCHEMA_FIELDS)?.get(target as object) : converted,
+    )
+    return out
   }
   const out = inline(ref, ctx, convertSchema)
   return out === DROP ? loosened({}) : out
@@ -1555,7 +1573,17 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
-    const out = downgrade(root, convert)
+    let out = downgrade(root, convert)
+    // A `not` or `oneOf` over a `$ref` around a cycle read its target before
+    // that target lost a restriction, so the conversion runs again, reading
+    // such targets as loose from the start, until no other target does so.
+    while (markLooseTargets()) {
+      nullableUnions.length = 0
+      unionTargets.clear()
+      refTargets.clear()
+      refOutputs.clear()
+      out = downgrade(root, convert)
+    }
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
         const isTarget = refTargets.has(input)
@@ -1576,7 +1604,21 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     nullableUnions.length = 0
     unionTargets.clear()
     refTargets.clear()
+    refOutputs.clear()
+    looseTargets.clear()
   }
+}
+
+// Adds each target whose output became loose after a `$ref` read it.
+function markLooseTargets(): boolean {
+  let added = false
+  for (const [target, out] of refOutputs) {
+    if (isLoose(out)) {
+      looseTargets.add(target)
+      added = true
+    }
+  }
+  return added
 }
 
 /** Downgrades an OpenAPI 3.1 document to 3.0, setting `openapi` to `3.0.4`. The input is never changed. */
