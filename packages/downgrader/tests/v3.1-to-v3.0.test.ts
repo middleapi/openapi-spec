@@ -295,6 +295,7 @@ describe('downgradeSpecV31ToV30', () => {
             get: { security: [{ mtls: [], key: [] }, { alias: [] }, {}], responses },
             put: { security: [{ mtls: [] }], responses },
             post: { security: [], responses },
+            delete: { security: [{ mtls: [] }, { key: [] }], responses },
           },
         },
         components: {
@@ -310,6 +311,8 @@ describe('downgradeSpecV31ToV30', () => {
       expect(out.paths['/a']?.get?.security).toEqual([{ key: [] }, {}, {}])
       expect(out.paths['/a']?.put?.security).toEqual([{}])
       expect(out.paths['/a']?.post?.security).toEqual([])
+      // A client with mutual TLS alone met it, so the key stays optional.
+      expect(out.paths['/a']?.delete?.security).toEqual([{}, { key: [] }])
     })
   })
 
