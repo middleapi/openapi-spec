@@ -1398,18 +1398,16 @@ function finishSchema(
   if (Array.isArray(schema.examples) && schema.examples.length > 0 && out.example === undefined) {
     out.example = clone(schema.examples[0])
   }
+  // An untyped schema gains no `type: "string"`, which would reject the values
+  // of other types it takes. The `format` reads only strings.
   const format = binaryFormat(schema)
   if (
     format !== undefined &&
-    (schema.type === undefined ? !hasSubschemas(schema) : hasType(schema.type, 'string'))
+    (schema.type === undefined ? !hasSubschemas(schema) : hasType(schema.type, 'string')) &&
+    (out.format === undefined || out.format === schema.contentEncoding)
   ) {
     // A `format` that only repeats the encoding, as Zod writes, gives way.
-    if (out.format === undefined || out.format === schema.contentEncoding) {
-      out.format = format
-    }
-    if (schema.type === undefined) {
-      out.type = 'string'
-    }
+    out.format = format
   }
   // 3.0 allows no other keywords, so unknown ones become extensions.
   for (const key of Object.keys(out)) {
