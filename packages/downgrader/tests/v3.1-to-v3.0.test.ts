@@ -3018,6 +3018,17 @@ describe('downgradeSchemaV31ToV30', () => {
           },
         }).components?.schemas?.Not,
       ).toEqual({})
+      // A cycle of $refs, which never reaches a schema, holds none.
+      const loop: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { id: ref('Loop') },
+        required: ['id'],
+      }
+      expect(
+        convert({
+          components: { schemas: { Not: { not: loop }, Loop: ref('Back'), Back: ref('Loop') } },
+        }).components?.schemas?.Not,
+      ).toEqual({ not: loop })
       // Nor does such a property tell branches apart as a required tag.
       const tagged = (kind: string, more: object = {}): OpenAPIV3_1.SchemaObject => ({
         type: 'object',

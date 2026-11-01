@@ -655,11 +655,11 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   if (schema.nullable === true) {
     return { type: undefined, values }
   }
+  const properties = isRecord(schema.properties) ? schema.properties : {}
   const required =
     schema.type === 'object' && Array.isArray(schema.required)
-      ? schema.required.filter((name) => !isOneWay(schema, name, ctx))
+      ? schema.required.filter((name) => !isOneWay(properties[name as string], ctx))
       : []
-  const properties = isRecord(schema.properties) ? schema.properties : {}
   for (const name of Object.keys(properties)) {
     const value = properties[name]
     const property =
@@ -679,25 +679,40 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   return { type: schema.type, values }
 }
 
-// A property that 3.0 requires in one direction only, as it applies
-// `required` to a `readOnly` property in responses only, and to a `writeOnly`
-// one in requests only, which 2020-12 does not. Read through `$ref`s too.
-function isOneWay(schema: Record<string, unknown>, name: unknown, ctx: Context): boolean {
-  const { properties } = schema
-  if (!isRecord(properties) || typeof name !== 'string' || !Object.hasOwn(properties, name)) {
-    return false
+// Whether an object requires a property that 3.0 requires in one direction
+// only, as it applies `required` to a `readOnly` property in responses only,
+// and to a `writeOnly` one in requests only, which 2020-12 does not. Spelled
+// out, as it runs for every schema with `required`.
+function requiresOneWay(required: unknown[], properties: unknown, ctx: Context): boolean {
+  if (isRecord(properties)) {
+    for (let i = 0; i < required.length; i++) {
+      if (isOneWay(properties[required[i] as string], ctx)) {
+        return true
+      }
+    }
   }
+  return false
+}
+
+// Read through `$ref`s too, as 3.0 reads each target in its place.
+function isOneWay(property: unknown, ctx: Context): boolean {
+  let part = property
   let visited: Set<unknown> | undefined
-  for (let part = properties[name]; isRecord(part);) {
-    if (part.readOnly === true || part.writeOnly === true) {
+  while (typeof part === 'object' && part !== null) {
+    const { readOnly, writeOnly, $ref } = part as Record<string, unknown>
+    if (readOnly === true || writeOnly === true) {
       return true
     }
-    const ref = getRef(part)
-    if (ref === undefined || visited?.has(part)) {
+    if (typeof $ref !== 'string') {
       return false
     }
-    ;(visited ??= new Set()).add(part)
-    part = resolvePointer(ref, ctx)
+    if (part !== property) {
+      if (visited?.has(part)) {
+        return false
+      }
+      ;(visited ??= new Set()).add(part)
+    }
+    part = resolvePointer($ref, ctx)
   }
   return false
 }
@@ -1470,7 +1485,7 @@ function finishSchema(
   let loose =
     loosen(out, schema, exactTuple, ctx) ||
     constOutsideEnum ||
-    (Array.isArray(schema.required) && schema.required.some((name) => isOneWay(schema, name, ctx)))
+    (Array.isArray(schema.required) && requiresOneWay(schema.required, schema.properties, ctx))
   // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
   // dropped, as it would reject the properties `patternProperties` allowed.
   // Code generators read a missing one as allowing no other properties.
