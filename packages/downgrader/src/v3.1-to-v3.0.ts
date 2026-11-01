@@ -655,7 +655,10 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   if (schema.nullable === true) {
     return { type: undefined, values }
   }
-  const required = schema.type === 'object' && Array.isArray(schema.required) ? schema.required : []
+  const required =
+    schema.type === 'object' && Array.isArray(schema.required)
+      ? schema.required.filter((name) => !isOneWay(schema, name, ctx))
+      : []
   const properties = isRecord(schema.properties) ? schema.properties : {}
   for (const name of Object.keys(properties)) {
     const value = properties[name]
@@ -674,6 +677,29 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
     }
   }
   return { type: schema.type, values }
+}
+
+// A property that 3.0 requires in one direction only, as it applies
+// `required` to a `readOnly` property in responses only, and to a `writeOnly`
+// one in requests only, which 2020-12 does not. Read through `$ref`s too.
+function isOneWay(schema: Record<string, unknown>, name: unknown, ctx: Context): boolean {
+  const { properties } = schema
+  if (!isRecord(properties) || typeof name !== 'string' || !Object.hasOwn(properties, name)) {
+    return false
+  }
+  let visited: Set<unknown> | undefined
+  for (let part = properties[name]; isRecord(part);) {
+    if (part.readOnly === true || part.writeOnly === true) {
+      return true
+    }
+    const ref = getRef(part)
+    if (ref === undefined || visited?.has(part)) {
+      return false
+    }
+    ;(visited ??= new Set()).add(part)
+    part = resolvePointer(ref, ctx)
+  }
+  return false
 }
 
 // Whether no value matches both: they have different types, other than an
@@ -1441,7 +1467,10 @@ function finishSchema(
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
     !includesJson(schema.enum, schema.const)
-  let loose = loosen(out, schema, exactTuple, ctx) || constOutsideEnum
+  let loose =
+    loosen(out, schema, exactTuple, ctx) ||
+    constOutsideEnum ||
+    (Array.isArray(schema.required) && schema.required.some((name) => isOneWay(schema, name, ctx)))
   // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
   // dropped, as it would reject the properties `patternProperties` allowed.
   // Code generators read a missing one as allowing no other properties.
@@ -1675,7 +1704,8 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     let out = downgrade(root, convert)
     // A `not` or `oneOf` over a `$ref` around a cycle read its target before
     // that target lost a restriction, so the conversion runs again, reading
-    // such targets as loose from the start, until no other target does so.
+    // such targets as loose from the start, until no other target does so,
+    // or the pass kept no `not` or `oneOf` that one could change.
     while (keptStrict && markLooseTargets()) {
       keptStrict = false
       nullableUnions.length = 0
