@@ -258,6 +258,7 @@ Accepts the default OAS dialect, which adds `discriminator`, `xml`, `externalDoc
 
 #### Limitations
 
+- `pattern` is kept as written, although 3.0 reads it in the ECMA-262 5.1 dialect, which has no Unicode mode and reads by UTF-16 code unit. So a pattern such as `\p{L}` is invalid there, and one such as `^.{1,64}$` counts an emoji as two characters, so it can reject values 3.1 accepts.
 - `$ref`s to an `$anchor`, or written relative to an `$id`, are left as written and dangle. Every `$ref` is read as a JSON Pointer from the document root, and one into `$defs` is recognized by its `/$defs/` segment. One that percent-encodes a character, such as `#/%24defs/Pet`, is replaced by its target wherever it points.
 - An `anyOf` or `oneOf` of `{ type: "null" }` and a branch that a `$ref` points into stays as written, so the `$ref` still resolves, and code generators read it as a union.
 - `$ref`s into a keyword 3.0 removes, such as `prefixItems/0` or `propertyNames`, into a `oneOf` that becomes `anyOf`, or into the `items` or `properties` of a schema whose `type` list names more than one type besides `"null"`, which move into the branches of the `anyOf` or `oneOf` that takes the place of the list, are left as written and dangle. A `$ref` into the `allOf` of a schema that also holds a `$ref` resolves one member off, since that `$ref` becomes the first member of the `allOf`.
