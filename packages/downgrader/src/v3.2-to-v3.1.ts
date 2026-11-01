@@ -19,6 +19,7 @@ import {
   list,
   map,
   resolve,
+  resolvePointer,
 } from './shared'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
@@ -125,6 +126,7 @@ const SECURITY_SCHEME_FIELDS = defineFields({
 
 const OPERATION_FIELDS = defineFields({
   callbacks: map(refOr(convertCallback)),
+  security: convertSecurity,
   parameters: list(convertParameterRef),
   requestBody: refOr(convertRequestBody),
   responses: map(refOr(convertResponse), isNotExtension),
@@ -159,10 +161,31 @@ const DOCUMENT_FIELDS = defineFields({
   jsonSchemaDialect: (item) =>
     typeof item === 'string' && item.startsWith(V32_DIALECT_PREFIX) ? V31_DIALECT : clone(item),
   paths: map(convertPathItem, isPath),
+  security: convertSecurity,
   servers: convertServers,
   tags: list(convertTag),
   webhooks: map(convertPathItem),
 })
+
+// 3.1 names a scheme in a security requirement only by its component name,
+// where 3.2 also takes a URI reference to one. Any other name is left out,
+// which asks for less.
+function convertSecurity(value: unknown, ctx: Context): unknown {
+  if (!Array.isArray(value)) {
+    return clone(value)
+  }
+  const schemes = resolvePointer('#/components/securitySchemes', ctx)
+  const isScheme = (name: string): boolean => isRecord(schemes) && Object.hasOwn(schemes, name)
+  return value.map((requirement) =>
+    isRecord(requirement)
+      ? Object.fromEntries(
+          Object.keys(requirement)
+            .filter((name) => requirement[name] !== undefined && isScheme(name))
+            .map((name) => [name, clone(requirement[name])]),
+        )
+      : clone(requirement),
+  )
+}
 
 /** Reference Objects are the same in 3.1, so they are copied as they are. */
 function refOr(convert: Convert): Convert {
