@@ -428,17 +428,24 @@ function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
   return out
 }
 
-// The output of a target still being converted. A target that is only a
-// `$ref`, an alias, has none of its own, so it is the output of the target its
-// chain of kept `$ref`s ends at.
+// The output of a target still being converted. A target that converts to the
+// output of the target of its `$ref`, an alias, has none of its own, so it is
+// the output of the target its chain of `$ref`s ends at: the copy the
+// components get, or for a `$ref` the conversion inlines, its inlined copy.
 function sharedOutput(target: unknown, ctx: Context): unknown {
   const visited = new Set<unknown>()
   let at = target
-  while (isRecord(at) && isBareRef(at) && !visited.has(at) && !isInlined(at.$ref as string, ctx)) {
+  let seen: Context['seen'] | undefined = ctx.shared
+  for (
+    let ref = aliasRef(at, ctx);
+    ref !== undefined && !visited.has(at);
+    ref = aliasRef(at, ctx)
+  ) {
     visited.add(at)
-    at = resolvePointer(at.$ref as string, ctx)
+    at = resolvePointer(ref, ctx)
+    seen = isInlined(ref, ctx) ? ctx.apart.get(at) : ctx.shared
   }
-  return isRecord(at) ? ctx.shared.get(SCHEMA_FIELDS)?.get(at) : undefined
+  return isRecord(at) ? seen?.get(SCHEMA_FIELDS)?.get(at) : undefined
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -1543,15 +1550,22 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (typeof value === 'boolean') {
     return value ? {} : { not: {} }
   }
-  const ref = getRef(value)
-  if (
-    ref !== undefined &&
-    (isBareRef(value as Record<string, unknown>) ||
-      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
-  ) {
+  const ref = aliasRef(value, ctx)
+  if (ref !== undefined) {
     return convertSchemaRef(ref, ctx, value)
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema, revisitSchema)
+}
+
+// The `$ref` of a schema that becomes its target's output: a bare `$ref`, or
+// one to a tagged union beside only annotations.
+function aliasRef(value: unknown, ctx: Context): string | undefined {
+  const ref = getRef(value)
+  return ref !== undefined &&
+    (isBareRef(value as Record<string, unknown>) ||
+      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
+    ? ref
+    : undefined
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
