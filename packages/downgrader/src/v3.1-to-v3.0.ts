@@ -277,8 +277,9 @@ const DOCUMENT_FIELDS = defineFields({
   webhooks: DROP,
 })
 
-// A `$ref` into a removed part, `$defs`, or `definitions`, or into a value
-// the conversion replaces, is replaced by its target, unless it already dangles.
+// A `$ref` into a removed part, `$defs`, or `definitions`, or into any `items`
+// or `additionalProperties`, which the conversion can replace with another
+// schema, is replaced by its target, unless it already dangles.
 function isInlined(ref: string, ctx: Context): boolean {
   return (
     (ref.includes('/$defs/') ||
@@ -287,34 +288,12 @@ function isInlined(ref: string, ctx: Context): boolean {
       // about 3% of the instructions of a conversion.
       ref.startsWith('#/webhooks/') ||
       ref.startsWith('#/components/pathItems/') ||
-      isIntoReplaced(ref, ctx)) &&
+      INTO_REPLACED.test(ref)) &&
     resolvePointer(ref, ctx) !== undefined
   )
 }
 
-// Where the conversion puts another schema, which a `$ref` kept as written
-// would read instead: the `items` of a tuple, built from every item schema or
-// left out, and the `additionalProperties` beside `patternProperties`, which
-// becomes `true`, or of a record keyed by an enum, which becomes `false`.
-function isIntoReplaced(ref: string, ctx: Context): boolean {
-  for (const key of ['/items', '/additionalProperties']) {
-    for (let at = ref.indexOf(key); at !== -1; at = ref.indexOf(key, at + 1)) {
-      const end = at + key.length
-      if (end === ref.length || ref[end] === '/') {
-        const holder = resolvePointer(ref.slice(0, at), ctx)
-        if (
-          isRecord(holder) &&
-          (key === '/items'
-            ? holder.prefixItems !== undefined
-            : holder.patternProperties !== undefined || enumNames(holder, ctx) !== undefined)
-        ) {
-          return true
-        }
-      }
-    }
-  }
-  return false
-}
+const INTO_REPLACED = /\/(?:items|additionalProperties)(?:\/|$)/
 
 /** A 3.0 Reference Object holds only `$ref`. */
 function refOr(convert: Convert): Convert {

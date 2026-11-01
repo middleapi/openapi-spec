@@ -2534,19 +2534,21 @@ describe('downgradeSchemaV31ToV30', () => {
     ).toEqual({
       properties: { a: { properties: { x: value }, additionalProperties: false }, b: value },
     })
-    // A record keyed by any string keeps its additionalProperties, and so the $ref.
-    const map = {
-      properties: {
-        a: { additionalProperties: value },
-        b: { $ref: '#/properties/a/additionalProperties' },
-      },
-    } as const
-    expect(downgradeSchemaV31ToV30(map)).toEqual(map)
+    // So does any other $ref into additionalProperties, for simplicity.
+    expect(
+      downgradeSchemaV31ToV30({
+        properties: {
+          a: { additionalProperties: value },
+          b: { $ref: '#/properties/a/additionalProperties' },
+        },
+      }),
+    ).toEqual({ properties: { a: { additionalProperties: value }, b: value } })
   })
 
-  it('replaces a $ref into the items of a tuple, or into additionalProperties beside patternProperties, with its target', () => {
-    // The conversion puts other schemas there: the items built from every item
-    // schema, none for a closed tuple, and true.
+  it('replaces a $ref into items or additionalProperties with its target', () => {
+    // The conversion can put other schemas there: the items built from every
+    // item schema, none for a closed tuple, and true. Any such $ref is
+    // replaced, for simplicity.
     const ref = (path: string) => ({ $ref: `#/components/schemas/${path}` })
     const out = convert({
       components: {
@@ -2574,7 +2576,8 @@ describe('downgradeSchemaV31ToV30', () => {
           NotRest: { not: ref('Pair/items') },
           RestOrNumber: { oneOf: [ref('Pair/items'), { type: 'number' }] },
           NotOther: { not: ref('Notes/additionalProperties') },
-          // Not into a tuple, nor into items at all.
+          // Also one into the items of a plain array, but not into a property
+          // whose name only starts with items.
           List: {
             type: 'array',
             items: { type: 'object', properties: { a: { type: 'string' } } },
@@ -2591,7 +2594,7 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(out?.NotRest).toEqual({ not: { type: 'string' } })
     expect(out?.RestOrNumber).toEqual({ oneOf: [{ type: 'string' }, { type: 'number' }] })
     expect(out?.NotOther).toEqual({ not: { type: 'string' } })
-    expect(out?.Item).toEqual(ref('List/items/properties/a'))
+    expect(out?.Item).toEqual({ type: 'string' })
     expect(out?.Count).toEqual(ref('Bag/properties/itemsLeft'))
   })
 
