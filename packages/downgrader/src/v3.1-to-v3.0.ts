@@ -279,10 +279,13 @@ const DOCUMENT_FIELDS = defineFields({
 
 // A `$ref` into a removed part, `$defs`, or `definitions`, or into any `items`
 // or `additionalProperties`, which the conversion can replace with another
-// schema, is replaced by its target, unless it already dangles.
+// schema, is replaced by its target, unless it already dangles. So is one
+// that percent-encodes a character, which `find` decodes, as it can hide
+// those segments, such as `#/%24defs/Pet`.
 function isInlined(ref: string, ctx: Context): boolean {
   return (
-    (ref.includes('/$defs/') ||
+    (ref.includes('%') ||
+      ref.includes('/$defs/') ||
       ref.includes('/definitions/') ||
       // The removed parts, spelled out, as a callback for each `$ref` costs
       // about 3% of the instructions of a conversion.

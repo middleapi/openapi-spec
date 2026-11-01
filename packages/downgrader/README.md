@@ -169,7 +169,6 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 #### Limitations
 
 - A target replacing several `$ref`s stands in at each of them as the same object, so a Path Item referenced twice repeats its `operationId`s, and a YAML dump writes an alias. Where a target refers back to one it is being copied into, that inner reference becomes `{}`, or is removed where `{}` is not a valid value.
-- `$ref`s into removed parts are recognized by their `#/webhooks/` or `#/components/pathItems/` prefix as written, not percent-encoded.
 - Links and discriminator `mapping` values that point into a removed part, and Links that name a webhook operation by `operationId`, are left as written.
 - Encoding Objects pass through, although 3.0 serializes `multipart` parts by other defaults: it ignores `style`, `explode`, and `allowReserved` there, and gives an untyped part no `application/octet-stream` default.
 - A requirement that uses only mutual TLS becomes `{}`, so 3.0 tools read its operation as needing no security, and a requirement that pairs it with another scheme asks for that scheme alone.
