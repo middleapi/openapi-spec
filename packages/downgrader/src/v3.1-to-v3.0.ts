@@ -143,6 +143,11 @@ const refOutputs = new Map<unknown, unknown>()
 // Targets that did so, which the next pass reads as loose from the start.
 const looseTargets = new Set<unknown>()
 
+// Schemas whose `$ref` a copy cut to `{}` at recursion. The copy is reused
+// wherever its target is inlined again, or a `$ref` reads the component that
+// holds it, also once the target it was cut at is no longer being inlined.
+const cutHolders = new Set<unknown>()
+
 // The 3.0 keywords that apply only to objects, which `convertType` moves into
 // the `"object"` branch of a `type` list.
 const OBJECT_KEYWORDS = [
@@ -356,7 +361,7 @@ function convertBranches(item: unknown, ctx: Context, schema: Record<string, unk
 function convertTaggedBranch(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
   return ref !== undefined && isAnnotatedRef(value as Record<string, unknown>)
-    ? convertSchemaRef(ref, ctx)
+    ? convertSchemaRef(ref, ctx, value)
     : convertSchema(value, ctx)
 }
 
@@ -388,7 +393,7 @@ function isTaggedRef(ref: string, ctx: Context): boolean {
   return isRecord(target) && keepsDiscriminator(target, ctx) && !isInlined(ref, ctx)
 }
 
-function convertSchemaRef(ref: string, ctx: Context): unknown {
+function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
   if (!isInlined(ref, ctx)) {
     for (const key of ['/anyOf/', '/oneOf/']) {
       for (let at = ref.indexOf(key); at !== -1; at = ref.indexOf(key, at + 1)) {
@@ -412,7 +417,11 @@ function convertSchemaRef(ref: string, ctx: Context): unknown {
     return out
   }
   const out = inline(ref, ctx, convertSchema)
-  return out === DROP ? loosened({}) : out
+  if (out === DROP) {
+    cutHolders.add(holder)
+    return loosened({})
+  }
+  return out
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -647,12 +656,16 @@ function isApart(a: Tags, b: Tags): boolean {
 
 // The schema that a chain of `$ref`s from `value` ends at. A `$ref` back into
 // a target being inlined is cut to `{}`, which keeps nothing, and so is a
-// `$ref` whose chain of `$ref`s reaches one.
+// `$ref` whose chain of `$ref`s reaches one, or that a copy reused here cut.
 function follow(value: unknown, ctx: Context): unknown {
   const visited = new Set<string>()
   let target = value
   for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
-    if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
+    if (
+      visited.has(ref) ||
+      cutHolders.has(target) ||
+      (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))
+    ) {
       return undefined
     }
     visited.add(ref)
@@ -863,10 +876,14 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
-// The schema that `schema` stands for, read through one `$ref`.
+// The schema that `schema` stands for, read through one `$ref`, which keeps
+// nothing where a copy cut it to `{}`.
 function throughRef(schema: unknown, root: unknown): unknown {
   const ref = getRef(schema)
-  return ref === undefined ? schema : find(root, ref)
+  if (ref === undefined) {
+    return schema
+  }
+  return cutHolders.has(schema) ? undefined : find(root, ref)
 }
 
 // A schema that rejects null by its `type`, read through one `$ref`.
@@ -1333,7 +1350,10 @@ function finishSchema(
 ): void {
   // 3.0 ignores the siblings of a `$ref`, but not the members of an `allOf`.
   if (typeof schema.$ref === 'string') {
-    out.allOf = [convertSchemaRef(schema.$ref, ctx), ...(Array.isArray(out.allOf) ? out.allOf : [])]
+    out.allOf = [
+      convertSchemaRef(schema.$ref, ctx, schema),
+      ...(Array.isArray(out.allOf) ? out.allOf : []),
+    ]
   }
   if (out.discriminator !== undefined && !keepsDiscriminator(schema, ctx)) {
     delete out.discriminator
@@ -1477,7 +1497,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     (isBareRef(value as Record<string, unknown>) ||
       (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
   ) {
-    return convertSchemaRef(ref, ctx)
+    return convertSchemaRef(ref, ctx, value)
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
 }
@@ -1584,6 +1604,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
       unionTargets.clear()
       refTargets.clear()
       refOutputs.clear()
+      cutHolders.clear()
       out = downgrade(root, convert)
     }
     for (const [schema, input, key] of nullableUnions) {
@@ -1608,6 +1629,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     refTargets.clear()
     refOutputs.clear()
     looseTargets.clear()
+    cutHolders.clear()
   }
 }
 
