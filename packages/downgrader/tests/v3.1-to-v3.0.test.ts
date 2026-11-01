@@ -2935,6 +2935,27 @@ describe('downgradeSchemaV31ToV30', () => {
             },
             NotRest: { not: { $ref: '#/components/schemas/Pair/items' } },
             NotOther: { not: { $ref: '#/components/schemas/Notes/additionalProperties' } },
+            // Nor do they tell branches apart, by type or by a tag.
+            RestOrNumber: {
+              oneOf: [{ $ref: '#/components/schemas/Pair/items' }, { type: 'number' }],
+            },
+            OtherOrNumber: {
+              oneOf: [
+                { $ref: '#/components/schemas/Notes/additionalProperties' },
+                { type: 'number' },
+              ],
+            },
+            Kinds: { type: 'array', prefixItems: [{ const: 'b' }], items: { const: 'a' } },
+            Tagged: {
+              oneOf: [
+                {
+                  type: 'object',
+                  properties: { kind: { $ref: '#/components/schemas/Kinds/items' } },
+                  required: ['kind'],
+                },
+                { type: 'object', properties: { kind: { const: 'b' } }, required: ['kind'] },
+              ],
+            },
             // Not into a tuple, nor into items at all.
             List: {
               type: 'array',
@@ -2953,6 +2974,26 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(out?.Notes).toEqual({ type: 'object', additionalProperties: true })
       expect(out?.NotRest).toEqual({})
       expect(out?.NotOther).toEqual({})
+      expect(out?.RestOrNumber).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Pair/items' }, { type: 'number' }],
+      })
+      expect(out?.OtherOrNumber).toEqual({
+        anyOf: [{ $ref: '#/components/schemas/Notes/additionalProperties' }, { type: 'number' }],
+      })
+      expect(out?.Tagged).toEqual({
+        anyOf: [
+          {
+            type: 'object',
+            properties: { kind: { $ref: '#/components/schemas/Kinds/items' } },
+            required: ['kind'],
+          },
+          {
+            type: 'object',
+            properties: { kind: { type: 'string', enum: ['b'] } },
+            required: ['kind'],
+          },
+        ],
+      })
       expect(out?.NotItem).toEqual({
         not: { $ref: '#/components/schemas/List/items/properties/a' },
       })

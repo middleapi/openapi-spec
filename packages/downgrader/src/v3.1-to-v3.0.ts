@@ -662,12 +662,16 @@ function isApart(a: Tags, b: Tags): boolean {
 
 // The schema that a chain of `$ref`s from `value` ends at. A `$ref` back into
 // a target being inlined is cut to `{}`, which keeps nothing, and so is a
-// `$ref` whose chain of `$ref`s reaches one.
+// `$ref` whose chain of `$ref`s reaches one. So is a kept `$ref` into a spot
+// that `isIntoLoosened` names, where 3.0 reads a looser schema.
 function follow(value: unknown, ctx: Context): unknown {
   const visited = new Set<string>()
   let target = value
   for (let ref = getRef(target); ref !== undefined; ref = getRef(target)) {
-    if (visited.has(ref) || (isInlined(ref, ctx) && ctx.inlining.has(resolvePointer(ref, ctx)))) {
+    if (
+      visited.has(ref) ||
+      (isInlined(ref, ctx) ? ctx.inlining.has(resolvePointer(ref, ctx)) : isIntoLoosened(ref, ctx))
+    ) {
       return undefined
     }
     visited.add(ref)
