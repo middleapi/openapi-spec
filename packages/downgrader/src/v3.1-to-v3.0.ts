@@ -655,8 +655,11 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
   if (schema.nullable === true) {
     return { type: undefined, values }
   }
-  const required = schema.type === 'object' && Array.isArray(schema.required) ? schema.required : []
   const properties = isRecord(schema.properties) ? schema.properties : {}
+  const required =
+    schema.type === 'object' && Array.isArray(schema.required)
+      ? schema.required.filter((name) => !isOneWay(properties[name as string], ctx))
+      : []
   for (const name of Object.keys(properties)) {
     const value = properties[name]
     const property =
@@ -674,6 +677,27 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
     }
   }
   return { type: schema.type, values }
+}
+
+// Whether 3.0 requires the property in one direction only, as it applies
+// `required` to a `readOnly` property in responses only, and to a `writeOnly`
+// one in requests only. Read through `$ref`s, as 3.0 reads each target in its
+// place.
+function isOneWay(value: unknown, ctx: Context): boolean {
+  const visited = new Set<unknown>()
+  let part = value
+  while (isRecord(part) && !visited.has(part)) {
+    if (part.readOnly === true || part.writeOnly === true) {
+      return true
+    }
+    const ref = getRef(part)
+    if (ref === undefined) {
+      return false
+    }
+    visited.add(part)
+    part = resolvePointer(ref, ctx)
+  }
+  return false
 }
 
 // Whether no value matches both: they have different types, other than an
@@ -1441,7 +1465,13 @@ function finishSchema(
     schema.const !== undefined &&
     Array.isArray(schema.enum) &&
     !includesJson(schema.enum, schema.const)
-  let loose = loosen(out, schema, exactTuple, ctx) || constOutsideEnum
+  // 3.0 requires a `readOnly` property in responses only and a `writeOnly` one
+  // in requests only, where 2020-12 requires both everywhere.
+  let loose =
+    loosen(out, schema, exactTuple, ctx) ||
+    constOutsideEnum ||
+    schema.readOnly === true ||
+    schema.writeOnly === true
   // 3.0 lacks `patternProperties`, and `additionalProperties` beside it is
   // dropped, as it would reject the properties `patternProperties` allowed.
   // Code generators read a missing one as allowing no other properties.

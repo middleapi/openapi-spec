@@ -2990,6 +2990,69 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({})
     })
 
+    it('includes a readOnly or writeOnly schema, which 3.0 requires one way only', () => {
+      // 3.0 applies required to a readOnly property in responses only, so a
+      // request without it matches the object, which the not then rejects.
+      const id = { type: 'string', readOnly: true } as const
+      const withId: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { id },
+        required: ['id'],
+      }
+      expect(downgradeSchemaV31ToV30({ not: withId })).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { type: 'string', writeOnly: true } })).toEqual({})
+      // Also an optional one, and through a chain of $refs.
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Not: { not: { type: 'object', properties: { id: ref('IdAlias') } } },
+              IdAlias: ref('Id'),
+              Id: id,
+            },
+          },
+        }).components?.schemas?.Not,
+      ).toEqual({})
+      // Nor does such a property tell branches apart as a required tag.
+      const tagged = (kind: string, more: object = {}): OpenAPIV3_1.SchemaObject => ({
+        type: 'object',
+        properties: { kind: { const: kind, ...more } },
+        required: ['kind'],
+      })
+      const tagged30 = (kind: string, more: object = {}) => ({
+        type: 'object',
+        properties: { kind: { type: 'string', enum: [kind], ...more } },
+        required: ['kind'],
+      })
+      // A request without either tag matches both.
+      const readOnly = { readOnly: true }
+      expect(
+        downgradeSchemaV31ToV30({ oneOf: [tagged('a', readOnly), tagged('b', readOnly)] }),
+      ).toEqual({ anyOf: [tagged30('a', readOnly), tagged30('b', readOnly)] })
+      // One required both ways still tells them apart.
+      expect(downgradeSchemaV31ToV30({ oneOf: [tagged('a', readOnly), tagged('b')] })).toEqual({
+        oneOf: [tagged30('a', readOnly), tagged30('b')],
+      })
+      // A cycle of $refs, which never reaches a schema, holds neither keyword.
+      const loop: OpenAPIV3_1.SchemaObject = {
+        type: 'object',
+        properties: { kind: ref('Loop') },
+        required: ['kind'],
+      }
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Union: { oneOf: [id, loop] },
+              Loop: ref('Back'),
+              Back: ref('Loop'),
+            },
+          },
+        }).components?.schemas?.Union,
+      ).toEqual({ oneOf: [id, loop] })
+    })
+
     it('includes a const outside the enum beside it, which matched nothing', () => {
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: ['b'] } })).toEqual({})
       expect(downgradeSchemaV31ToV30({ not: { const: 'a', enum: [] } })).toEqual({})
