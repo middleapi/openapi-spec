@@ -234,15 +234,24 @@ function isQuerystring(parameter: unknown): boolean {
   return isRecord(parameter) && parameter.in === 'querystring'
 }
 
-// 3.1 allows these only beside `schema`. The media type in `content`
-// carries its own examples and serialization.
 function finishParameter(out: Record<string, unknown>, parameter: Record<string, unknown>): void {
+  // 3.1 allows these only beside `schema`. The media type in `content`
+  // carries its own examples and serialization.
   if (parameter.content !== undefined) {
     delete out.allowReserved
     delete out.example
     delete out.examples
     delete out.explode
     delete out.style
+  } else if (
+    out.schema !== undefined &&
+    (parameter.style === 'cookie' ||
+      (parameter.allowReserved === true && (parameter.in === 'path' || parameter.in === 'cookie')))
+  ) {
+    // 3.2 sends such a value as written, where the `form` or `simple` style
+    // 3.1 falls back to percent-decodes it, so the schema would read another
+    // string. Neither version percent-encodes a header.
+    out.schema = {}
   }
 }
 
