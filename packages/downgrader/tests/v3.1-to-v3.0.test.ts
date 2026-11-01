@@ -2805,6 +2805,11 @@ describe('downgradeSchemaV31ToV30', () => {
           not: { type: 'object', propertyNames: { type: 'string', pattern: '^a' } },
         }),
       ).toEqual({})
+      // Names are strings, so these allow no property.
+      expect(
+        downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: { type: 'number' } } }),
+      ).toEqual({})
+      expect(downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: false } })).toEqual({})
       expect(
         downgradeSchemaV31ToV30({
           not: { allOf: [{ properties: { a: {} } }], unevaluatedProperties: false },
@@ -2812,8 +2817,11 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({})
     })
 
-    it('excludes propertyNames: true, and unevaluatedProperties beside additionalProperties', () => {
+    it('excludes propertyNames: true or {}, and unevaluatedProperties beside additionalProperties', () => {
       expect(downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: true } })).toEqual({
+        not: { type: 'object' },
+      })
+      expect(downgradeSchemaV31ToV30({ not: { type: 'object', propertyNames: {} } })).toEqual({
         not: { type: 'object' },
       })
       expect(

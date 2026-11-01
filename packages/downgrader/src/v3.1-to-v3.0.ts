@@ -9,6 +9,7 @@ import {
   downgrade,
   DROP,
   find,
+  finishSummary,
   getRef,
   hasType,
   HTTP_METHODS,
@@ -172,12 +173,8 @@ const convertReference = refOr(clone)
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(REMOVED_KEYWORDS.map((key) => [key, DROP])),
   // It would reject the properties that `patternProperties` allowed.
-  additionalProperties: (item, ctx, schema) => {
-    if (schema.patternProperties !== undefined) {
-      return DROP
-    }
-    return typeof item === 'boolean' ? item : convertSchema(item, ctx)
-  },
+  additionalProperties: (item, ctx, schema) =>
+    schema.patternProperties === undefined ? convertAdditional(item, ctx) : DROP,
   allOf: list(convertSchema),
   // Zod writes a file with several media types as an `anyOf` of branches
   // that hold only `contentMediaType`, an annotation, so it matches every
@@ -265,16 +262,9 @@ const INFO_FIELDS = defineFields({
   summary: DROP,
 })
 
-// A summary stands in for the description it lacks.
-function finishInfo(out: Record<string, unknown>, info: Record<string, unknown>): void {
-  if (out.description === undefined && typeof info.summary === 'string') {
-    out.description = info.summary
-  }
-}
-
 const DOCUMENT_FIELDS = defineFields({
   components: (item, ctx) => convertObject(item, ctx, COMPONENTS_FIELDS),
-  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS, finishInfo),
+  info: (item, ctx) => convertObject(item, ctx, INFO_FIELDS, finishSummary),
   jsonSchemaDialect: DROP,
   paths: map(convertPathItem, isPath),
   security: convertSecurity,
@@ -471,12 +461,22 @@ function includesJson(items: unknown[], value: unknown): boolean {
   return items.some((item) => jsonKey(item) === key)
 }
 
+// After the members the `allOf` already holds.
+function addAllOf(out: Record<string, unknown>, member: unknown): void {
+  out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), member]
+}
+
 function addAnyOf(out: Record<string, unknown>, variants: unknown[]): void {
   if (out.anyOf === undefined) {
     out.anyOf = variants
   } else {
-    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { anyOf: variants }]
+    addAllOf(out, { anyOf: variants })
   }
+}
+
+// 3.0 allows a boolean `additionalProperties`, unlike other subschemas.
+function convertAdditional(value: unknown, ctx: Context): unknown {
+  return typeof value === 'boolean' ? value : convertSchema(value, ctx)
 }
 
 function loosened(out: object): object {
@@ -505,10 +505,7 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
   // Followed alone or beside annotations, such as the `description` Zod writes
   // for a described use, since other keywords beside it narrow the names further.
   const names =
-    ref !== undefined &&
-    Object.entries(schema.propertyNames as Record<string, unknown>).every(
-      ([name, item]) => item === undefined || name === '$ref' || isInputAnnotation(name),
-    )
+    ref !== undefined && isAnnotatedRef(schema.propertyNames as Record<string, unknown>)
       ? resolve(ref, ctx)
       : schema.propertyNames
   if (!isRecord(names)) {
@@ -523,13 +520,10 @@ function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | un
     schema.patternProperties !== undefined ||
     schema.unevaluatedProperties !== undefined ||
     schema.additionalProperties === false ||
-    !Object.entries(names).every(
-      ([name, item]) =>
-        item === undefined ||
-        name === 'enum' ||
-        name === 'const' ||
-        isInputAnnotation(name) ||
-        (name === 'type' && item === 'string'),
+    !(names.type === undefined || names.type === 'string') ||
+    !hasOnly(
+      names,
+      (name) => name === 'enum' || name === 'const' || name === 'type' || isInputAnnotation(name),
     )
   ) {
     return undefined
@@ -555,9 +549,8 @@ function losesRestriction(
         names === true ||
         enumNames(schema, ctx) !== undefined ||
         (isRecord(names) &&
-          Object.entries(names).every(
-            ([name, item]) => item === undefined || (name === 'type' && item === 'string'),
-          ))
+          (names.type === undefined || names.type === 'string') &&
+          hasOnly(names, (name) => name === 'type'))
       )
     }
     case 'unevaluatedProperties':
@@ -749,7 +742,7 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     if (out.enum === undefined || (Array.isArray(out.enum) && out.enum.includes(null))) {
       out.enum = [null]
     } else {
-      out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+      addAllOf(out, { not: {} })
     }
   }
 }
@@ -843,10 +836,24 @@ function rejectsNull(schema: unknown): boolean {
     : typeof type === 'string' && type !== 'null'
 }
 
+// The schema that `schema` stands for, read through one `$ref`.
+function throughRef(schema: unknown, root: unknown): unknown {
+  const ref = getRef(schema)
+  return ref === undefined ? schema : find(root, ref)
+}
+
 // A schema that rejects null by its `type`, read through one `$ref`.
 function refRejectsNull(schema: unknown, root: unknown): boolean {
-  const ref = getRef(schema)
-  return rejectsNull(ref === undefined ? schema : find(root, ref))
+  return rejectsNull(throughRef(schema, root))
+}
+
+// A schema that rejects null by its `type`, or a `$ref` to one that rejects
+// null with or without a `type`.
+function keptRejectsNull(schema: unknown, root: unknown): boolean {
+  return (
+    refRejectsNull(schema, root) ||
+    (getRef(schema) !== undefined && untypedRejectsNull(throughRef(schema, root), root))
+  )
 }
 
 // A schema with no `type` that rejects null all the same: an `enum` or
@@ -879,8 +886,7 @@ function untypedRejectsNull(schema: unknown, root: unknown, inline = false): boo
 
 // A schema with an `"object"` `type`, read through one `$ref`.
 function isObjectBranch(schema: unknown, root: unknown): boolean {
-  const ref = getRef(schema)
-  const target = ref === undefined ? schema : find(root, ref)
+  const target = throughRef(schema, root)
   return isRecord(target) && hasType(target.type, 'object')
 }
 
@@ -1024,30 +1030,18 @@ function mergeNullable(
     // that Zod writes for a described reference, or either side of an
     // intersection.
     const ref = getRef(other)
-    const target = ref === undefined ? other : find(root, ref)
-    const held =
-      Array.isArray(other.allOf) &&
-      other.allOf.some((member) => {
-        const memberRef = getRef(member)
-        return (
-          refRejectsNull(member, root) ||
-          (memberRef !== undefined && untypedRejectsNull(find(root, memberRef), root))
-        )
-      })
     if (
-      rejectsNull(target) ||
+      keptRejectsNull(other, root) ||
       // A pair a `$ref` points to keeps an inline union, since NSwag gives each
       // `$ref` to a `oneOf` with null a type it never defines.
-      (ref === undefined
-        ? !isTarget && unionRejectsNull(other, root)
-        : untypedRejectsNull(target, root)) ||
-      held
+      (!isTarget && unionRejectsNull(other, root)) ||
+      (Array.isArray(other.allOf) && other.allOf.some((member) => keptRejectsNull(member, root)))
     ) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(target)) {
+    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(find(root, ref))) {
       // GitHub writes a nullable reference this way to a schema that already
       // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
       // the `$ref` alone. NSwag reads the pair as an empty class, and
@@ -1271,7 +1265,7 @@ function isMediaTypeOnly(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.contentMediaType === 'string' &&
-    Object.entries(value).every(([key, item]) => key === 'contentMediaType' || item === undefined)
+    hasOnly(value, (key) => key === 'contentMediaType')
   )
 }
 
@@ -1321,14 +1315,12 @@ function finishSchema(
     out.enum = [clone(schema.const)]
   }
   if (Array.isArray(schema.enum) && schema.enum.length === 0) {
-    out.allOf = [...(Array.isArray(out.allOf) ? out.allOf : []), { not: {} }]
+    addAllOf(out, { not: {} })
   }
   const exactTuple =
     Array.isArray(schema.prefixItems) && convertTuple(out, schema.prefixItems, schema, ctx)
   if (isUnevaluatedAdditional(schema)) {
-    const additional = schema.unevaluatedProperties
-    out.additionalProperties =
-      typeof additional === 'boolean' ? additional : convertSchema(additional, ctx)
+    out.additionalProperties = convertAdditional(schema.unevaluatedProperties, ctx)
   }
   const names = enumNames(schema, ctx)
   if (names !== undefined) {
@@ -1440,6 +1432,7 @@ function finishSchema(
   }
 }
 
+// Spelled out, not through `hasOnly`, since it runs for every `$ref`.
 function isBareRef(value: Record<string, unknown>): boolean {
   for (const key in value) {
     if (key !== '$ref' && Object.hasOwn(value, key) && value[key] !== undefined) {

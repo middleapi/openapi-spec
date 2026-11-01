@@ -8,6 +8,7 @@ import {
   defineFields,
   downgrade,
   DROP,
+  finishSummary,
   getRef,
   hasType,
   HTTP_METHODS,
@@ -189,15 +190,8 @@ function convertServer(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, SERVER_FIELDS)
 }
 
-// A summary stands in for the description it lacks.
-function finishTag(out: Record<string, unknown>, tag: Record<string, unknown>): void {
-  if (out.description === undefined && typeof tag.summary === 'string') {
-    out.description = tag.summary
-  }
-}
-
 function convertTag(value: unknown, ctx: Context): unknown {
-  return convertObject(value, ctx, TAG_FIELDS, finishTag)
+  return convertObject(value, ctx, TAG_FIELDS, finishSummary)
 }
 
 function finishExample(out: Record<string, unknown>, example: Record<string, unknown>): void {
