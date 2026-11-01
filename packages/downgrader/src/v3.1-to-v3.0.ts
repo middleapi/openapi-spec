@@ -23,9 +23,6 @@ import {
   resolvePointer,
 } from './shared'
 
-// 3.0 has no place for these, so `$ref`s into them are replaced by their targets.
-const REMOVED_PARTS = ['#/webhooks/', '#/components/pathItems/']
-
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
   '$dynamicRef',
@@ -278,7 +275,10 @@ function isInlined(ref: string, ctx: Context): boolean {
   return (
     (ref.includes('/$defs/') ||
       ref.includes('/definitions/') ||
-      REMOVED_PARTS.some((prefix) => ref.startsWith(prefix)) ||
+      // The removed parts, spelled out, as a callback for each `$ref` costs
+      // about 3% of the instructions of a conversion.
+      ref.startsWith('#/webhooks/') ||
+      ref.startsWith('#/components/pathItems/') ||
       isIntoNamedValue(ref, ctx)) &&
     resolvePointer(ref, ctx) !== undefined
   )
