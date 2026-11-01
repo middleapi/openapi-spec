@@ -415,6 +415,39 @@ describe('downgradeSpecV32ToV31', () => {
     })
   })
 
+  it('leaves out security requirement names that are not a component name', () => {
+    const key = { type: 'apiKey', in: 'header', name: 'X-Key' } as const
+    const out = convert({
+      security: [{ '#/components/securitySchemes/key': [] }],
+      paths: {
+        '/a': {
+          get: {
+            security: [
+              { '#/components/securitySchemes/key': [], 'key': [] },
+              // A component name is read as one, whatever it looks like.
+              { '#/components/securitySchemes/other': ['read'] },
+              { 'https://example.com/openapi.json#/components/securitySchemes/key': [] },
+            ],
+          },
+        },
+      },
+      components: { securitySchemes: { 'key': key, '#/components/securitySchemes/other': key } },
+    })
+    expect(out.security).toEqual([{}])
+    expect(out.paths?.['/a']?.get?.security).toEqual([
+      { key: [] },
+      { '#/components/securitySchemes/other': ['read'] },
+      {},
+    ])
+    // Without any schemes, every name is left out, and malformed values stay.
+    const malformed = convert({
+      security: 'all',
+      paths: { '/a': { get: { security: [null, { key: [] }] } } },
+    } as any)
+    expect(malformed.security).toBe('all')
+    expect(malformed.paths?.['/a']?.get?.security).toEqual([null, {}])
+  })
+
   it('converts schemas everywhere in the document', () => {
     const schema: OpenAPIV3_2.SchemaObject = { type: 'string', xml: { nodeType: 'attribute' } }
     const out = convert({

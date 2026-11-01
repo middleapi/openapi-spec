@@ -87,6 +87,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 | Example [`dataValue`][3.2-example-data-value] and [`serializedValue`][3.2-example-serialized-value]                                                                                                             | Removed. Without `value` or `externalValue`, `dataValue`, or else `serializedValue`, fills `value`.     |
 | OAuth [`deviceAuthorization`][3.2-oauth-flows-device-authorization] flow                                                                                                                                        | Removed.                                                                                                |
 | Security Scheme [`oauth2MetadataUrl`][3.2-security-scheme-oauth2-metadata-url] and [`deprecated`][3.2-security-scheme-deprecated]                                                                               | Removed.                                                                                                |
+| [Security requirement][3.2-security-requirement] names other than a component name, such as a URI reference to a scheme                                                                                         | Removed, which asks for less.                                                                           |
 
 [3.2-self]: https://spec.openapis.org/oas/v3.2.1.html#oas-self
 [3.2-json-schema-dialect]: https://spec.openapis.org/oas/v3.2.1.html#oas-json-schema-dialect
@@ -113,12 +114,14 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 [3.2-oauth-flows-device-authorization]: https://spec.openapis.org/oas/v3.2.1.html#oauth-flows-device-authorization
 [3.2-security-scheme-oauth2-metadata-url]: https://spec.openapis.org/oas/v3.2.1.html#security-scheme-oauth2-metadata-url
 [3.2-security-scheme-deprecated]: https://spec.openapis.org/oas/v3.2.1.html#security-scheme-deprecated
+[3.2-security-requirement]: https://spec.openapis.org/oas/v3.2.1.html#security-requirement-object
 
 #### Limitations
 
 - Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
 - A `content` `$ref` that does not resolve is removed, which can leave a parameter or header without the one entry it needs.
-- Security requirements that name a scheme by URI, and `$self`-relative references, pass through unchanged.
+- A security requirement that names its scheme by URI reference loses it, so 3.1 tools can read the operation as needing no credentials for it.
+- `$self`-relative references pass through unchanged.
 
 ### Schema (`downgradeSchemaV32ToV31`)
 
