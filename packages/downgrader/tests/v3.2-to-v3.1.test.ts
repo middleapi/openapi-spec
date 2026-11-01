@@ -230,6 +230,25 @@ describe('downgradeSpecV32ToV31', () => {
       ])
     })
 
+    it('loosens the schema of a parameter that 3.2 sends as written, which 3.1 percent-decodes', () => {
+      const id = { type: 'string', pattern: '^[^=]*$' } as const
+      const out = convertOperation({
+        parameters: [
+          { in: 'cookie', name: 'session', style: 'cookie', schema: id, example: 'a%3D' },
+          { in: 'cookie', name: 'pref', allowReserved: true, schema: id },
+          { in: 'path', name: 'p', required: true, allowReserved: true, schema: id },
+          // Neither version percent-encodes a header.
+          { in: 'header', name: 'X-Id', allowReserved: true, schema: id },
+        ],
+      })
+      expect(out?.parameters).toEqual([
+        { in: 'cookie', name: 'session', schema: {}, example: 'a%3D' },
+        { in: 'cookie', name: 'pref', schema: {} },
+        { in: 'path', name: 'p', required: true, schema: {} },
+        { in: 'header', name: 'X-Id', schema: id },
+      ])
+    })
+
     it('drops the fields 3.1 allows only beside schema from a parameter with content', () => {
       const content = { 'application/json': { example: 1 } }
       // As oRPC emits a query parameter whose queryStyles entry is 'json'.
