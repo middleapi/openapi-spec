@@ -1549,6 +1549,62 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
+  it('keeps a oneOf of literals that share a value whatever the order of its keys', () => {
+    // Equal objects match both branches, which the oneOf rejects.
+    const objects = { oneOf: [{ const: { a: 1, b: 2 } }, { const: { b: 2, a: 1 } }] }
+    expect(downgradeSchemaV31ToV30({ not: objects })).toEqual({
+      not: {
+        type: 'object',
+        oneOf: [
+          { type: 'object', enum: [{ a: 1, b: 2 }] },
+          { type: 'object', enum: [{ b: 2, a: 1 }] },
+        ],
+      },
+    })
+    // Also beside literals of other types.
+    expect(downgradeSchemaV31ToV30({ not: { oneOf: [...objects.oneOf, { const: 'x' }] } })).toEqual(
+      {
+        not: {
+          oneOf: [
+            { type: 'object', enum: [{ a: 1, b: 2 }] },
+            { type: 'object', enum: [{ b: 2, a: 1 }] },
+            { type: 'string', enum: ['x'] },
+          ],
+        },
+      },
+    )
+    // An anyOf takes it either way.
+    expect(downgradeSchemaV31ToV30({ anyOf: objects.oneOf })).toEqual({
+      type: 'object',
+      enum: [
+        { a: 1, b: 2 },
+        { b: 2, a: 1 },
+      ],
+    })
+  })
+
+  it('keeps an additionalProperties in a literal branch unless the same properties surround it', () => {
+    // In the branch it sees no properties, so it rejects { a: 1 }.
+    const closed = { additionalProperties: false } as const
+    const literal = (a: number) => ({ type: 'object', enum: [{ a }], ...closed }) as const
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: { a: {} },
+        ...closed,
+        anyOf: [
+          { const: { a: 1 }, ...closed },
+          { const: { a: 2 }, ...closed },
+        ],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: {} },
+      ...closed,
+      anyOf: [literal(1), literal(2)],
+    })
+  })
+
   it('types an enum with no type after its values, as ArkType writes a union of literals', () => {
     expect(downgradeSchemaV31ToV30({ enum: ['a', 'b'] })).toEqual({
       type: 'string',

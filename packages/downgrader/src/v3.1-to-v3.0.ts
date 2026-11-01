@@ -477,13 +477,20 @@ function acceptsAll(schema: unknown): boolean {
   )
 }
 
-// Equal JSON values get the same key. A cyclic value is only equal to itself.
+// Equal JSON values get the same key when their keys come in the same order,
+// which equal objects need not do. A cyclic value is only equal to itself.
 function jsonKey(value: unknown): unknown {
   try {
     return JSON.stringify(value)
   } catch {
     return value
   }
+}
+
+// Whether a `oneOf` of literals may share `value` unseen: equal objects can
+// hold their keys in another order.
+function mayRepeatUnseen(key: 'anyOf' | 'oneOf', value: unknown): boolean {
+  return key === 'oneOf' && typeof value === 'object' && value !== null
 }
 
 // Serializes `value` once, not once per item, so a large `value` beside many
@@ -808,12 +815,18 @@ function isInputAnnotation(name: string): boolean {
 
 // The schema around a branch holds `name` with the same value, as ArkType
 // writes the description of a described union into every branch too.
+// `additionalProperties` reads the `properties` beside it, so it repeats only
+// beside the same ones.
 function repeats(
   out: Record<string, unknown>,
   branch: Record<string, unknown>,
   name: string,
 ): boolean {
-  return Object.hasOwn(out, name) && jsonKey(out[name]) === jsonKey(branch[name])
+  return (
+    Object.hasOwn(out, name) &&
+    jsonKey(out[name]) === jsonKey(branch[name]) &&
+    (name !== 'additionalProperties' || jsonKey(out.properties) === jsonKey(branch.properties))
+  )
 }
 
 // Only null matches the branch, as `{ type: "null" }` becomes, and its other
@@ -1162,6 +1175,9 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
       return
     }
     for (const value of branch.enum) {
+      if (mayRepeatUnseen(key, value)) {
+        return
+      }
       const valueKey = jsonKey(value)
       if (!seen.has(valueKey)) {
         seen.add(valueKey)
@@ -1210,6 +1226,9 @@ function mergeEnumsByType(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'):
       result.push({ type: branch.type, enum: group.enum })
     }
     for (const value of branch.enum) {
+      if (mayRepeatUnseen(key, value)) {
+        return
+      }
       const valueKey = jsonKey(value)
       if (!group.seen.has(valueKey)) {
         group.seen.add(valueKey)
