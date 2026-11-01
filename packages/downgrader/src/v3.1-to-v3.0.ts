@@ -122,6 +122,11 @@ const IN_PLACE_APPLICATORS = [
 // Converted schemas that lost a restriction, directly or in a subschema.
 const LOOSE = new WeakSet<object>()
 
+// Whether a `not` or `oneOf` kept its form, since nothing under it was loose.
+// Only such a choice changes when more schemas read as loose, so without one
+// the conversion need not run again.
+let keptStrict = false
+
 // Converted schemas with an `anyOf` or `oneOf` of several branches, for
 // `mergeEnums` and `mergeNullable`. They run once the whole input is converted,
 // since a cycle can meet a branch before its conversion is done.
@@ -756,13 +761,19 @@ function loosen(
   if (isLoose(out.not)) {
     delete out.not
     loose = true
+  } else if (out.not !== undefined) {
+    keptStrict = true
   }
-  if (Array.isArray(out.oneOf) && out.oneOf.some(isLoose)) {
-    if (!isDisjoint(schema.oneOf as unknown[], ctx)) {
-      addAnyOf(out, out.oneOf)
-      delete out.oneOf
+  if (Array.isArray(out.oneOf)) {
+    if (out.oneOf.some(isLoose)) {
+      if (!isDisjoint(schema.oneOf as unknown[], ctx)) {
+        addAnyOf(out, out.oneOf)
+        delete out.oneOf
+      }
+      loose = true
+    } else {
+      keptStrict = true
     }
-    loose = true
   }
   return (
     loose ||
@@ -1665,7 +1676,8 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     // A `not` or `oneOf` over a `$ref` around a cycle read its target before
     // that target lost a restriction, so the conversion runs again, reading
     // such targets as loose from the start, until no other target does so.
-    while (markLooseTargets()) {
+    while (keptStrict && markLooseTargets()) {
+      keptStrict = false
       nullableUnions.length = 0
       unionTargets.clear()
       refTargets.clear()
@@ -1691,6 +1703,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     return out
   } finally {
     // Cleared even when conversion throws, so nothing keeps the input alive.
+    keptStrict = false
     nullableUnions.length = 0
     unionTargets.clear()
     refTargets.clear()
