@@ -143,6 +143,13 @@ const refOutputs = new Map<unknown, unknown>()
 // Targets that did so, which the next pass reads as loose from the start.
 const looseTargets = new Set<unknown>()
 
+// The same for a cycle of objects, as a dereferencing parser leaves: each
+// schema met again, also where a document shares it, with its output, not
+// loose yet, and the schemas whose output then lost a restriction, which the
+// next pass reads as loose when it meets them again.
+const revisits: [object, object][] = []
+const looseInputs = new Set<object>()
+
 // Schemas whose `$ref` a copy cut to `{}` at recursion. The copy is reused
 // wherever its target is inlined again, or a `$ref` reads the component that
 // holds it, also once the target it was cut at is no longer being inlined.
@@ -410,10 +417,7 @@ function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
     if (isLoose(converted) || looseTargets.has(target)) {
       return loosened(out)
     }
-    refOutputs.set(
-      target,
-      converted === DROP ? ctx.shared.get(SCHEMA_FIELDS)?.get(target as object) : converted,
-    )
+    refOutputs.set(target, converted === DROP ? sharedOutput(target, ctx) : converted)
     return out
   }
   const out = inline(ref, ctx, convertSchema)
@@ -422,6 +426,19 @@ function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
     return loosened({})
   }
   return out
+}
+
+// The output of a target still being converted. A target that is only a
+// `$ref`, an alias, has none of its own, so it is the output of the target its
+// chain of kept `$ref`s ends at.
+function sharedOutput(target: unknown, ctx: Context): unknown {
+  const visited = new Set<unknown>()
+  let at = target
+  while (isRecord(at) && isBareRef(at) && !visited.has(at) && !isInlined(at.$ref as string, ctx)) {
+    visited.add(at)
+    at = resolvePointer(at.$ref as string, ctx)
+  }
+  return isRecord(at) ? ctx.shared.get(SCHEMA_FIELDS)?.get(at) : undefined
 }
 
 // 3.0 `items` applies one schema to every item, so a tuple becomes an array
@@ -545,7 +562,7 @@ function isUnevaluatedAdditional(schema: Record<string, unknown>): boolean {
 // property of its own, which 3.0 can express. A reusable enum is a `$ref` to it.
 function enumNames(schema: Record<string, unknown>, ctx: Context): string[] | undefined {
   // Followed alone or beside annotations, such as the `description` Zod writes
-  // for a described use, also on along a chain of them, since other keywords
+  // for a described use, and along a chain of them, since other keywords
   // beside a `$ref` narrow the names further.
   let names = schema.propertyNames
   const visited = new Set<unknown>()
@@ -1502,6 +1519,16 @@ function finishSchema(
   }
 }
 
+// Met again before its output was done, around a cycle, a schema not loose
+// yet may lose a restriction after a `not` or `oneOf` around it read it.
+function revisitSchema(value: object, out: object): void {
+  if (looseInputs.has(value)) {
+    LOOSE.add(out)
+  } else if (!isLoose(out)) {
+    revisits.push([value, out])
+  }
+}
+
 // Spelled out, not through `hasOnly`, since it runs for every `$ref`.
 function isBareRef(value: Record<string, unknown>): boolean {
   for (const key in value) {
@@ -1524,7 +1551,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   ) {
     return convertSchemaRef(ref, ctx, value)
   }
-  return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema)
+  return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema, revisitSchema)
 }
 
 function convertParameter(value: unknown, ctx: Context): unknown {
@@ -1630,6 +1657,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
       refTargets.clear()
       refOutputs.clear()
       cutHolders.clear()
+      revisits.length = 0
       out = downgrade(root, convert)
     }
     for (const [schema, input, key] of nullableUnions) {
@@ -1655,6 +1683,8 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     refOutputs.clear()
     looseTargets.clear()
     cutHolders.clear()
+    revisits.length = 0
+    looseInputs.clear()
   }
 }
 
@@ -1664,6 +1694,12 @@ function markLooseTargets(): boolean {
   for (const [target, out] of refOutputs) {
     if (isLoose(out)) {
       looseTargets.add(target)
+      added = true
+    }
+  }
+  for (const [input, out] of revisits) {
+    if (isLoose(out) && !looseInputs.has(input)) {
+      looseInputs.add(input)
       added = true
     }
   }

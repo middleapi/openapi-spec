@@ -115,13 +115,15 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
 /**
  * Converts the object `value` key by key: a key listed in `fields` goes
  * through its converter or is dropped, and any other key is copied. `finish`
- * then edits the output in place.
+ * then edits the output in place. An object met again gives the same output,
+ * which `revisit` is told of.
  */
 export function convertObject(
   value: unknown,
   ctx: Context,
   fields: Fields,
   finish?: Finish,
+  revisit?: (value: object, out: object) => void,
 ): unknown {
   if (!isRecord(value)) {
     return clone(value)
@@ -133,6 +135,7 @@ export function convertObject(
   }
   const known = seen.get(value)
   if (known !== undefined) {
+    revisit?.(value, known)
     return known
   }
   const out: Record<string, unknown> = {}
