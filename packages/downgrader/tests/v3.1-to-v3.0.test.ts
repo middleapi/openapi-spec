@@ -1394,6 +1394,9 @@ describe('downgradeSchemaV31ToV30', () => {
       const cyclic: Record<string, any> = { anyOf: [{ type: 'null' }] }
       cyclic.anyOf.unshift({ anyOf: [cyclic, { type: 'null' }] })
       expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual(ref('B'))
+      // A $ref beside the cycle is still followed.
+      cyclic.anyOf[0].anyOf.push(ref('A'))
+      expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual({ anyOf: [ref('B'), onlyNull] })
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
