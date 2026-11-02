@@ -1605,6 +1605,10 @@ describe('downgradeSchemaV31ToV30', () => {
         },
       },
     )
+    // Null, which is no object, merges.
+    expect(
+      downgradeSchemaV31ToV30({ oneOf: [{ type: 'string', enum: ['a', null] }, { const: 'b' }] }),
+    ).toEqual({ type: 'string', enum: ['a', null, 'b'] })
     // An anyOf takes it either way.
     expect(downgradeSchemaV31ToV30({ anyOf: objects.oneOf })).toEqual({
       type: 'object',
@@ -1634,6 +1638,34 @@ describe('downgradeSchemaV31ToV30', () => {
       properties: { a: {} },
       ...closed,
       anyOf: [literal(1), literal(2)],
+    })
+    // Beside the same properties, here none, it repeats the schema around it.
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        ...closed,
+        anyOf: [
+          { const: { a: 1 }, ...closed },
+          { const: { a: 2 }, ...closed },
+        ],
+      }),
+    ).toEqual({ type: 'object', ...closed, enum: [{ a: 1 }, { a: 2 }] })
+    // Other keywords repeat whatever properties surround them.
+    expect(
+      downgradeSchemaV31ToV30({
+        type: 'object',
+        properties: { a: {} },
+        description: 'd',
+        anyOf: [
+          { const: { a: 1 }, description: 'd' },
+          { const: { a: 2 }, description: 'd' },
+        ],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: {} },
+      description: 'd',
+      enum: [{ a: 1 }, { a: 2 }],
     })
   })
 
@@ -3087,6 +3119,28 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(
         downgradeSchemaV31ToV30({ oneOf: [tagged('a', readOnly), tagged('b', readOnly)] }),
       ).toEqual({ anyOf: [tagged30('a', readOnly), tagged30('b', readOnly)] })
+      // A response without either writeOnly tag matches both too.
+      const writeOnly = { writeOnly: true }
+      expect(
+        downgradeSchemaV31ToV30({ oneOf: [tagged('a', writeOnly), tagged('b', writeOnly)] }),
+      ).toEqual({ anyOf: [tagged30('a', writeOnly), tagged30('b', writeOnly)] })
+      // Also through a $ref to the readOnly tag.
+      const byRef = (kind: string): OpenAPIV3_1.SchemaObject => ({
+        type: 'object',
+        properties: { kind: ref(`Kind${kind}`) },
+        required: ['kind'],
+      })
+      expect(
+        convert({
+          components: {
+            schemas: {
+              Union: { oneOf: [byRef('A'), byRef('B')] },
+              KindA: { const: 'a', readOnly: true },
+              KindB: { const: 'b', readOnly: true },
+            },
+          },
+        }).components?.schemas?.Union,
+      ).toEqual({ anyOf: [byRef('A'), byRef('B')] })
       // One required both ways still tells them apart.
       expect(downgradeSchemaV31ToV30({ oneOf: [tagged('a', readOnly), tagged('b')] })).toEqual({
         oneOf: [tagged30('a', readOnly), tagged30('b')],
@@ -3290,6 +3344,55 @@ describe('downgradeSchemaV31ToV30', () => {
           $defs: { A: { $ref: '#/$defs/B' }, B: { $ref: '#/$defs/A' } },
         }),
       ).toEqual({ anyOf: [{}, { type: 'object' }] })
+      // Nor does a $ref to a component whose $ref into the target is still to
+      // be cut, as C's is once its other keywords are converted.
+      const r = '#/components/schemas/'
+      const tag = (value: string) => ({ tag: { const: value } })
+      const c = convert({
+        components: {
+          schemas: {
+            S: { $ref: `${r}H/$defs/T` },
+            C: {
+              $ref: `${r}H/$defs/T`,
+              properties: {
+                p: {
+                  oneOf: [
+                    { $ref: `${r}C` },
+                    { type: 'object', properties: tag('u'), required: ['tag'] },
+                  ],
+                },
+              },
+            },
+            H: {
+              $defs: {
+                T: {
+                  type: 'object',
+                  properties: { ...tag('t'), c: { $ref: `${r}C` } },
+                  required: ['tag'],
+                },
+              },
+            },
+          },
+        },
+      }).components?.schemas?.C
+      expect(c).toHaveProperty('allOf', [{}])
+      expect(c).toHaveProperty(['properties', 'p', 'anyOf'])
+    })
+
+    it('forgets the $refs that an earlier conversion cut at recursion', () => {
+      // The same $ref object is cut in one input, where its target holds it,
+      // and tells the branches apart in the next.
+      const ref = { $ref: '#/$defs/A' }
+      downgradeSchemaV31ToV30({
+        properties: { a: { $ref: '#/$defs/A' } },
+        $defs: { A: { type: 'object', properties: { next: ref } } },
+      })
+      expect(
+        downgradeSchemaV31ToV30({
+          oneOf: [ref, { type: 'number', propertyNames: { maxLength: 1 } }],
+          $defs: { A: { type: 'object' } },
+        }),
+      ).toEqual({ oneOf: [{ type: 'object' }, { type: 'number' }] })
     })
 
     it('counts a copy cut at recursion and reused later as telling no branch apart', () => {
