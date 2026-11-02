@@ -657,12 +657,20 @@ describe('downgradeSchemaV32ToV31', () => {
     },
   )
 
-  it('drops discriminator defaultMapping', () => {
+  it('drops a discriminator with a defaultMapping and keeps one without', () => {
     expect(
       downgradeSchemaV32ToV31({
+        oneOf: [{ $ref: 'Cat' }, { $ref: 'Dog' }],
         discriminator: { propertyName: 'kind', defaultMapping: 'Cat', mapping: { dog: 'Dog' } },
       }),
-    ).toEqual({ discriminator: { propertyName: 'kind', mapping: { dog: 'Dog' } } })
+    ).toStrictEqual({ oneOf: [{ $ref: 'Cat' }, { $ref: 'Dog' }] })
+    expect(
+      downgradeSchemaV32ToV31({
+        discriminator: { 'propertyName': 'kind', 'mapping': { dog: 'Dog' }, 'x-a': 1 },
+      }),
+    ).toStrictEqual({
+      discriminator: { 'propertyName': 'kind', 'mapping': { dog: 'Dog' }, 'x-a': 1 },
+    })
   })
 
   it('passes everything else through, including properties named like keywords', () => {
