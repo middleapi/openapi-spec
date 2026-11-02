@@ -486,6 +486,15 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schema({ type: 'string', nullable: true })).toEqual({ type: 'string', nullable: true })
       expect(schema({ nullable: true })).toEqual({})
       expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
+      // Beside a `type` list that holds null, it adds nothing, so a `oneOf` with a `$ref` to it stays.
+      const branches = [{ $ref: '#/components/schemas/T' }, { type: 'integer' as const }]
+      expect(
+        convert({
+          components: {
+            schemas: { T: { type: ['array', 'null'], nullable: true }, N: { oneOf: branches } },
+          },
+        }).components?.schemas?.N,
+      ).toEqual({ oneOf: branches })
       // Beside a `$ref` without a `type`, as aide writes it, the `$ref` stays bare
       // rather than an `allOf` with nothing beside it.
       const pet = '#/components/schemas/Pet'
@@ -776,6 +785,12 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'null' }, { type: 'string' }, { type: 'null' }],
         }),
       ).toEqual({ type: 'string', nullable: true })
+      // A branch whose `enum` rejects null is not the null branch beside it.
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: ['string', 'null'], enum: ['a'] }, { type: 'null' }],
+        }),
+      ).toEqual({ anyOf: [{ type: 'string', enum: ['a'], nullable: true }, onlyNull] })
       // One branch holds no null to merge, as Valibot writes a union of one schema.
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }] })).toEqual({
         anyOf: [{ type: 'string' }],
@@ -1296,6 +1311,17 @@ describe('downgradeSchemaV31ToV30', () => {
         description: 'A',
         anyOf: [onlyNull, ref],
       })
+      // The target of a `$ref` beside the `type` can reject null too, so the pair stays.
+      const pet: OpenAPIV3_1.SchemaObject = {
+        $ref: '#/components/schemas/Base',
+        type: ['object', 'null'],
+      }
+      const nullablePet = { anyOf: [{ type: 'null' as const }, ref] }
+      expect(
+        convert({
+          components: { schemas: { Base: { type: 'object' }, Pet: pet, Owner: nullablePet } },
+        }).components?.schemas?.Owner,
+      ).toEqual({ anyOf: [onlyNull, ref] })
       // A `oneOf` rejects the null that both branches match, so it stays.
       const pair = { oneOf: [{ type: 'null' as const }, ref] }
       expect(
