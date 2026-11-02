@@ -2260,6 +2260,8 @@ describe('downgradeSchemaV31ToV30', () => {
             Identification: identification,
             // A target that is itself a `$ref` holds no `type` of its own.
             Alias: ref('Identification'),
+            // Written 3.0-style, which lets it take null in 3.0.
+            Nullable: { ...identification, nullable: true },
             // As Pydantic writes a tagged union, whose discriminator 3.0 removes.
             Pet: {
               oneOf: [ref('Pet/$defs/Cat')],
@@ -2277,6 +2279,7 @@ describe('downgradeSchemaV31ToV30', () => {
                 nullable: { ...ref('Identification'), type: ['object', 'null'] },
                 other: { ...ref('Identification'), type: 'string' },
                 alias: { ...ref('Alias'), type: 'object' },
+                nullableTarget: { ...ref('Nullable'), type: 'object' },
                 pet: { ...ref('Pet'), description: 'Pet' },
               },
             },
@@ -2293,6 +2296,7 @@ describe('downgradeSchemaV31ToV30', () => {
           nullable: { type: 'object', nullable: true, allOf: [ref('Identification')] },
           other: { type: 'string', allOf: [ref('Identification')] },
           alias: { type: 'object', allOf: [ref('Alias')] },
+          nullableTarget: { type: 'object', allOf: [ref('Nullable')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },
         },
       })
