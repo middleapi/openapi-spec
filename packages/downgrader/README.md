@@ -119,7 +119,7 @@ Schema Objects inside the document convert as in [Schema](#schema-downgradeschem
 
 #### Limitations
 
-- Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, or into an `itemSchema` that moves into `schema.items`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle.
+- Other `$ref`s into a removed part, such as a schema `$ref` into `components.mediaTypes`, or into an `itemSchema` that moves into `schema.items`, and Links or discriminator `mapping` values that point at a removed operation, are left as written and dangle. A `$ref` by index to a parameter that comes after a removed `querystring` parameter in its list, such as `#/paths/~1a/get/parameters/1/schema`, resolves to the next parameter, or dangles when none follows.
 - A `content` `$ref` that does not resolve, such as an external one or one through `$self`, becomes `{}`, which takes any payload.
 - A security requirement that names its scheme by URI reference loses it, so 3.1 tools can read the operation as needing no credentials for it.
 - `$self`-relative references pass through unchanged.
