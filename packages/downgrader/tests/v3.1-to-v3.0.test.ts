@@ -1390,6 +1390,10 @@ describe('downgradeSchemaV31ToV30', () => {
         A: ref('B'),
         B: { anyOf: [{ not: {} }, ref('A'), onlyNull] },
       })
+      // A cycle of objects ends the walk.
+      const cyclic: Record<string, any> = { anyOf: [{ type: 'null' }] }
+      cyclic.anyOf.unshift({ anyOf: [cyclic, { type: 'null' }] })
+      expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual(ref('B'))
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {

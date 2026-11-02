@@ -982,13 +982,20 @@ function refAdmitsNull(ref: string, ctx: Context): boolean {
   return true
 }
 
-function nonNullBranches(branches: unknown[]): unknown[] {
+// Met again, around a cycle of objects, a union adds nothing.
+function nonNullBranches(branches: unknown[], seen = new Set<unknown[]>()): unknown[] {
+  if (seen.has(branches)) {
+    return []
+  }
+  seen.add(branches)
   return branches.flatMap((branch) => {
     if (acceptsNull(branch)) {
       return []
     }
     const nested = isRecord(branch) ? (branch.anyOf ?? branch.oneOf) : undefined
-    return Array.isArray(nested) && nested.some(acceptsNull) ? nonNullBranches(nested) : [branch]
+    return Array.isArray(nested) && nested.some(acceptsNull)
+      ? nonNullBranches(nested, seen)
+      : [branch]
   })
 }
 
