@@ -400,6 +400,12 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
   let shared: string[] = []
   let literals = 0
   const nodes: Node<T>[] = [node]
+  // The part starting with `{` parsed last, its index, and its segment. Routes
+  // waiting at one node often start with the same param, as in
+  // `/repos/{owner}/{repo}/...`, and reuse its segment instead of parsing it.
+  let lastPart: string | undefined
+  let lastIndex = 0
+  let lastSegment: Segment = ''
 
   next: for (let p = 0; p < pending.length; p += 3) {
     const path = pending[p]
@@ -433,7 +439,12 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
         if (child.pending !== undefined) {
           expand(child, child.pending, index, false)
         }
-        segment = toSegment(part, index)
+        if (part !== lastPart || index !== lastIndex) {
+          lastPart = part
+          lastIndex = index
+          lastSegment = toSegment(part, index)
+        }
+        segment = lastSegment
       }
 
       if (typeof segment === 'string') {
