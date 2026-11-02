@@ -5,10 +5,9 @@ import type { Context, Convert } from './shared'
 import {
   clone,
   convertObject,
+  createContext,
   defineFields,
-  downgrade,
   DROP,
-  find,
   finishSummary,
   getRef,
   hasType,
@@ -883,25 +882,25 @@ function rejectsNull(schema: unknown): boolean {
 
 // The schema that `schema` stands for, read through one `$ref`, which keeps
 // nothing where a copy cut it to `{}`.
-function throughRef(schema: unknown, root: unknown): unknown {
+function throughRef(schema: unknown, ctx: Context): unknown {
   const ref = getRef(schema)
   if (ref === undefined) {
     return schema
   }
-  return cutHolders.has(schema) ? undefined : find(root, ref)
+  return cutHolders.has(schema) ? undefined : resolvePointer(ref, ctx)
 }
 
 // A schema that rejects null by its `type`, read through one `$ref`.
-function refRejectsNull(schema: unknown, root: unknown): boolean {
-  return rejectsNull(throughRef(schema, root))
+function refRejectsNull(schema: unknown, ctx: Context): boolean {
+  return rejectsNull(throughRef(schema, ctx))
 }
 
 // A schema that rejects null by its `type`, or a `$ref` to one that rejects
 // null with or without a `type`.
-function keptRejectsNull(schema: unknown, root: unknown): boolean {
+function keptRejectsNull(schema: unknown, ctx: Context): boolean {
   return (
-    refRejectsNull(schema, root) ||
-    (getRef(schema) !== undefined && untypedRejectsNull(throughRef(schema, root), root))
+    refRejectsNull(schema, ctx) ||
+    (getRef(schema) !== undefined && untypedRejectsNull(throughRef(schema, ctx), ctx))
   )
 }
 
@@ -913,7 +912,7 @@ function keptRejectsNull(schema: unknown, root: unknown): boolean {
 // GitHub and Notion a tagged one, does not count, since NSwag writes a type it
 // never defines for a nullable `$ref` to one, where the `anyOf` pair gives an
 // empty class, though it reads an inline one as its first branch.
-function untypedRejectsNull(schema: unknown, root: unknown, inline = false): boolean {
+function untypedRejectsNull(schema: unknown, ctx: Context, inline = false): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
   }
@@ -924,18 +923,18 @@ function untypedRejectsNull(schema: unknown, root: unknown, inline = false): boo
   const branches = schema.anyOf ?? schema.oneOf
   return (
     (Array.isArray(schema.enum) && !schema.enum.includes(null)) ||
-    (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, root))) ||
+    (Array.isArray(schema.allOf) && schema.allOf.some((member) => refRejectsNull(member, ctx))) ||
     (Array.isArray(branches) &&
       branches.length > 0 &&
-      branches.every((branch) => refRejectsNull(branch, root)) &&
+      branches.every((branch) => refRejectsNull(branch, ctx)) &&
       (inline ||
-        !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, root)))))
+        !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, ctx)))))
   )
 }
 
 // A schema with an `"object"` `type`, read through one `$ref`.
-function isObjectBranch(schema: unknown, root: unknown): boolean {
-  const target = throughRef(schema, root)
+function isObjectBranch(schema: unknown, ctx: Context): boolean {
+  const target = throughRef(schema, ctx)
   return isRecord(target) && hasType(target.type, 'object')
 }
 
@@ -943,11 +942,11 @@ function isObjectBranch(schema: unknown, root: unknown): boolean {
 // `Optional` tagged union, and Valibot and Zod a nullable union, with a branch
 // that `scalarOneOf` does not take, which then makes a nullable union of
 // scalars one flat `oneOf` instead, as Effect writes a nullable number.
-function unionRejectsNull(schema: Record<string, unknown>, root: unknown): boolean {
+function unionRejectsNull(schema: Record<string, unknown>, ctx: Context): boolean {
   const branches = schema.anyOf ?? schema.oneOf
   return (
     Array.isArray(branches) &&
-    untypedRejectsNull(schema, root, true) &&
+    untypedRejectsNull(schema, ctx, true) &&
     branches.some((branch) => !isRecord(branch) || !ONE_OF_TYPES.has(branch.type as string))
   )
 }
@@ -1030,7 +1029,7 @@ function dropEqualBranches(out: Record<string, unknown>): boolean {
 // other branch takes `nullable`, and oapi-codegen reads it as a union.
 function mergeNullable(
   out: Record<string, unknown>,
-  root: unknown,
+  ctx: Context,
   key: 'anyOf' | 'oneOf',
   isTarget: boolean,
 ): void {
@@ -1080,17 +1079,21 @@ function mergeNullable(
     // intersection.
     const ref = getRef(other)
     if (
-      keptRejectsNull(other, root) ||
+      keptRejectsNull(other, ctx) ||
       // A pair a `$ref` points to keeps an inline union, since NSwag gives each
       // `$ref` to a `oneOf` with null a type it never defines.
-      (!isTarget && unionRejectsNull(other, root)) ||
-      (Array.isArray(other.allOf) && other.allOf.some((member) => keptRejectsNull(member, root)))
+      (!isTarget && unionRejectsNull(other, ctx)) ||
+      (Array.isArray(other.allOf) && other.allOf.some((member) => keptRejectsNull(member, ctx)))
     ) {
       // Null once, since `oneOf` rejects a value that matches two branches.
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (ref !== undefined && Object.keys(out).length === 1 && admitsNull(find(root, ref))) {
+    } else if (
+      ref !== undefined &&
+      Object.keys(out).length === 1 &&
+      admitsNull(resolvePointer(ref, ctx))
+    ) {
       // GitHub writes a nullable reference this way to a schema that already
       // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
       // the `$ref` alone. NSwag reads the pair as an empty class, and
@@ -1633,7 +1636,8 @@ function convertDocument(value: unknown, ctx: Context): unknown {
 
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
-    const out = downgrade(root, convert)
+    const ctx = createContext(root)
+    const out = convert(root, ctx)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
         const isTarget = refTargets.has(input)
@@ -1641,7 +1645,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
         const branches = schema[key]
         // A `oneOf` with null twice rejects null, so only a pair can merge.
         if (Array.isArray(branches) && (key === 'anyOf' || branches.length === 2)) {
-          mergeNullable(schema, root, key, isTarget)
+          mergeNullable(schema, ctx, key, isTarget)
         }
         if (!isTarget) {
           scalarOneOf(schema)

@@ -228,7 +228,7 @@ export function getRef(value: unknown): string | undefined {
 }
 
 /** The target of a local JSON Pointer `$ref` in `root`, looked up afresh each time. */
-export function find(root: unknown, ref: string): unknown {
+function find(root: unknown, ref: string): unknown {
   if (!ref.startsWith('#')) {
     return undefined
   }
@@ -301,9 +301,9 @@ export function inline(ref: string, ctx: Context, convert: Convert, shared = fal
   return out
 }
 
-export function downgrade(root: unknown, convert: Convert): unknown {
+export function createContext(root: unknown): Context {
   const seen: Context['seen'] = new Map()
-  return convert(root, {
+  return {
     apart: new Map(),
     converting: [],
     inlining: new Set(),
@@ -311,5 +311,5 @@ export function downgrade(root: unknown, convert: Convert): unknown {
     seen,
     shared: seen,
     targets: new Map(),
-  })
+  }
 }
