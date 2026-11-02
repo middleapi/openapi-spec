@@ -2288,6 +2288,8 @@ describe('downgradeSchemaV31ToV30', () => {
         title: 'T',
         allOf: [ref],
       })
+      // As Exa writes it, the `$ref` then stays bare.
+      expect(downgradeSchemaV31ToV30({ discriminator, ...ref })).toStrictEqual(ref)
       expect(downgradeSchemaV31ToV30({ type: ['integer', 'object'], discriminator })).toEqual({
         anyOf: [{ type: 'integer' }, { type: 'object' }],
       })

@@ -365,8 +365,9 @@ function convertTaggedBranch(value: unknown, ctx: Context): unknown {
 // Keywords 3.0 removes that restrict nothing, such as identifiers and the
 // `definitions` zod-to-json-schema writes, count as missing beside a `$ref`, as
 // does a 3.0-style `nullable`, which means nothing in 3.1, and which 3.0 keeps
-// only beside a single `type`, as aide writes it. The `$ref` then stays bare,
-// not an `allOf` with nothing beside it.
+// only beside a single `type`, as aide writes it, and a `discriminator`, which
+// does nothing there, as Exa writes it. The `$ref` then stays bare, not an
+// `allOf` with nothing beside it.
 const IDENTIFIER_KEYWORDS = new Set([
   '$anchor',
   '$comment',
@@ -379,7 +380,11 @@ const IDENTIFIER_KEYWORDS = new Set([
 ])
 
 function isRemovedBesideRef(value: Record<string, unknown>, key: string): boolean {
-  return IDENTIFIER_KEYWORDS.has(key) || (key === 'nullable' && value.type === undefined)
+  return (
+    IDENTIFIER_KEYWORDS.has(key) ||
+    key === 'discriminator' ||
+    (key === 'nullable' && value.type === undefined)
+  )
 }
 
 // Whether each key of `value` that holds a value passes `test`, since a key
