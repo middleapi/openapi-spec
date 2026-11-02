@@ -462,6 +462,13 @@ describe('downgradeSpecV32ToV31', () => {
       { '#/components/securitySchemes/other': ['read'] },
       {},
     ])
+    // A scheme holding undefined is missing, as the output leaves it out.
+    const unset = convert({
+      security: [{ key: [], unset: [] }],
+      components: { securitySchemes: { key, unset: undefined } },
+    } as any)
+    expect(unset.security).toEqual([{ key: [] }])
+    expect(unset.components?.securitySchemes).toStrictEqual({ key })
     // Without any schemes, every name is left out, and malformed values stay.
     const malformed = convert({
       security: 'all',
