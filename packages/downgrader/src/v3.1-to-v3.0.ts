@@ -179,6 +179,18 @@ const SCHEMA_FIELDS = defineFields({
   additionalProperties: (item, ctx, schema) =>
     schema.patternProperties === undefined ? convertAdditional(item, ctx) : DROP,
   allOf: list(convertSchema),
+  // 3.0 allows no extensions in a discriminator.
+  discriminator: (item) => {
+    const out = clone(item)
+    if (isRecord(out)) {
+      for (const key of Object.keys(out)) {
+        if (key.startsWith('x-')) {
+          delete out[key]
+        }
+      }
+    }
+    return out
+  },
   // Zod writes a file with several media types as an `anyOf` of branches
   // that hold only `contentMediaType`, an annotation, so it matches every
   // value. Its branches would each become a binary string in 3.0.
