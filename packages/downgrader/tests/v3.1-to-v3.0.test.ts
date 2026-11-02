@@ -1311,15 +1311,16 @@ describe('downgradeSchemaV31ToV30', () => {
         description: 'A',
         anyOf: [onlyNull, ref],
       })
-      // So can the target of a `$ref` beside the `type`.
+      // The target of a `$ref` beside the `type` can reject null too, so the pair stays.
       const pet: OpenAPIV3_1.SchemaObject = {
         $ref: '#/components/schemas/Base',
         type: ['object', 'null'],
       }
-      const owner3 = { anyOf: [{ type: 'null' as const }, ref] }
+      const nullablePet = { anyOf: [{ type: 'null' as const }, ref] }
       expect(
-        convert({ components: { schemas: { Base: { type: 'object' }, Pet: pet, Owner: owner3 } } })
-          .components?.schemas?.Owner,
+        convert({
+          components: { schemas: { Base: { type: 'object' }, Pet: pet, Owner: nullablePet } },
+        }).components?.schemas?.Owner,
       ).toEqual({ anyOf: [onlyNull, ref] })
       // A `oneOf` rejects the null that both branches match, so it stays.
       const pair = { oneOf: [{ type: 'null' as const }, ref] }
