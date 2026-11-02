@@ -84,6 +84,10 @@ export function defineFields(table: Readonly<Record<string, Field | typeof DROP>
  * a `Date`, are kept as they are.
  */
 export function clone(value: unknown): unknown {
+  // Most values copied are strings, numbers and booleans.
+  if (typeof value !== 'object' || value === null) {
+    return value
+  }
   return Array.isArray(value) || isRecord(value) ? copy(value, new Map()) : value
 }
 
@@ -217,8 +221,10 @@ export function hasType(type: unknown, name: string): boolean {
   return type === name || (Array.isArray(type) && type.includes(name))
 }
 
+// Reads `$ref` before `isRecord`, as most values hold none.
 export function getRef(value: unknown): string | undefined {
-  return isRecord(value) && typeof value.$ref === 'string' ? value.$ref : undefined
+  const ref = (value as { $ref?: unknown } | null | undefined)?.$ref
+  return typeof ref === 'string' && isRecord(value) ? ref : undefined
 }
 
 /** The target of a local JSON Pointer `$ref` in `root`, looked up afresh each time. */
