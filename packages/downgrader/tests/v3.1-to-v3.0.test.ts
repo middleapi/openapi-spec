@@ -1813,6 +1813,23 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ examples: [] })).toStrictEqual({})
   })
 
+  it('drops the extensions of a discriminator, which 3.0 allows none of', () => {
+    const cat = '#/components/schemas/Cat'
+    const discriminator = {
+      'propertyName': 'kind',
+      'mapping': { cat },
+      'x-discriminator-default': 'cat',
+    }
+    expect(downgradeSchemaV31ToV30({ oneOf: [{ $ref: cat }], discriminator })).toStrictEqual({
+      oneOf: [{ $ref: cat }],
+      discriminator: { propertyName: 'kind', mapping: { cat } },
+    })
+    expect(discriminator['x-discriminator-default']).toBe('cat')
+    expect(downgradeSchemaV31ToV30({ discriminator: 'kind' } as never)).toEqual({
+      discriminator: 'kind',
+    })
+  })
+
   it('turns tuples into arrays whose items match any item schema', () => {
     const prefixItems = [{ type: 'string' }, { type: 'integer' }] as const
     expect(
