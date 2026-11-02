@@ -3750,6 +3750,7 @@ describe('unusual input', () => {
           S: { properties: 'none', allOf: {}, example: { a: 1, b: undefined } },
           R: { $ref: 1 },
           U: { anyOf: [1, 2] },
+          N: { anyOf: [null, { const: 'a' }, { const: 'b' }] },
         },
       },
     }
@@ -3764,6 +3765,7 @@ describe('unusual input', () => {
       S: { properties: 'none', allOf: {}, example: { a: 1 } },
       R: {},
       U: { anyOf: [1, 2] },
+      N: { anyOf: [null, { type: 'string', enum: ['a', 'b'] }] },
     })
   })
 })
