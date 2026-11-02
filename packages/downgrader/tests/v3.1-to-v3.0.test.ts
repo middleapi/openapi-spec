@@ -2307,6 +2307,12 @@ describe('downgradeSchemaV31ToV30', () => {
         discriminator,
         allOf: [ref],
       })
+      for (const key of ['anyOf', 'allOf'] as const) {
+        expect(downgradeSchemaV31ToV30({ ...ref, [key]: [ref], discriminator })).toHaveProperty(
+          'discriminator',
+          discriminator,
+        )
+      }
     })
 
     it('keeps a $ref beside only annotations bare in a union beside a discriminator', () => {
