@@ -63,7 +63,7 @@ interface MethodRoutes<T> {
    * Marks the slot of each path in `statics`, so that most request paths for
    * routes with params skip hashing to look there. Building it costs more
    * than a cold start gains back, so it waits for the tree to serve
-   * `FILTER_AFTER` requests, and is dropped when a path is added to `statics`.
+   * `FILTER_AFTER` requests.
    */
   filter: Uint8Array | undefined
   /** The requests the tree has served without `filter`. */
@@ -268,7 +268,12 @@ function addStatic<T>(
   const statics = routes.statics
   if (!statics.has(path)) {
     statics.set(path, data)
-    routes.filter = undefined
+    // Marking the slot, rather than dropping the filter for the next request to
+    // build again, keeps adding routes between requests, as lazy routers do,
+    // from costing a pass over every static path each time.
+    if (routes.filter !== undefined) {
+      routes.filter[slot(path)] = 1
+    }
   }
 }
 
