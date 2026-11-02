@@ -146,7 +146,7 @@ describe('routes added after requests', () => {
       router.match('GET', `/users/${id}`)
     }
 
-    // once a tree request rebuilds the filter of static paths, these need it to hold them
+    // once the tree has served enough requests to build the filter of static paths, these need it to hold them
     router.add('GET', '/users/me', '/users/me')
     router.add('GET', '/teams/{id}', '/teams/{id}')
     router.add('GET', '/users/{id}/posts', '/users/{id}/posts')
