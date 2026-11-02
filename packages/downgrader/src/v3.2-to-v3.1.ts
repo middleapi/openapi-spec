@@ -47,15 +47,16 @@ const convertCallback = map(convertPathItem, isNotExtension)
 const convertContent = map(convertMediaTypeEntry)
 const convertServers = list(convertServer)
 
-const DISCRIMINATOR_FIELDS = defineFields({
-  defaultMapping: DROP,
-})
-
 const SCHEMA_FIELDS = defineFields({
   ...Object.fromEntries(SUBSCHEMA_KEYWORDS.map((key) => [key, convertSchema])),
   ...Object.fromEntries(SUBSCHEMA_MAP_KEYWORDS.map((key) => [key, map(convertSchema)])),
   ...Object.fromEntries(SUBSCHEMA_LIST_KEYWORDS.map((key) => [key, list(convertSchema)])),
-  discriminator: (item, ctx) => convertObject(item, ctx, DISCRIMINATOR_FIELDS),
+  // A `defaultMapping` sends a missing or unmapped value to its schema. 3.1 has
+  // no default, so tools such as Hey API pin a tag on that schema and reject
+  // those values; without the discriminator every value the union accepts
+  // stays accepted.
+  discriminator: (item) =>
+    isRecord(item) && item.defaultMapping !== undefined ? DROP : clone(item),
   xml: convertXml,
 })
 
