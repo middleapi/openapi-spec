@@ -118,8 +118,10 @@ const IN_PLACE_APPLICATORS = [
   'then',
 ]
 
-// Converted schemas that lost a restriction, directly or in a subschema.
-const LOOSE = new WeakSet<object>()
+// Converted schemas that lost a restriction, directly or in a subschema. A
+// `Set` emptied after each run, as a `WeakSet` costs about a tenth of a
+// conversion with many cycles in the time the garbage collector spends on it.
+const LOOSE = new Set<object>()
 
 // Converted schemas with an `anyOf` or `oneOf` of several branches, for
 // `mergeEnums` and `mergeNullable`. They run once the whole input is converted,
@@ -1663,6 +1665,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     unionTargets.clear()
     refTargets.clear()
     cutHolders.clear()
+    LOOSE.clear()
   }
 }
 
