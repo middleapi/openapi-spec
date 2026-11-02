@@ -2312,6 +2312,49 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ properties: { a: { description: 'A', allOf: [identification] } } })
     })
 
+    it('keeps a $ref beside only annotations bare to a subtype of a schema with a discriminator', () => {
+      // Hey API pins the tag of a schema whose `allOf` holds a `$ref` to a
+      // subtype, as the NPP API describes a GeoJSON point, through any depth.
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      const pet = {
+        type: 'object',
+        properties: { kind: { type: 'string' } },
+        discriminator: { propertyName: 'kind', mapping: { cat: '#/components/schemas/Cat' } },
+      } as const
+      const out = convert({
+        components: {
+          schemas: {
+            Pet: pet,
+            Cat: { allOf: [ref('Pet'), { properties: { lives: { type: 'integer' } } }] },
+            Kitten: { allOf: [ref('Cat')] },
+            // No `discriminator` above it, also through a cycle of `allOf`s.
+            Loop: { allOf: [ref('Loop')] },
+            Plain: { allOf: [ref('Loop'), { type: 'object' }] },
+            // As Pydantic writes a base, which replaces its `$ref`.
+            Inline: { allOf: [ref('Inline/$defs/Base')], $defs: { Base: pet } },
+            Owner: {
+              type: 'object',
+              properties: {
+                cat: { ...ref('Cat'), description: 'The cat' },
+                kitten: { ...ref('Kitten'), title: 'Kitten' },
+                plain: { ...ref('Plain'), description: 'Plain' },
+                inline: { ...ref('Inline'), description: 'Inline' },
+              },
+            },
+          },
+        },
+      })
+      expect(out.components?.schemas?.Owner).toEqual({
+        type: 'object',
+        properties: {
+          cat: ref('Cat'),
+          kitten: ref('Kitten'),
+          plain: { description: 'Plain', allOf: [ref('Plain')] },
+          inline: { description: 'Inline', allOf: [ref('Inline')] },
+        },
+      })
+    })
+
     it('reads definitions, the draft-07 name of $defs, as $defs', () => {
       expect(
         downgradeSchemaV31ToV30({
