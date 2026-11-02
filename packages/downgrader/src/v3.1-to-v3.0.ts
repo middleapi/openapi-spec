@@ -335,18 +335,29 @@ function convertBranches(item: unknown, ctx: Context, schema: Record<string, unk
 
 function convertTaggedBranch(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref !== undefined && isAnnotatedRef(refSiblings(value as Record<string, unknown>))
+  return ref !== undefined && isAnnotatedRef(value as Record<string, unknown>)
     ? convertSchemaRef(ref, ctx, value)
     : convertSchema(value, ctx)
 }
 
-// A 3.0-style `nullable` means nothing in 3.1, and 3.0 keeps it only beside a
-// single `type`, so beside a `$ref` without one it counts as missing, as aide
-// writes it. The `$ref` then stays bare, not an `allOf` with nothing beside it.
-function refSiblings(value: Record<string, unknown>): Record<string, unknown> {
-  return value.nullable !== undefined && value.type === undefined
-    ? { ...value, nullable: undefined }
-    : value
+// Keywords 3.0 removes that restrict nothing, such as identifiers and the
+// `definitions` zod-to-json-schema writes, count as missing beside a `$ref`, as
+// does a 3.0-style `nullable`, which means nothing in 3.1, and which 3.0 keeps
+// only beside a single `type`, as aide writes it. The `$ref` then stays bare,
+// not an `allOf` with nothing beside it.
+const IDENTIFIER_KEYWORDS = new Set([
+  '$anchor',
+  '$comment',
+  '$defs',
+  '$dynamicAnchor',
+  '$id',
+  '$schema',
+  '$vocabulary',
+  'definitions',
+])
+
+function isRemovedBesideRef(value: Record<string, unknown>, key: string): boolean {
+  return IDENTIFIER_KEYWORDS.has(key) || (key === 'nullable' && value.type === undefined)
 }
 
 // Whether each key of `value` that holds a value passes `test`, since a key
@@ -363,7 +374,10 @@ function hasOnly(value: Record<string, unknown>, test: (key: string) => boolean)
 // The 3.1 annotations `examples` and `$comment` count too, as the Anthropic
 // API writes `examples` beside a `$ref` to a tagged union.
 function isAnnotatedRef(value: Record<string, unknown>): boolean {
-  return hasOnly(value, (key) => key === '$ref' || isInputAnnotation(key))
+  return hasOnly(
+    value,
+    (key) => key === '$ref' || isInputAnnotation(key) || isRemovedBesideRef(value, key),
+  )
 }
 
 // 3.0 reads an `allOf` that holds a `$ref` to a schema with a `discriminator`
@@ -377,7 +391,16 @@ function isAnnotatedRef(value: Record<string, unknown>): boolean {
 // Hey API pins the tag of a subtype too, one whose `allOf` holds a `$ref` to
 // such a schema, as the NPP API describes a GeoJSON point.
 function isTaggedRef(value: Record<string, unknown>, ref: string, ctx: Context): boolean {
-  if (!hasOnly(value, (key) => key === '$ref' || key === 'type' || isInputAnnotation(key))) {
+  if (
+    !hasOnly(
+      value,
+      (key) =>
+        key === '$ref' ||
+        key === 'type' ||
+        isInputAnnotation(key) ||
+        isRemovedBesideRef(value, key),
+    )
+  ) {
     return false
   }
   const target = resolvePointer(ref, ctx)
@@ -1551,7 +1574,12 @@ function revisitSchema(out: object): void {
 // Spelled out, not through `hasOnly`, since it runs for every `$ref`.
 function isBareRef(value: Record<string, unknown>): boolean {
   for (const key in value) {
-    if (key !== '$ref' && Object.hasOwn(value, key) && value[key] !== undefined) {
+    if (
+      key !== '$ref' &&
+      Object.hasOwn(value, key) &&
+      value[key] !== undefined &&
+      !isRemovedBesideRef(value, key)
+    ) {
       return false
     }
   }
@@ -1563,11 +1591,12 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     return value ? {} : { not: {} }
   }
   const ref = getRef(value)
-  if (ref !== undefined) {
-    const siblings = refSiblings(value as Record<string, unknown>)
-    if (isBareRef(siblings) || isTaggedRef(siblings, ref, ctx)) {
-      return convertSchemaRef(ref, ctx, value)
-    }
+  if (
+    ref !== undefined &&
+    (isBareRef(value as Record<string, unknown>) ||
+      isTaggedRef(value as Record<string, unknown>, ref, ctx))
+  ) {
+    return convertSchemaRef(ref, ctx, value)
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema, revisitSchema)
 }

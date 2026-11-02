@@ -495,6 +495,21 @@ describe('downgradeSchemaV31ToV30', () => {
         description: 'd',
         allOf: [{ $ref: pet }],
       })
+      // So do identifiers 3.0 lacks, as zod-to-json-schema writes `definitions` beside one.
+      expect(
+        schema({
+          $ref: pet,
+          $comment: 'c',
+          $anchor: 'a',
+          $dynamicAnchor: 'd',
+          $id: 'https://example.com/pet',
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          $vocabulary: {},
+          $defs: { A: {} },
+          definitions: { B: {} },
+          nullable: true,
+        }),
+      ).toStrictEqual({ $ref: pet })
       // A discriminator maps only to the `$ref`s among its branches.
       const discriminator = { propertyName: 'type' }
       expect(
@@ -2299,6 +2314,9 @@ describe('downgradeSchemaV31ToV30', () => {
                 pet: { ...ref('Pet'), description: 'Pet' },
                 // A 3.0-style `nullable` means nothing beside a `$ref` without a `type`.
                 nullableRef: { ...ref('Strategy'), nullable: true, description: 'd' },
+                identified: { ...ref('Strategy'), $id: 'https://example.com/s', title: 'S' },
+                // Beside a `type`, it lets the target take null in 3.0.
+                typedNullable: { ...ref('Identification'), type: 'object', nullable: true },
               },
             },
           },
@@ -2318,6 +2336,8 @@ describe('downgradeSchemaV31ToV30', () => {
           nullableTarget: { type: 'object', allOf: [ref('Nullable')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },
           nullableRef: ref('Strategy'),
+          identified: ref('Strategy'),
+          typedNullable: { type: 'object', nullable: true, allOf: [ref('Identification')] },
         },
       })
       // A target that replaces the `$ref` keeps the annotations beside it.
