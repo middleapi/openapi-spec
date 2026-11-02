@@ -1474,7 +1474,9 @@ function finishSchema(
     out.format = format
   }
   // 3.0 allows no other keywords, so unknown ones become extensions.
-  for (const key of Object.keys(out)) {
+  const keys = Object.keys(out)
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index]!
     if (!V30_SCHEMA_KEYWORDS.has(key) && !key.startsWith('x-')) {
       if (!Object.hasOwn(out, `x-${key}`)) {
         out[`x-${key}`] = out[key]

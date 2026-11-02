@@ -87,6 +87,9 @@ export function clone(value: unknown): unknown {
   return Array.isArray(value) || isRecord(value) ? copy(value, new Map()) : value
 }
 
+// The hot loops here read keys with `for...in` and items by index, as the
+// iterator steps of `for...of` cost about a tenth of a conversion that runs
+// before the JIT compiles it, as oRPC runs one.
 function copy(value: unknown, copies: Map<object, unknown>): unknown {
   if (!(Array.isArray(value) || isRecord(value))) {
     return value
@@ -98,17 +101,19 @@ function copy(value: unknown, copies: Map<object, unknown>): unknown {
   if (Array.isArray(value)) {
     const out: unknown[] = []
     copies.set(value, out)
-    for (const item of value) {
-      out.push(copy(item, copies))
+    for (let index = 0; index < value.length; index++) {
+      out.push(copy(value[index], copies))
     }
     return out
   }
   const out: Record<string, unknown> = {}
   copies.set(value, out)
-  for (const key of Object.keys(value)) {
-    const item = value[key]
-    if (item !== undefined) {
-      setOwn(out, key, copy(item, copies))
+  for (const key in value) {
+    if (Object.hasOwn(value, key)) {
+      const item = value[key]
+      if (item !== undefined) {
+        setOwn(out, key, copy(item, copies))
+      }
     }
   }
   return out
@@ -145,7 +150,10 @@ export function convertObject(
   const out: Record<string, unknown> = {}
   seen.set(value, out)
   ctx.converting.push(out)
-  for (const key of Object.keys(value)) {
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) {
+      continue
+    }
     const item = value[key]
     if (item === undefined) {
       continue
@@ -176,11 +184,14 @@ export function map(convert: Convert, isEntry: (key: string) => boolean = () => 
       return clone(value)
     }
     const out: Record<string, unknown> = {}
-    for (const key of Object.keys(value)) {
-      const item = value[key]
-      const converted = item === undefined ? DROP : isEntry(key) ? convert(item, ctx) : clone(item)
-      if (converted !== DROP) {
-        setOwn(out, key, converted)
+    for (const key in value) {
+      if (Object.hasOwn(value, key)) {
+        const item = value[key]
+        const converted =
+          item === undefined ? DROP : isEntry(key) ? convert(item, ctx) : clone(item)
+        if (converted !== DROP) {
+          setOwn(out, key, converted)
+        }
       }
     }
     return out
