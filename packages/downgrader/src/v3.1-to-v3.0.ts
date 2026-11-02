@@ -1199,6 +1199,10 @@ function mergeEnums(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void 
 // make a `oneOf` of a union of scalars.
 function mergeEnumsByType(out: Record<string, unknown>, key: 'anyOf' | 'oneOf'): void {
   const branches = out[key] as unknown[]
+  // Only two enums can merge, which most unions, such as a nullable pair, lack.
+  if (branches.filter((branch) => Array.isArray((branch as { enum?: unknown })?.enum)).length < 2) {
+    return
+  }
   const merged = new Map<unknown, { enum: unknown[]; seen: Set<unknown> }>()
   const result: unknown[] = []
   for (const branch of branches) {
