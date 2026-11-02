@@ -1736,19 +1736,17 @@ function convertDocument(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, DOCUMENT_FIELDS, finishDocument)
 }
 
-// A chain of bare `$ref`s from `schema` that comes back to it.
+// A chain of `$ref`s from `schema` that comes back to it. 3.0 has no `$ref`
+// with siblings, so each is bare.
 function leadsBack(schema: Record<string, unknown>, ctx: Context): boolean {
-  const seen = new Set<unknown>()
-  for (let next: unknown = schema; isRecord(next) && Object.keys(next).length === 1;) {
-    const ref = getRef(next)
-    if (ref === undefined || seen.has(next)) {
-      return false
-    }
-    seen.add(next)
-    next = resolvePointer(ref, ctx)
+  const seen = new Set<string>()
+  for (let ref = getRef(schema); ref !== undefined && !seen.has(ref);) {
+    seen.add(ref)
+    const next = resolvePointer(ref, ctx)
     if (next === schema) {
       return true
     }
+    ref = getRef(next)
   }
   return false
 }
