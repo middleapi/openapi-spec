@@ -771,6 +771,11 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'null' }],
         }),
       ).toEqual({ type: 'string', nullable: true })
+      expect(
+        downgradeSchemaV31ToV30({
+          anyOf: [{ type: 'null' }, { type: 'string' }, { type: 'null' }],
+        }),
+      ).toEqual({ type: 'string', nullable: true })
       // One branch holds no null to merge, as Valibot writes a union of one schema.
       expect(downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }] })).toEqual({
         anyOf: [{ type: 'string' }],
@@ -1291,6 +1296,12 @@ describe('downgradeSchemaV31ToV30', () => {
         description: 'A',
         anyOf: [onlyNull, ref],
       })
+      // A `oneOf` rejects the null that both branches match, so it stays.
+      const pair = { oneOf: [{ type: 'null' as const }, ref] }
+      expect(
+        convert({ components: { schemas: { Pet: { type: ['object', 'null'] }, Owner: pair } } })
+          .components?.schemas?.Owner,
+      ).toEqual({ oneOf: [onlyNull, ref] })
     })
 
     it('keeps only the $ref of an anyOf with null when the target is a nullable anyOf, as Zod and Pydantic write it', () => {
