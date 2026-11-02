@@ -322,9 +322,19 @@ function refOr(convert: Convert): Convert {
 // A discriminator picks only among named components, not the targets that
 // replace `$ref`s into `$defs`, as Pydantic and msgspec write a tagged union.
 // Its `mapping` into them would dangle, which validators that follow it reject.
+// Beside none of `oneOf`, `anyOf` and `allOf`, it does nothing, as Pydantic
+// writes one beside the `$ref` of a tagged union with a single member, but 3.0
+// tools would apply it to the `allOf` the `$ref` becomes, or the `anyOf` a
+// `type` list does, and reject what lacks the tag.
 function keepsDiscriminator(schema: Record<string, unknown>, ctx: Context): boolean {
+  const { type } = schema
   return (
     schema.discriminator !== undefined &&
+    (schema.oneOf !== undefined ||
+      schema.anyOf !== undefined ||
+      schema.allOf !== undefined ||
+      (typeof schema.$ref !== 'string' &&
+        !(Array.isArray(type) && type.filter((item) => item !== 'null').length > 1))) &&
     ![schema.oneOf, schema.anyOf].some(
       (branches) =>
         Array.isArray(branches) &&
@@ -355,8 +365,9 @@ function convertTaggedBranch(value: unknown, ctx: Context): unknown {
 // Keywords 3.0 removes that restrict nothing, such as identifiers and the
 // `definitions` zod-to-json-schema writes, count as missing beside a `$ref`, as
 // does a 3.0-style `nullable`, which means nothing in 3.1, and which 3.0 keeps
-// only beside a single `type`, as aide writes it. The `$ref` then stays bare,
-// not an `allOf` with nothing beside it.
+// only beside a single `type`, as aide writes it, and a `discriminator`, which
+// does nothing there, as Exa writes it. The `$ref` then stays bare, not an
+// `allOf` with nothing beside it.
 const IDENTIFIER_KEYWORDS = new Set([
   '$anchor',
   '$comment',
@@ -369,7 +380,11 @@ const IDENTIFIER_KEYWORDS = new Set([
 ])
 
 function isRemovedBesideRef(value: Record<string, unknown>, key: string): boolean {
-  return IDENTIFIER_KEYWORDS.has(key) || (key === 'nullable' && value.type === undefined)
+  return (
+    IDENTIFIER_KEYWORDS.has(key) ||
+    key === 'discriminator' ||
+    (key === 'nullable' && value.type === undefined)
+  )
 }
 
 // Whether each key of `value` that holds a value passes `test`, since a key

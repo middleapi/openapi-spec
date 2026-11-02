@@ -2280,6 +2280,35 @@ describe('downgradeSchemaV31ToV30', () => {
       }
     })
 
+    it('removes a discriminator that a $ref or a type list would give an allOf or anyOf to act on', () => {
+      const discriminator = { propertyName: 'type', mapping: { a: '#/components/schemas/A' } }
+      const ref = { $ref: '#/components/schemas/A' }
+      // As Pydantic writes a tagged union of a single member.
+      expect(downgradeSchemaV31ToV30({ title: 'T', discriminator, ...ref })).toEqual({
+        title: 'T',
+        allOf: [ref],
+      })
+      // As Exa writes it, the `$ref` then stays bare.
+      expect(downgradeSchemaV31ToV30({ discriminator, ...ref })).toStrictEqual(ref)
+      expect(downgradeSchemaV31ToV30({ type: ['integer', 'object'], discriminator })).toEqual({
+        anyOf: [{ type: 'integer' }, { type: 'object' }],
+      })
+      // A base object keeps it, and so does a `$ref` beside branches.
+      const base = { type: 'object', properties: { type: { type: 'string' } } } as const
+      expect(downgradeSchemaV31ToV30({ ...base, discriminator })).toEqual({
+        ...base,
+        discriminator,
+      })
+      expect(downgradeSchemaV31ToV30({ ...base, type: ['object', 'null'], discriminator })).toEqual(
+        { ...base, nullable: true, discriminator },
+      )
+      expect(downgradeSchemaV31ToV30({ ...ref, oneOf: [ref], discriminator })).toEqual({
+        oneOf: [ref],
+        discriminator,
+        allOf: [ref],
+      })
+    })
+
     it('keeps a $ref beside only annotations bare in a union beside a discriminator', () => {
       // As Anthropic describes each branch of a tagged union. 3.0 maps a
       // discriminator only to the `$ref`s among the branches.
