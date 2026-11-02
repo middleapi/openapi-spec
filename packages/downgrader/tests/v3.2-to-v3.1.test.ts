@@ -552,6 +552,23 @@ describe('downgradeSpecV32ToV31', () => {
     ).toEqual({ xml: { attribute: true } })
   })
 
+  it('reads only the keys an object holds, as JSON does, beside an enumerable key on Object.prototype', () => {
+    const prototype = Object.prototype as Record<string, unknown>
+    prototype.polluted = 'yes'
+    try {
+      const doc = {
+        openapi: '3.2.0',
+        info: { ...info, 'x-meta': { a: 1 } },
+        paths: { '/a': {} },
+      } as const
+      expect(JSON.stringify(downgradeSpecV32ToV31(doc))).toBe(
+        JSON.stringify({ ...doc, openapi: '3.1.2' }),
+      )
+    } finally {
+      delete prototype.polluted
+    }
+  })
+
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {
     const date = new Date(0)
     const out = convertOperation({
