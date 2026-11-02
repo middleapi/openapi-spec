@@ -1328,6 +1328,54 @@ describe('downgradeSchemaV31ToV30', () => {
       })
     })
 
+    it('keeps the null of an anyOf with null whose $ref leads back to it through such pairs', () => {
+      const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
+      const pair = (name: string) => ({ anyOf: [ref(name), { type: 'null' as const }] })
+      const schemas = (input: Record<string, OpenAPIV3_1.SchemaObject>) =>
+        convert({ components: { schemas: input } }).components?.schemas
+      // In 3.1 these admit only null, and the bare `$ref`s would match nothing.
+      expect(schemas({ A: pair('A') })).toEqual({ A: { anyOf: [ref('A'), onlyNull] } })
+      expect(schemas({ A: pair('B'), B: pair('A') })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
+        B: { anyOf: [ref('A'), onlyNull] },
+      })
+      expect(schemas({ A: pair('B'), B: pair('C'), C: pair('B') })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
+        B: { anyOf: [ref('C'), onlyNull] },
+        C: { anyOf: [ref('B'), onlyNull] },
+      })
+      // A chain that ends at a schema admitting null keeps each `$ref` alone.
+      expect(schemas({ A: pair('B'), B: pair('C'), C: { type: ['string', 'null'] } })).toEqual({
+        A: ref('B'),
+        B: ref('C'),
+        C: { type: 'string', nullable: true },
+      })
+      // A pair whose `$ref` rejects null becomes a `oneOf`, which keeps null.
+      expect(schemas({ A: pair('B'), B: pair('C'), C: { type: 'string' } })).toEqual({
+        A: ref('B'),
+        B: { oneOf: [ref('C'), onlyNull] },
+        C: { type: 'string' },
+      })
+      // A target with more branches stays a union that holds null itself.
+      const union = { anyOf: [ref('A'), { type: 'string' as const }, { type: 'null' as const }] }
+      expect(schemas({ A: pair('B'), B: union })).toEqual({
+        A: ref('B'),
+        B: { anyOf: [ref('A'), { type: 'string' }, onlyNull] },
+      })
+      // Annotations beside a pair count for nothing, as 3.0 drops some of them.
+      expect(schemas({ A: { $comment: 'c', ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('A'), onlyNull] },
+      })
+      expect(schemas({ A: pair('B'), B: { examples: [], ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
+        B: { anyOf: [ref('A'), onlyNull] },
+      })
+      expect(schemas({ A: pair('B'), B: { description: 'B', ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
+        B: { description: 'B', anyOf: [ref('A'), onlyNull] },
+      })
+    })
+
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
       const node: Record<string, any> = { type: 'object', properties: {} }
       node.properties.parent = { anyOf: [node, { type: 'null' }] }
