@@ -362,10 +362,21 @@ function isAnnotatedRef(value: Record<string, unknown>): boolean {
 // leaves out the tag, and Hey API pins it to the name of the schema around it
 // when the target has no `oneOf`. So a `$ref` to one beside only annotations,
 // as OpenAI and Adyen describe a property holding a tagged union, stays the
-// bare `$ref`, as a branch does.
-function isTaggedRef(ref: string, ctx: Context): boolean {
+// bare `$ref`, as a branch does. A `type` the target holds too, as OpenAI and
+// the NPP API write beside one, restricts nothing more, so it counts as well,
+// unless a 3.0-style `nullable` there lets the target take null in 3.0.
+function isTaggedRef(value: Record<string, unknown>, ref: string, ctx: Context): boolean {
+  if (!hasOnly(value, (key) => key === '$ref' || key === 'type' || isInputAnnotation(key))) {
+    return false
+  }
   const target = resolvePointer(ref, ctx)
-  return isRecord(target) && keepsDiscriminator(target, ctx) && !isInlined(ref, ctx)
+  return (
+    isRecord(target) &&
+    (value.type === undefined ||
+      (jsonKey(value.type) === jsonKey(target.type) && target.nullable !== true)) &&
+    keepsDiscriminator(target, ctx) &&
+    !isInlined(ref, ctx)
+  )
 }
 
 function convertSchemaRef(ref: string, ctx: Context, holder: unknown): unknown {
@@ -1529,7 +1540,7 @@ function convertSchema(value: unknown, ctx: Context): unknown {
   if (
     ref !== undefined &&
     (isBareRef(value as Record<string, unknown>) ||
-      (isAnnotatedRef(value as Record<string, unknown>) && isTaggedRef(ref, ctx)))
+      isTaggedRef(value as Record<string, unknown>, ref, ctx))
   ) {
     return convertSchemaRef(ref, ctx, value)
   }
