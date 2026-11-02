@@ -141,6 +141,9 @@ const refTargets = new Set<unknown>()
 // holds it, also once the target it was cut at is no longer being inlined.
 const cutHolders = new Set<unknown>()
 
+// Pairs of null and a `$ref` that became the `$ref` alone, with their branches.
+const collapsedPairs: [schema: Record<string, unknown>, anyOf: unknown[]][] = []
+
 // The 3.0 keywords that apply only to objects, which `convertType` moves into
 // the `"object"` branch of a `type` list.
 const OBJECT_KEYWORDS = [
@@ -958,47 +961,6 @@ function admitsNull(schema: unknown): boolean {
   )
 }
 
-// A `$ref` whose target admits null, which a pair of null and the `$ref`
-// becomes. A target that holds such a pair, beside annotations that 3.0 may
-// drop, such as `$comment`, can become its own `$ref` in turn, so a loop of
-// them, which in 3.1 admits only null, would become `$ref`s that match
-// nothing. One that does not admit null keeps its pair. A pair nested in the
-// target's `anyOf`, as `anyOf: [{ anyOf: [$ref, null] }, null]`, leads on too.
-function refAdmitsNull(ref: string, ctx: Context): boolean {
-  const seen = new Set<string>()
-  for (let next: string | undefined = ref; next !== undefined;) {
-    const target = resolvePointer(next, ctx)
-    if (!admitsNull(target)) {
-      return next !== ref
-    }
-    if (seen.has(next)) {
-      return false
-    }
-    seen.add(next)
-    const { anyOf } = target as Record<string, unknown>
-    const others = Array.isArray(anyOf) ? nonNullBranches(anyOf) : []
-    next = others.length === 1 ? getRef(others[0]) : undefined
-  }
-  return true
-}
-
-// Met again, around a cycle of objects, a union adds nothing.
-function nonNullBranches(branches: unknown[], seen = new Set<unknown[]>()): unknown[] {
-  if (seen.has(branches)) {
-    return []
-  }
-  seen.add(branches)
-  return branches.flatMap((branch) => {
-    if (acceptsNull(branch)) {
-      return []
-    }
-    const nested = isRecord(branch) ? (branch.anyOf ?? branch.oneOf) : undefined
-    return Array.isArray(nested) && nested.some(acceptsNull)
-      ? nonNullBranches(nested, seen)
-      : [branch]
-  })
-}
-
 // A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.
 function rejectsNull(schema: unknown): boolean {
   if (!isRecord(schema) || schema.nullable === true) {
@@ -1219,11 +1181,16 @@ function mergeNullable(
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (ref !== undefined && Object.keys(out).length === 1 && refAdmitsNull(ref, ctx)) {
+    } else if (
+      ref !== undefined &&
+      Object.keys(out).length === 1 &&
+      admitsNull(resolvePointer(ref, ctx))
+    ) {
       // GitHub writes a nullable reference this way to a schema that already
       // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
       // the `$ref` alone. NSwag reads the pair as an empty class, and
       // oapi-codegen as a union.
+      collapsedPairs.push([out, out.anyOf as unknown[]])
       delete out.anyOf
       out.$ref = ref
     }
@@ -1769,6 +1736,23 @@ function convertDocument(value: unknown, ctx: Context): unknown {
   return convertObject(value, ctx, DOCUMENT_FIELDS, finishDocument)
 }
 
+// A chain of bare `$ref`s from `schema` that comes back to it.
+function leadsBack(schema: Record<string, unknown>, ctx: Context): boolean {
+  const seen = new Set<unknown>()
+  for (let next: unknown = schema; isRecord(next) && Object.keys(next).length === 1;) {
+    const ref = getRef(next)
+    if (ref === undefined || seen.has(next)) {
+      return false
+    }
+    seen.add(next)
+    next = resolvePointer(ref, ctx)
+    if (next === schema) {
+      return true
+    }
+  }
+  return false
+}
+
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
     const ctx = createContext(root)
@@ -1787,6 +1771,15 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
         }
       }
     }
+    // A loop of such `$ref`s, which in 3.1 admits only null, would match
+    // nothing, so each keeps its pair.
+    if (collapsedPairs.length > 0) {
+      const outCtx = createContext(out)
+      for (const [schema, anyOf] of collapsedPairs.filter(([item]) => leadsBack(item, outCtx))) {
+        delete schema.$ref
+        schema.anyOf = anyOf
+      }
+    }
     return out
   } finally {
     // Cleared even when conversion throws, so nothing keeps the input alive.
@@ -1794,6 +1787,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     unionTargets.clear()
     refTargets.clear()
     cutHolders.clear()
+    collapsedPairs.length = 0
     LOOSE.clear()
   }
 }

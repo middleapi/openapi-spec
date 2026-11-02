@@ -1339,8 +1339,9 @@ describe('downgradeSchemaV31ToV30', () => {
         A: { anyOf: [ref('B'), onlyNull] },
         B: { anyOf: [ref('A'), onlyNull] },
       })
+      // One that leads into such a loop, without being on it, keeps the `$ref`.
       expect(schemas({ A: pair('B'), B: pair('C'), C: pair('B') })).toEqual({
-        A: { anyOf: [ref('B'), onlyNull] },
+        A: ref('B'),
         B: { anyOf: [ref('C'), onlyNull] },
         C: { anyOf: [ref('B'), onlyNull] },
       })
@@ -1370,12 +1371,13 @@ describe('downgradeSchemaV31ToV30', () => {
         A: { anyOf: [ref('B'), onlyNull] },
         B: { anyOf: [ref('A'), onlyNull] },
       })
+      // A description that 3.0 keeps beside the pair breaks the loop.
       expect(schemas({ A: pair('B'), B: { description: 'B', ...pair('A') } })).toEqual({
-        A: { anyOf: [ref('B'), onlyNull] },
+        A: ref('B'),
         B: { description: 'B', anyOf: [ref('A'), onlyNull] },
       })
-      // So does a pair nested in the target's union.
-      const nested = { anyOf: [{ anyOf: [ref('A'), onlyNull] }, onlyNull] }
+      // So does a pair nested in the target's union, which keeps one pair.
+      const nested = { anyOf: [ref('A'), onlyNull] }
       expect(schemas({ A: { anyOf: [pair('A'), { type: 'null' }] } })).toEqual({ A: nested })
       expect(schemas({ A: { anyOf: [{ oneOf: pair('A').anyOf }, { type: 'null' }] } })).toEqual({
         A: nested,
@@ -1390,13 +1392,17 @@ describe('downgradeSchemaV31ToV30', () => {
         A: ref('B'),
         B: { anyOf: [{ not: {} }, ref('A'), onlyNull] },
       })
-      // A cycle of objects ends the walk.
-      const cyclic: Record<string, any> = { anyOf: [{ type: 'null' }] }
-      cyclic.anyOf.unshift({ anyOf: [cyclic, { type: 'null' }] })
-      expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual(ref('B'))
-      // A $ref beside the cycle is still followed.
-      cyclic.anyOf[0].anyOf.push(ref('A'))
-      expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual({ anyOf: [ref('B'), onlyNull] })
+      // As does a loop through a nested pair, or a duplicate `$ref`, or null
+      // written as `const`.
+      expect(
+        schemas({
+          A: pair('B'),
+          B: { anyOf: [{ anyOf: [ref('A'), { const: null }] }, { type: 'null' }] },
+        }),
+      ).toEqual({ A: { anyOf: [ref('B'), onlyNull] }, B: { anyOf: [ref('A'), onlyNull] } })
+      expect(schemas({ A: { anyOf: [ref('A'), ref('A'), { type: 'null' }] } })).toEqual({
+        A: { anyOf: [ref('A'), onlyNull] },
+      })
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
