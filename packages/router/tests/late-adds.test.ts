@@ -18,6 +18,8 @@ describe('routes added after requests', () => {
     // shares its parts up to `t` with the route before it
     router.add('GET', '/s/{x}/t/{y}', '/s/{x}/t/{y}')
     router.add('GET', '/s/{x}/t/u', '/s/{x}/t/u')
+    // has the part the route before it parsed last, at another index
+    router.add('GET', '/{x}', '/{x}')
 
     expectMatches(router, {
       '/a/1/b/2': ['/a/{x}/b/{y}', { x: '1', y: '2' }],
@@ -31,6 +33,7 @@ describe('routes added after requests', () => {
       '/a/1/c': ['/a/{x}/c', { x: '1' }],
       '/s/1/t/2': ['/s/{x}/t/{y}', { x: '1', y: '2' }],
       '/s/1/t/u': ['/s/{x}/t/u', { x: '1' }],
+      '/1': ['/{x}', { x: '1' }],
     })
   })
 
