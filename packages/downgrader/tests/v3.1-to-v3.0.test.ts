@@ -2278,6 +2278,8 @@ describe('downgradeSchemaV31ToV30', () => {
                 typed: { ...ref('Identification'), type: 'object', title: 'Typed' },
                 nullable: { ...ref('Identification'), type: ['object', 'null'] },
                 other: { ...ref('Identification'), type: 'string' },
+                // A keyword that restricts more keeps the `allOf`.
+                bounded: { ...ref('Identification'), type: 'object', minProperties: 1 },
                 alias: { ...ref('Alias'), type: 'object' },
                 nullableTarget: { ...ref('Nullable'), type: 'object' },
                 pet: { ...ref('Pet'), description: 'Pet' },
@@ -2295,6 +2297,7 @@ describe('downgradeSchemaV31ToV30', () => {
           typed: ref('Identification'),
           nullable: { type: 'object', nullable: true, allOf: [ref('Identification')] },
           other: { type: 'string', allOf: [ref('Identification')] },
+          bounded: { type: 'object', minProperties: 1, allOf: [ref('Identification')] },
           alias: { type: 'object', allOf: [ref('Alias')] },
           nullableTarget: { type: 'object', allOf: [ref('Nullable')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },
