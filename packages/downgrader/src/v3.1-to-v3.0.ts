@@ -962,7 +962,8 @@ function admitsNull(schema: unknown): boolean {
 // becomes. A target that holds such a pair, beside annotations that 3.0 may
 // drop, such as `$comment`, can become its own `$ref` in turn, so a loop of
 // them, which in 3.1 admits only null, would become `$ref`s that match
-// nothing. One that does not admit null keeps its pair.
+// nothing. One that does not admit null keeps its pair. A pair nested in the
+// target's `anyOf`, as `anyOf: [{ anyOf: [$ref, null] }, null]`, leads on too.
 function refAdmitsNull(ref: string, ctx: Context): boolean {
   const seen = new Set<string>()
   for (let next: string | undefined = ref; next !== undefined;) {
@@ -975,10 +976,20 @@ function refAdmitsNull(ref: string, ctx: Context): boolean {
     }
     seen.add(next)
     const { anyOf } = target as Record<string, unknown>
-    const others = Array.isArray(anyOf) ? anyOf.filter((branch) => !acceptsNull(branch)) : []
+    const others = Array.isArray(anyOf) ? nonNullBranches(anyOf) : []
     next = others.length === 1 ? getRef(others[0]) : undefined
   }
   return true
+}
+
+function nonNullBranches(branches: unknown[]): unknown[] {
+  return branches.flatMap((branch) => {
+    if (acceptsNull(branch)) {
+      return []
+    }
+    const nested = isRecord(branch) ? (branch.anyOf ?? branch.oneOf) : undefined
+    return Array.isArray(nested) && nested.some(acceptsNull) ? nonNullBranches(nested) : [branch]
+  })
 }
 
 // A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.

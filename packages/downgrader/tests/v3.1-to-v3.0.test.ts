@@ -1374,6 +1374,22 @@ describe('downgradeSchemaV31ToV30', () => {
         A: { anyOf: [ref('B'), onlyNull] },
         B: { description: 'B', anyOf: [ref('A'), onlyNull] },
       })
+      // So does a pair nested in the target's union.
+      const nested = { anyOf: [{ anyOf: [ref('A'), onlyNull] }, onlyNull] }
+      expect(schemas({ A: { anyOf: [pair('A'), { type: 'null' }] } })).toEqual({ A: nested })
+      expect(schemas({ A: { anyOf: [{ oneOf: pair('A').anyOf }, { type: 'null' }] } })).toEqual({
+        A: nested,
+      })
+      expect(
+        schemas({
+          A: pair('B'),
+          B: { anyOf: [{ anyOf: [ref('A'), ref('B')] }, { type: 'null' }] },
+        }),
+      ).toEqual({ A: ref('B'), B: { anyOf: [{ anyOf: [ref('A'), ref('B')] }, onlyNull] } })
+      expect(schemas({ A: pair('B'), B: { anyOf: [false, ref('A'), { type: 'null' }] } })).toEqual({
+        A: ref('B'),
+        B: { anyOf: [{ not: {} }, ref('A'), onlyNull] },
+      })
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
