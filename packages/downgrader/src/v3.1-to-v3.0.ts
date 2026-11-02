@@ -931,6 +931,31 @@ function admitsNull(schema: unknown): boolean {
   )
 }
 
+// A `$ref` whose target admits null, which a pair of null and the `$ref`
+// becomes. A target that holds only such a pair becomes its own `$ref` in
+// turn, so a loop of them, which in 3.1 admits only null, would become
+// `$ref`s that match nothing. One that does not admit null keeps its pair.
+function refAdmitsNull(ref: string, ctx: Context): boolean {
+  const seen = new Set<string>()
+  for (let next: string | undefined = ref; next !== undefined;) {
+    const target = resolvePointer(next, ctx)
+    if (!admitsNull(target)) {
+      return next !== ref
+    }
+    if (seen.has(next)) {
+      return false
+    }
+    seen.add(next)
+    const { anyOf } = target as Record<string, unknown>
+    const others =
+      Array.isArray(anyOf) && Object.keys(target as object).length === 1
+        ? anyOf.filter((branch) => !acceptsNull(branch))
+        : []
+    next = others.length === 1 ? getRef(others[0]) : undefined
+  }
+  return true
+}
+
 // A `type` with no `nullable: true` beside it, in 3.1 or 3.0, rejects null.
 function rejectsNull(schema: unknown): boolean {
   if (!isRecord(schema) || schema.nullable === true) {
@@ -1151,11 +1176,7 @@ function mergeNullable(
       const nullBranch = branches.find((branch) => isNullBranch(branch, out))
       out.oneOf = branches[0] === other ? [other, nullBranch] : [nullBranch, other]
       delete out.anyOf
-    } else if (
-      ref !== undefined &&
-      Object.keys(out).length === 1 &&
-      admitsNull(resolvePointer(ref, ctx))
-    ) {
+    } else if (ref !== undefined && Object.keys(out).length === 1 && refAdmitsNull(ref, ctx)) {
       // GitHub writes a nullable reference this way to a schema that already
       // admits null, and Zod and Pydantic to a nullable one, which 3.0 writes as
       // the `$ref` alone. NSwag reads the pair as an empty class, and
