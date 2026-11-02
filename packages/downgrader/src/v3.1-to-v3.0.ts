@@ -365,6 +365,8 @@ function isAnnotatedRef(value: Record<string, unknown>): boolean {
 // bare `$ref`, as a branch does. A `type` the target holds too, as OpenAI and
 // the NPP API write beside one, restricts nothing more, so it counts as well,
 // unless a 3.0-style `nullable` there lets the target take null in 3.0.
+// Hey API pins the tag of a subtype too, one whose `allOf` holds a `$ref` to
+// such a schema, as the NPP API describes a GeoJSON point.
 function isTaggedRef(value: Record<string, unknown>, ref: string, ctx: Context): boolean {
   if (!hasOnly(value, (key) => key === '$ref' || key === 'type' || isInputAnnotation(key))) {
     return false
@@ -374,8 +376,23 @@ function isTaggedRef(value: Record<string, unknown>, ref: string, ctx: Context):
     isRecord(target) &&
     (value.type === undefined ||
       (jsonKey(value.type) === jsonKey(target.type) && target.nullable !== true)) &&
-    keepsDiscriminator(target, ctx) &&
+    isTagged(target, ctx, new Set()) &&
     !isInlined(ref, ctx)
+  )
+}
+
+function isTagged(schema: Record<string, unknown>, ctx: Context, seen: Set<unknown>): boolean {
+  if (keepsDiscriminator(schema, ctx)) {
+    return true
+  }
+  seen.add(schema)
+  return (
+    Array.isArray(schema.allOf) &&
+    schema.allOf.some((member) => {
+      const ref = getRef(member)
+      const target = ref === undefined || isInlined(ref, ctx) ? undefined : resolvePointer(ref, ctx)
+      return isRecord(target) && !seen.has(target) && isTagged(target, ctx, seen)
+    })
   )
 }
 
