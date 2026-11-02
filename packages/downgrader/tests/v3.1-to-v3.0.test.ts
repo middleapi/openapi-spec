@@ -1403,6 +1403,17 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schemas({ A: { anyOf: [ref('A'), ref('A'), { type: 'null' }] } })).toEqual({
         A: { anyOf: [ref('A'), onlyNull] },
       })
+      // A cycle of objects in the target converts.
+      const cyclic: Record<string, any> = { anyOf: [{ type: 'null' }] }
+      cyclic.anyOf.unshift({ anyOf: [cyclic, { type: 'null' }] })
+      expect(schemas({ A: pair('B'), B: cyclic })?.A).toEqual(ref('B'))
+      // A `$ref` whose target moves in 3.0 leads nowhere.
+      expect(
+        schemas({
+          A: pair('B/properties/a'),
+          B: { type: ['object', 'string'], properties: { a: { type: 'null' } } },
+        })?.A,
+      ).toEqual(ref('B/properties/a'))
     })
 
     it('merges a branch in full where a cycle meets it before its conversion is done', () => {
