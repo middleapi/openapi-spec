@@ -535,9 +535,14 @@ function toSegment(text: string, index: number): Segment {
   return decode(text)
 }
 
-/** Paths that share a slot have the same length modulo 8 and last char modulo 128. */
+/**
+ * Spreads paths over 1024 slots by their length and last char. Paths whose
+ * lengths differ by 8 land 8 slots apart, where a step of 128 per length would
+ * put them in the same slot for the same last char, as happens to many paths
+ * of real APIs.
+ */
 function slot(path: string): number {
-  return ((path.length & 7) << 7) | (path.charCodeAt(path.length - 1) & 127)
+  return (path.length * 127 + path.charCodeAt(path.length - 1)) & 1023
 }
 
 function trimTrailingSlash(path: string): string {
