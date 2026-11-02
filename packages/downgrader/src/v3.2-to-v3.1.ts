@@ -175,7 +175,8 @@ function convertSecurity(value: unknown, ctx: Context): unknown {
     return clone(value)
   }
   const schemes = resolvePointer('#/components/securitySchemes', ctx)
-  const isScheme = (name: string): boolean => isRecord(schemes) && Object.hasOwn(schemes, name)
+  const isScheme = (name: string): boolean =>
+    isRecord(schemes) && Object.hasOwn(schemes, name) && schemes[name] !== undefined
   return value.map((requirement) =>
     isRecord(requirement)
       ? Object.fromEntries(
