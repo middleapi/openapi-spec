@@ -80,8 +80,6 @@ interface MethodRoutes<T> {
    * to add to than an object per route.
    */
   pending: unknown[]
-  /** Whether a route can match only through the tree. */
-  dynamic: boolean
 }
 
 /** A literal segment's decoded text, or a param. */
@@ -167,9 +165,6 @@ export class Router<T> {
     }
 
     const encoded = path.includes('%')
-    if (!encoded && !routes.dynamic) {
-      return undefined
-    }
 
     // Adds the routes in `pending` to the tree. Once the tree has served a
     // request, each goes in whole, as routes may no longer wait where the tree
@@ -236,9 +231,7 @@ function addParsed<T>(
     }
   }
 
-  const routes = routesOf(methods, method)
-  routes.dynamic = true
-  routes.pending.push(path, data, undefined)
+  routesOf(methods, method).pending.push(path, data, undefined)
 }
 
 function routesOf<T>(methods: Map<string, MethodRoutes<T>>, method: string): MethodRoutes<T> {
@@ -251,7 +244,6 @@ function routesOf<T>(methods: Map<string, MethodRoutes<T>>, method: string): Met
       unfiltered: 0,
       indexed: 0,
       pending: [],
-      dynamic: false,
     }
     methods.set(method, routes)
   }
