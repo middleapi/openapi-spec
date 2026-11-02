@@ -131,7 +131,7 @@ Both versions build on JSON Schema 2020-12, so everything not listed here passes
 | 3.2                                                                 | In 3.1                                                                                                                  |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | XML [`nodeType`][3.2-xml-node-type]                                 | `"attribute"` becomes `attribute: true`, and `"element"` on an array becomes `wrapped: true`. Other values are removed. |
-| Discriminator [`defaultMapping`][3.2-discriminator-default-mapping] | Removed.                                                                                                                |
+| Discriminator [`defaultMapping`][3.2-discriminator-default-mapping] | The whole `discriminator` is removed, since 3.1 has no default for a missing or unmapped value.                         |
 
 [3.2-xml-node-type]: https://spec.openapis.org/oas/v3.2.1.html#xml-node-type
 [3.2-discriminator-default-mapping]: https://spec.openapis.org/oas/v3.2.1.html#discriminator-default-mapping
