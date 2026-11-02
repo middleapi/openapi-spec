@@ -322,9 +322,19 @@ function refOr(convert: Convert): Convert {
 // A discriminator picks only among named components, not the targets that
 // replace `$ref`s into `$defs`, as Pydantic and msgspec write a tagged union.
 // Its `mapping` into them would dangle, which validators that follow it reject.
+// Beside none of `oneOf`, `anyOf` and `allOf`, it does nothing, as Pydantic
+// writes one beside the `$ref` of a tagged union with a single member, but 3.0
+// tools would apply it to the `allOf` the `$ref` becomes, or the `anyOf` a
+// `type` list does, and reject what lacks the tag.
 function keepsDiscriminator(schema: Record<string, unknown>, ctx: Context): boolean {
+  const { type } = schema
   return (
     schema.discriminator !== undefined &&
+    (schema.oneOf !== undefined ||
+      schema.anyOf !== undefined ||
+      schema.allOf !== undefined ||
+      (typeof schema.$ref !== 'string' &&
+        !(Array.isArray(type) && type.filter((item) => item !== 'null').length > 1))) &&
     ![schema.oneOf, schema.anyOf].some(
       (branches) =>
         Array.isArray(branches) &&
