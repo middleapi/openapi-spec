@@ -2258,6 +2258,8 @@ describe('downgradeSchemaV31ToV30', () => {
               discriminator: { propertyName: 'type' },
             },
             Identification: identification,
+            // A target that is itself a `$ref` holds no `type` of its own.
+            Alias: ref('Identification'),
             // As Pydantic writes a tagged union, whose discriminator 3.0 removes.
             Pet: {
               oneOf: [ref('Pet/$defs/Cat')],
@@ -2270,7 +2272,11 @@ describe('downgradeSchemaV31ToV30', () => {
                 strategy: { ...ref('Strategy'), description: 'The chunking strategy' },
                 data: { ...ref('Strategy'), examples: [{ type: 'auto' }], $comment: 'Event data' },
                 identification: { ...ref('Identification'), 'title': 'Account', 'x-a': 1 },
-                typed: { ...ref('Identification'), type: 'object' },
+                // A `type` the target holds too, as OpenAI and the NPP API write.
+                typed: { ...ref('Identification'), type: 'object', title: 'Typed' },
+                nullable: { ...ref('Identification'), type: ['object', 'null'] },
+                other: { ...ref('Identification'), type: 'string' },
+                alias: { ...ref('Alias'), type: 'object' },
                 pet: { ...ref('Pet'), description: 'Pet' },
               },
             },
@@ -2283,7 +2289,10 @@ describe('downgradeSchemaV31ToV30', () => {
           strategy: ref('Strategy'),
           data: ref('Strategy'),
           identification: ref('Identification'),
-          typed: { type: 'object', allOf: [ref('Identification')] },
+          typed: ref('Identification'),
+          nullable: { type: 'object', nullable: true, allOf: [ref('Identification')] },
+          other: { type: 'string', allOf: [ref('Identification')] },
+          alias: { type: 'object', allOf: [ref('Alias')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },
         },
       })
