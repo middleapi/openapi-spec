@@ -462,12 +462,13 @@ describe('downgradeSpecV32ToV31', () => {
       { '#/components/securitySchemes/other': ['read'] },
       {},
     ])
-    // A scheme holding undefined is missing, as the output leaves it out.
+    // A scheme or a requirement name holding undefined is missing, as the
+    // output leaves it out.
     const unset = convert({
-      security: [{ key: [], unset: [] }],
+      security: [{ key: [], unset: [] }, { key: undefined }],
       components: { securitySchemes: { key, unset: undefined } },
     } as any)
-    expect(unset.security).toEqual([{ key: [] }])
+    expect(unset.security).toStrictEqual([{ key: [] }, {}])
     expect(unset.components?.securitySchemes).toStrictEqual({ key })
     // Without any schemes, every name is left out, and malformed values stay.
     const malformed = convert({
@@ -549,6 +550,23 @@ describe('downgradeSpecV32ToV31', () => {
         Object.assign(Object.create(null), { xml: { nodeType: 'attribute' } }),
       ),
     ).toEqual({ xml: { attribute: true } })
+  })
+
+  it('reads only the keys an object holds, as JSON does, beside an enumerable key on Object.prototype', () => {
+    const prototype = Object.prototype as Record<string, unknown>
+    prototype.polluted = 'yes'
+    try {
+      const doc = {
+        openapi: '3.2.0',
+        info: { ...info, 'x-meta': { a: 1 } },
+        paths: { '/a': {} },
+      } as const
+      expect(JSON.stringify(downgradeSpecV32ToV31(doc))).toBe(
+        JSON.stringify({ ...doc, openapi: '3.1.2' }),
+      )
+    } finally {
+      delete prototype.polluted
+    }
   })
 
   it('treats keys holding undefined as missing, and keeps non-plain values as they are', () => {
