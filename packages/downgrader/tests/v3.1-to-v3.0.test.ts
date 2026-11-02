@@ -486,6 +486,20 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(schema({ type: 'string', nullable: true })).toEqual({ type: 'string', nullable: true })
       expect(schema({ nullable: true })).toEqual({})
       expect(schema({ type: 'string', nullable: false })).toEqual({ type: 'string' })
+      // Beside a `$ref` without a `type`, as aide writes it, the `$ref` stays bare
+      // rather than an `allOf` with nothing beside it.
+      const pet = '#/components/schemas/Pet'
+      expect(schema({ $ref: pet, nullable: true })).toStrictEqual({ $ref: pet })
+      expect(schema({ $ref: pet, nullable: false })).toStrictEqual({ $ref: pet })
+      expect(schema({ $ref: pet, nullable: true, description: 'd' })).toStrictEqual({
+        description: 'd',
+        allOf: [{ $ref: pet }],
+      })
+      // A discriminator maps only to the `$ref`s among its branches.
+      const discriminator = { propertyName: 'type' }
+      expect(
+        schema({ oneOf: [{ $ref: pet, nullable: true, description: 'd' }], discriminator }),
+      ).toStrictEqual({ oneOf: [{ $ref: pet }], discriminator })
       // It admits null, which the 3.1 branch did not, so the branches can overlap,
       // and the `anyOf` the `oneOf` becomes takes the branch in place of the pair.
       expect(schema({ oneOf: [{ type: 'string', nullable: true }, { type: 'null' }] })).toEqual({
@@ -2283,6 +2297,8 @@ describe('downgradeSchemaV31ToV30', () => {
                 alias: { ...ref('Alias'), type: 'object' },
                 nullableTarget: { ...ref('Nullable'), type: 'object' },
                 pet: { ...ref('Pet'), description: 'Pet' },
+                // A 3.0-style `nullable` means nothing beside a `$ref` without a `type`.
+                nullableRef: { ...ref('Strategy'), nullable: true, description: 'd' },
               },
             },
           },
@@ -2301,6 +2317,7 @@ describe('downgradeSchemaV31ToV30', () => {
           alias: { type: 'object', allOf: [ref('Alias')] },
           nullableTarget: { type: 'object', allOf: [ref('Nullable')] },
           pet: { description: 'Pet', allOf: [ref('Pet')] },
+          nullableRef: ref('Strategy'),
         },
       })
       // A target that replaces the `$ref` keeps the annotations beside it.
