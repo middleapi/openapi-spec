@@ -1356,9 +1356,22 @@ describe('downgradeSchemaV31ToV30', () => {
         B: { oneOf: [ref('C'), onlyNull] },
         C: { type: 'string' },
       })
-      // A pair with an annotation stays, so the `$ref` to it gets null from it.
-      expect(schemas({ A: pair('B'), B: { description: 'B', ...pair('A') } })).toEqual({
+      // A target with more branches stays a union that holds null itself.
+      const union = { anyOf: [ref('A'), { type: 'string' as const }, { type: 'null' as const }] }
+      expect(schemas({ A: pair('B'), B: union })).toEqual({
         A: ref('B'),
+        B: { anyOf: [ref('A'), { type: 'string' }, onlyNull] },
+      })
+      // Annotations beside a pair count for nothing, as 3.0 drops some of them.
+      expect(schemas({ A: { $comment: 'c', ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('A'), onlyNull] },
+      })
+      expect(schemas({ A: pair('B'), B: { examples: [], ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
+        B: { anyOf: [ref('A'), onlyNull] },
+      })
+      expect(schemas({ A: pair('B'), B: { description: 'B', ...pair('A') } })).toEqual({
+        A: { anyOf: [ref('B'), onlyNull] },
         B: { description: 'B', anyOf: [ref('A'), onlyNull] },
       })
     })

@@ -932,9 +932,10 @@ function admitsNull(schema: unknown): boolean {
 }
 
 // A `$ref` whose target admits null, which a pair of null and the `$ref`
-// becomes. A target that holds only such a pair becomes its own `$ref` in
-// turn, so a loop of them, which in 3.1 admits only null, would become
-// `$ref`s that match nothing. One that does not admit null keeps its pair.
+// becomes. A target that holds such a pair, beside annotations that 3.0 may
+// drop, such as `$comment`, can become its own `$ref` in turn, so a loop of
+// them, which in 3.1 admits only null, would become `$ref`s that match
+// nothing. One that does not admit null keeps its pair.
 function refAdmitsNull(ref: string, ctx: Context): boolean {
   const seen = new Set<string>()
   for (let next: string | undefined = ref; next !== undefined;) {
@@ -947,10 +948,7 @@ function refAdmitsNull(ref: string, ctx: Context): boolean {
     }
     seen.add(next)
     const { anyOf } = target as Record<string, unknown>
-    const others =
-      Array.isArray(anyOf) && Object.keys(target as object).length === 1
-        ? anyOf.filter((branch) => !acceptsNull(branch))
-        : []
+    const others = Array.isArray(anyOf) ? anyOf.filter((branch) => !acceptsNull(branch)) : []
     next = others.length === 1 ? getRef(others[0]) : undefined
   }
   return true
