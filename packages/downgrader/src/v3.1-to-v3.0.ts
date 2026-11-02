@@ -335,9 +335,18 @@ function convertBranches(item: unknown, ctx: Context, schema: Record<string, unk
 
 function convertTaggedBranch(value: unknown, ctx: Context): unknown {
   const ref = getRef(value)
-  return ref !== undefined && isAnnotatedRef(value as Record<string, unknown>)
+  return ref !== undefined && isAnnotatedRef(refSiblings(value as Record<string, unknown>))
     ? convertSchemaRef(ref, ctx, value)
     : convertSchema(value, ctx)
+}
+
+// A 3.0-style `nullable` means nothing in 3.1, and 3.0 keeps it only beside a
+// single `type`, so beside a `$ref` without one it counts as missing, as aide
+// writes it. The `$ref` then stays bare, not an `allOf` with nothing beside it.
+function refSiblings(value: Record<string, unknown>): Record<string, unknown> {
+  return value.nullable !== undefined && value.type === undefined
+    ? { ...value, nullable: undefined }
+    : value
 }
 
 // Whether each key of `value` that holds a value passes `test`, since a key
@@ -1554,12 +1563,11 @@ function convertSchema(value: unknown, ctx: Context): unknown {
     return value ? {} : { not: {} }
   }
   const ref = getRef(value)
-  if (
-    ref !== undefined &&
-    (isBareRef(value as Record<string, unknown>) ||
-      isTaggedRef(value as Record<string, unknown>, ref, ctx))
-  ) {
-    return convertSchemaRef(ref, ctx, value)
+  if (ref !== undefined) {
+    const siblings = refSiblings(value as Record<string, unknown>)
+    if (isBareRef(siblings) || isTaggedRef(siblings, ref, ctx)) {
+      return convertSchemaRef(ref, ctx, value)
+    }
   }
   return convertObject(value, ctx, SCHEMA_FIELDS, finishSchema, revisitSchema)
 }
