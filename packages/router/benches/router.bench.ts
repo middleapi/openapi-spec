@@ -15,6 +15,12 @@ import {
 // rou3 runs as is, without the percent-decoding oRPC does around it today,
 // so each comparison is against less work than this router does.
 
+// CodSpeed measures one call of each bench after a few warmup calls. Repeating
+// the few requests of a match bench in each call lets V8 finish compiling them
+// during the warmup, so a compile can't land in the measured call and swing its
+// result many times.
+const REPEAT = 16
+
 function createOurs(routes: Routes): Router<string> {
   const router = new Router<string>()
   for (const [method, path] of routes) {
@@ -37,14 +43,18 @@ function compare(name: string, routes: Routes, requests: Requests): void {
     const rou3 = createRou3(routes)
 
     bench('@openapi-spec/router', () => {
-      for (const [method, pathname] of requests) {
-        ours.match(method, fresh(pathname))
+      for (let i = 0; i < REPEAT; i++) {
+        for (const [method, pathname] of requests) {
+          ours.match(method, fresh(pathname))
+        }
       }
     })
 
     bench('rou3', () => {
-      for (const [method, pathname] of requests) {
-        findRoute(rou3, method, fresh(pathname))
+      for (let i = 0; i < REPEAT; i++) {
+        for (const [method, pathname] of requests) {
+          findRoute(rou3, method, fresh(pathname))
+        }
       }
     })
   })
