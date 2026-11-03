@@ -293,17 +293,24 @@ const DOCUMENT_FIELDS = defineFields({
 // or `additionalProperties`, which the conversion can replace with another
 // schema, is replaced by its target, unless it already dangles. So is one
 // that percent-encodes a character, which `find` decodes, as it can hide
-// those segments, such as `#/%24defs/Pet`.
+// those segments, such as `#/%24defs/Pet`. The segment after
+// `#/components/<type>/` is a name, so a component named `items` is not one.
 function isInlined(ref: string, ctx: Context): boolean {
+  let keywords = ref
+  if (ref.startsWith('#/components/')) {
+    const name = ref.indexOf('/', 13) + 1
+    const end = ref.indexOf('/', name)
+    keywords = name === 0 || end === -1 ? '' : ref.slice(end)
+  }
   return (
     (ref.includes('%') ||
-      ref.includes('/$defs/') ||
-      ref.includes('/definitions/') ||
+      keywords.includes('/$defs/') ||
+      keywords.includes('/definitions/') ||
       // The removed parts, spelled out, as a callback for each `$ref` costs
       // about 3% of the instructions of a conversion.
       ref.startsWith('#/webhooks/') ||
       ref.startsWith('#/components/pathItems/') ||
-      INTO_REPLACED.test(ref)) &&
+      INTO_REPLACED.test(keywords)) &&
     resolvePointer(ref, ctx) !== undefined
   )
 }
