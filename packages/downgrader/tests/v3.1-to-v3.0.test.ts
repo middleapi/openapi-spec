@@ -2932,6 +2932,33 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(out?.Count).toEqual(ref('Bag/properties/itemsLeft'))
   })
 
+  it('keeps a $ref to a component named like a keyword it replaces', () => {
+    // Celigo names a recursive mapping row `items`: replacing the $ref cut
+    // the recursion to {} one level down.
+    const ref = (path: string) => ({ $ref: `#/components/schemas/${path}` })
+    const schemas = {
+      items: { type: 'object', properties: { rows: { type: 'array', items: ref('items') } } },
+      additionalProperties: { type: 'string' },
+      $defs: { type: 'object', properties: { a: { type: 'integer' } } },
+      definitions: { type: 'object', properties: { b: { type: 'integer' } } },
+      Map: { type: 'object', additionalProperties: ref('additionalProperties') },
+      Defs: ref('$defs/properties/a'),
+      Definitions: ref('definitions/properties/b'),
+      // A keyword after the name still counts.
+      Row: ref('items/properties/rows/items'),
+    } as const
+    const out = convert({
+      components: { schemas, responses: { items: { description: 'Rows' } } },
+      paths: {
+        '/rows': { get: { responses: { 200: { $ref: '#/components/responses/items' } } } },
+      },
+    })
+    expect(out.components?.schemas).toEqual({ ...schemas, Row: ref('items') })
+    expect(out.paths?.['/rows']?.get?.responses?.[200]).toEqual({
+      $ref: '#/components/responses/items',
+    })
+  })
+
   it('replaces a percent-encoded $ref with its target', () => {
     // find decodes it, so it can point into $defs, a removed part, or items
     // that the conversion replaces, unseen.
