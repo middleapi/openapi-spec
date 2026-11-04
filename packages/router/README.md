@@ -5,7 +5,7 @@
     <img alt="codecov" src="https://codecov.io/gh/middleapi/openapi-spec/branch/main/graph/badge.svg">
   </a>
   <a href="https://www.npmjs.com/package/@openapi-spec/router">
-    <img alt="weekly downloads" src="https://img.shields.io/npm/dw/%40openapi-spec%2Frouter?logo=npm" />
+    <img alt="monthly downloads" src="https://img.shields.io/npm/dm/%40openapi-spec%2Frouter?logo=npm" />
   </a>
   <a href="https://app.codspeed.io/middleapi/openapi-spec?utm_source=badge">
     <img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" />
