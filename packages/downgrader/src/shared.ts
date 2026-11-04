@@ -217,8 +217,12 @@ export function isNotExtension(key: string): boolean {
   return !key.startsWith('x-')
 }
 
+// YAML reads `type: [string, null]` with a bare null, which counts as `"null"`.
 export function hasType(type: unknown, name: string): boolean {
-  return type === name || (Array.isArray(type) && type.includes(name))
+  return (
+    type === name ||
+    (Array.isArray(type) && (type.includes(name) || (name === 'null' && type.includes(null))))
+  )
 }
 
 // Reads `$ref` before `isRecord`, as most values hold none.

@@ -3946,6 +3946,42 @@ describe('unusual input', () => {
     expect(downgradeSchemaV31ToV30({ maximum: 5, exclusiveMaximum: 10 })).toEqual({ maximum: 5 })
   })
 
+  // YAML reads `type: [string, null]`, as TCGdex writes it, with a bare null.
+  it('reads a null in a type list as "null"', () => {
+    expect(downgradeSchemaV31ToV30({ type: ['string', null] } as never)).toEqual({
+      type: 'string',
+      nullable: true,
+    })
+    expect(downgradeSchemaV31ToV30({ type: [null, 'integer', 'string'] } as never)).toEqual({
+      oneOf: [
+        { type: 'integer' },
+        { type: 'string' },
+        { type: 'string', nullable: true, enum: [null] },
+      ],
+    })
+    expect(
+      downgradeSchemaV31ToV30({
+        type: ['object', null],
+        discriminator: { propertyName: 'k' },
+      } as never),
+    ).toEqual({ type: 'object', nullable: true, discriminator: { propertyName: 'k' } })
+    expect(
+      downgradeSchemaV31ToV30({
+        anyOf: [{ type: 'string' }, { type: ['integer', null] }],
+      } as never),
+    ).toEqual(
+      downgradeSchemaV31ToV30({ anyOf: [{ type: 'string' }, { type: ['integer', 'null'] }] }),
+    )
+    expect(downgradeSchemaV31ToV30({ type: ['string', 'null', null] } as never)).toEqual({
+      type: 'string',
+      nullable: true,
+    })
+    expect(downgradeSchemaV31ToV30({ type: [null] } as never)).toEqual(
+      downgradeSchemaV31ToV30({ type: ['null'] }),
+    )
+    expect(downgradeSchemaV31ToV30({ type: null } as never)).toEqual({})
+  })
+
   it('keeps own __proto__ keys as keys', () => {
     const out = downgradeSchemaV31ToV30(
       JSON.parse(
