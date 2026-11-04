@@ -344,7 +344,9 @@ function keepsDiscriminator(schema: Record<string, unknown>, ctx: Context): bool
       schema.anyOf !== undefined ||
       schema.allOf !== undefined ||
       (typeof schema.$ref !== 'string' &&
-        !(Array.isArray(type) && type.filter((item) => item !== 'null').length > 1))) &&
+        !(
+          Array.isArray(type) && type.filter((item) => item !== 'null' && item !== null).length > 1
+        ))) &&
     ![schema.oneOf, schema.anyOf].some(
       (branches) =>
         Array.isArray(branches) &&
@@ -850,7 +852,7 @@ function convertType(out: Record<string, unknown>, type: unknown): void {
     return
   }
   const types = (Array.isArray(type) ? type : [type]).filter((item) => typeof item === 'string')
-  const nullable = types.includes('null')
+  const nullable = hasType(type, 'null')
   const rest = types.filter((item) => item !== 'null')
   if (rest.length === 1) {
     if (nullable) {
