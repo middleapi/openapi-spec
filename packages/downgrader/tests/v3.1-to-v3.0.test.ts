@@ -2959,6 +2959,39 @@ describe('downgradeSchemaV31ToV30', () => {
     })
   })
 
+  it('replaces a $ref into a key that becomes an extension with its target', () => {
+    // NocoDB groups schemas under one component, whose keys 3.0 renames.
+    const ref = (path: string) => ({ $ref: `#/components/schemas/${path}` })
+    const out = convert({
+      components: {
+        schemas: {
+          FieldOptions: {
+            'Text': { type: 'object', properties: { type: { const: 'Text' } } },
+            'Number': { type: ['number', 'null'] },
+            'x-note': { type: 'string' },
+            'prefixItems': [{ type: 'string' }],
+          },
+          Field: { oneOf: [ref('FieldOptions/Text'), ref('FieldOptions/Number')] },
+          Nested: ref('FieldOptions/Text/properties/type'),
+          Kept: ref('FieldOptions/x-note'),
+          Removed: ref('FieldOptions/prefixItems/0'),
+        },
+      },
+    })
+    expect(out.components?.schemas).toMatchObject({
+      FieldOptions: { 'x-Text': {}, 'x-Number': {} },
+      Field: {
+        oneOf: [
+          { type: 'object', properties: { type: { type: 'string', enum: ['Text'] } } },
+          { type: 'number', nullable: true },
+        ],
+      },
+      Nested: { type: 'string', enum: ['Text'] },
+      Kept: ref('FieldOptions/x-note'),
+      Removed: ref('FieldOptions/prefixItems/0'),
+    })
+  })
+
   it('replaces a percent-encoded $ref with its target', () => {
     // find decodes it, so it can point into $defs, a removed part, or items
     // that the conversion replaces, unseen.
