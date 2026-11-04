@@ -3002,7 +3002,9 @@ describe('downgradeSchemaV31ToV30', () => {
       Nested: { type: 'string', enum: ['Text'] },
       Kept: ref('FieldOptions/x-note'),
       Removed: ref('FieldOptions/prefixItems/0'),
+      Negated: { not: { type: 'string' } },
     })
+    expect(out.components?.parameters?.Query).toMatchObject({ schema: { type: 'string' } })
     expect(out.components?.schemas?.IntoKept).toStrictEqual(ref('Negated/not'))
     expect(out.components?.schemas?.IntoParameter).toStrictEqual({
       $ref: '#/components/parameters/Query/schema',
