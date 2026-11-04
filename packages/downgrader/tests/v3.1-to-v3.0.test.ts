@@ -2981,7 +2981,12 @@ describe('downgradeSchemaV31ToV30', () => {
           Nested: ref('FieldOptions/Text/properties/type'),
           Kept: ref('FieldOptions/x-note'),
           Removed: ref('FieldOptions/prefixItems/0'),
+          // A key 3.0 keeps, and a key of another component type, are not renamed.
+          Negated: { not: { type: 'string' } },
+          IntoKept: ref('Negated/not'),
+          IntoParameter: { $ref: '#/components/parameters/Query/schema' },
         },
+        parameters: { Query: { name: 'q', in: 'query', schema: { type: 'string' } } },
       },
     })
     // The discriminator goes, as its mapping would dangle.
@@ -2997,6 +3002,10 @@ describe('downgradeSchemaV31ToV30', () => {
       Nested: { type: 'string', enum: ['Text'] },
       Kept: ref('FieldOptions/x-note'),
       Removed: ref('FieldOptions/prefixItems/0'),
+    })
+    expect(out.components?.schemas?.IntoKept).toStrictEqual(ref('Negated/not'))
+    expect(out.components?.schemas?.IntoParameter).toStrictEqual({
+      $ref: '#/components/parameters/Query/schema',
     })
   })
 
