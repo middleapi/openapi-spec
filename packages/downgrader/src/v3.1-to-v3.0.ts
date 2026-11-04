@@ -297,13 +297,23 @@ const DOCUMENT_FIELDS = defineFields({
 // `#/components/<type>/` is a name, so a component named `items` is not one.
 function isInlined(ref: string, ctx: Context): boolean {
   let keywords = ref
+  let renamed = false
   if (ref.startsWith('#/components/')) {
     const name = ref.indexOf('/', 13) + 1
     const end = ref.indexOf('/', name)
     keywords = name === 0 || end === -1 ? '' : ref.slice(end)
+    // A key no keyword names becomes an extension, as when NocoDB groups
+    // schemas under one component.
+    if (keywords !== '' && ref.startsWith('#/components/schemas/')) {
+      const next = keywords.indexOf('/', 1)
+      const key = next === -1 ? keywords.slice(1) : keywords.slice(1, next)
+      renamed =
+        !V30_SCHEMA_KEYWORDS.has(key) && !REMOVED_KEYWORDS.includes(key) && !key.startsWith('x-')
+    }
   }
   return (
-    (ref.includes('%') ||
+    (renamed ||
+      ref.includes('%') ||
       keywords.includes('/$defs/') ||
       keywords.includes('/definitions/') ||
       // The removed parts, spelled out, as a callback for each `$ref` costs
