@@ -3976,6 +3976,9 @@ describe('unusual input', () => {
       type: 'string',
       nullable: true,
     })
+    expect(downgradeSchemaV31ToV30({ type: [null] } as never)).toEqual(
+      downgradeSchemaV31ToV30({ type: ['null'] }),
+    )
     expect(downgradeSchemaV31ToV30({ type: null } as never)).toEqual({})
   })
 
