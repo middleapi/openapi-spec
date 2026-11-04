@@ -2971,13 +2971,21 @@ describe('downgradeSchemaV31ToV30', () => {
             'x-note': { type: 'string' },
             'prefixItems': [{ type: 'string' }],
           },
-          Field: { oneOf: [ref('FieldOptions/Text'), ref('FieldOptions/Number')] },
+          Field: {
+            oneOf: [ref('FieldOptions/Text'), ref('FieldOptions/Number')],
+            discriminator: {
+              propertyName: 'type',
+              mapping: { Text: '#/components/schemas/FieldOptions/Text' },
+            },
+          },
           Nested: ref('FieldOptions/Text/properties/type'),
           Kept: ref('FieldOptions/x-note'),
           Removed: ref('FieldOptions/prefixItems/0'),
         },
       },
     })
+    // The discriminator goes, as its mapping would dangle.
+    expect(out.components?.schemas?.Field).not.toHaveProperty('discriminator')
     expect(out.components?.schemas).toMatchObject({
       FieldOptions: { 'x-Text': {}, 'x-Number': {} },
       Field: {
