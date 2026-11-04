@@ -297,7 +297,9 @@ const DOCUMENT_FIELDS = defineFields({
 // `#/components/<type>/` is a name, so a component named `items` is not one.
 function isInlined(ref: string, ctx: Context): boolean {
   let keywords = ref
-  let renamed = false
+  // Extensions pass through unconverted, so a target kept in one, as Stoplight
+  // bundles files into `x-ext`, is converted where a `$ref` uses it.
+  let unconverted = ref.startsWith('#/x-') || ref.startsWith('#/components/x-')
   if (ref.startsWith('#/components/')) {
     const name = ref.indexOf('/', 13) + 1
     const end = ref.indexOf('/', name)
@@ -307,12 +309,11 @@ function isInlined(ref: string, ctx: Context): boolean {
     if (keywords !== '' && ref.startsWith('#/components/schemas/')) {
       const next = keywords.indexOf('/', 1)
       const key = next === -1 ? keywords.slice(1) : keywords.slice(1, next)
-      renamed =
-        !V30_SCHEMA_KEYWORDS.has(key) && !REMOVED_KEYWORDS.includes(key) && !key.startsWith('x-')
+      unconverted = !V30_SCHEMA_KEYWORDS.has(key) && !REMOVED_KEYWORDS.includes(key)
     }
   }
   return (
-    (renamed ||
+    (unconverted ||
       ref.includes('%') ||
       keywords.includes('/$defs/') ||
       keywords.includes('/definitions/') ||
