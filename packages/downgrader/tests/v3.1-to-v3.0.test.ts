@@ -271,6 +271,38 @@ describe('downgradeSpecV31ToV30', () => {
     })
   })
 
+  describe('extensions', () => {
+    it('inlines $refs into an extension, whose content passes through unconverted, as Stoplight bundles into x-ext', () => {
+      const ext = {
+        tag: { const: 'a' },
+        loop: { type: 'object', properties: { next: { $ref: '#/x-ext/loop' } } },
+        query: { name: 'q', in: 'query', schema: { type: ['string', 'null'] } },
+      }
+      const out = convert({
+        'paths': { '/a': { get: { parameters: [{ $ref: '#/x-ext/query' }], responses } } },
+        'components': {
+          'schemas': {
+            Tag: { oneOf: [{ $ref: '#/x-ext/tag' }, { type: 'null' }] },
+            Loop: { $ref: '#/x-ext/loop' },
+            Kind: { $ref: '#/components/x-schemas/Kind' },
+          },
+          'x-schemas': { Kind: { const: 'b' } },
+        },
+        'x-ext': ext,
+      })
+      expect(out.paths['/a']?.get?.parameters).toEqual([
+        { name: 'q', in: 'query', schema: { type: 'string', nullable: true } },
+      ])
+      // A 3.0 reader would ignore `const`, so null would match both branches.
+      expect(out.components?.schemas).toEqual({
+        Tag: { oneOf: [{ type: 'string', enum: ['a'] }, onlyNull] },
+        Loop: { type: 'object', properties: { next: {} } },
+        Kind: { type: 'string', enum: ['b'] },
+      })
+      expect(out['x-ext']).toEqual(ext)
+    })
+  })
+
   describe('mutual TLS', () => {
     it('drops mutualTLS schemes, and the $refs that resolve to them', () => {
       const out = convert({
@@ -2968,7 +3000,7 @@ describe('downgradeSchemaV31ToV30', () => {
           FieldOptions: {
             'Text': { type: 'object', properties: { type: { const: 'Text' } } },
             'Number': { type: ['number', 'null'] },
-            'x-note': { type: 'string' },
+            'x-note': { const: 'note' },
             'prefixItems': [{ type: 'string' }],
           },
           Field: {
@@ -2979,7 +3011,7 @@ describe('downgradeSchemaV31ToV30', () => {
             },
           },
           Nested: ref('FieldOptions/Text/properties/type'),
-          Kept: ref('FieldOptions/x-note'),
+          Extension: ref('FieldOptions/x-note'),
           Removed: ref('FieldOptions/prefixItems/0'),
           // A key 3.0 keeps, and a key of another component type, are not renamed.
           Negated: { not: { type: 'string' } },
@@ -2992,7 +3024,7 @@ describe('downgradeSchemaV31ToV30', () => {
     // The discriminator goes, as its mapping would dangle.
     expect(out.components?.schemas?.Field).not.toHaveProperty('discriminator')
     expect(out.components?.schemas).toMatchObject({
-      FieldOptions: { 'x-Text': {}, 'x-Number': {} },
+      FieldOptions: { 'x-Text': {}, 'x-Number': {}, 'x-note': { const: 'note' } },
       Field: {
         oneOf: [
           { type: 'object', properties: { type: { type: 'string', enum: ['Text'] } } },
@@ -3000,7 +3032,7 @@ describe('downgradeSchemaV31ToV30', () => {
         ],
       },
       Nested: { type: 'string', enum: ['Text'] },
-      Kept: ref('FieldOptions/x-note'),
+      Extension: { type: 'string', enum: ['note'] },
       Removed: ref('FieldOptions/prefixItems/0'),
       Negated: { not: { type: 'string' } },
     })
