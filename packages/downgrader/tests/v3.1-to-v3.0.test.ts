@@ -3979,6 +3979,10 @@ describe('unusual input', () => {
     expect(downgradeSchemaV31ToV30({ type: [null] } as never)).toEqual(
       downgradeSchemaV31ToV30({ type: ['null'] }),
     )
+    // A bare null counts only as "null", so null alone gets no string format.
+    expect(
+      downgradeSchemaV31ToV30({ type: [null], contentEncoding: 'base64' } as never),
+    ).toStrictEqual(onlyNull)
     expect(downgradeSchemaV31ToV30({ type: null } as never)).toEqual({})
   })
 
