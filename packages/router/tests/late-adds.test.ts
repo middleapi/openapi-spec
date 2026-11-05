@@ -1,7 +1,7 @@
 import { Router } from '@openapi-spec/router'
 
-import type { Expected } from './helpers'
-import { expectMatches, routerOf } from './helpers'
+import type { Expected } from './helpers.ts'
+import { expectMatches, routerOf } from './helpers.ts'
 
 describe('routes added after requests', () => {
   it('matches routes added at every part of a tree that requests built only in part', () => {

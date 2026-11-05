@@ -1,6 +1,6 @@
 import { Router } from '@openapi-spec/router'
 
-import { expectMatches, routerOf } from './helpers'
+import { expectMatches, routerOf } from './helpers.ts'
 
 describe('Router', () => {
   describe('literal segments', () => {

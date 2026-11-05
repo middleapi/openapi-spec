@@ -8,13 +8,13 @@ export default defineConfig({
       exclude: ['**.bench.*', '**.test-d.*', '**.test.*'],
       include: ['apps/*/src/**', 'packages/*/src/**'],
     },
-    exclude: [...defaultExclude, '**/.claude/**'],
+    exclude: [...defaultExclude, '**/.claude/worktrees/**'],
     globals: true,
     include: ['**/*.test.ts'],
     passWithNoTests: true,
     benchmark: {
       include: ['**/*.bench.ts'],
-      exclude: [...defaultExclude, '**/.claude/**'],
+      exclude: [...defaultExclude, '**/.claude/worktrees/**'],
     },
   },
 })

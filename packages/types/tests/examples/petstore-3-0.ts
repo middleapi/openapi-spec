@@ -1,6 +1,6 @@
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.0/petstore.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from '../../src/v3.0'
+import type { OpenAPIObject } from '../../src/v3.0.ts'
 
 export const doc: OpenAPIObject = {
   openapi: '3.0.0',

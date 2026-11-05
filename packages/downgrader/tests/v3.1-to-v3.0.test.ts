@@ -2,7 +2,7 @@ import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/do
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import { expectValidDowngrade } from './validate'
+import { expectValidDowngrade } from './validate.ts'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }
@@ -1130,7 +1130,7 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ type: ['object', 'string'] })).toEqual({
         oneOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
-      expect(pet({ type: 'object', nullable: true } as OpenAPIV3_1.SchemaObject)).toEqual({
+      expect(pet({ type: 'object', nullable: true })).toEqual({
         anyOf: [{ $ref: '#/components/schemas/Pet' }, onlyNull],
       })
       // Zod writes the description of a described reference beside the `$ref`.
@@ -1206,7 +1206,7 @@ describe('downgradeSchemaV31ToV30', () => {
       expect(pet({ type: ['object', 'null'], anyOf: [{ type: 'object' }] })).toEqual({
         anyOf: [ref, onlyNull],
       })
-      expect(pet({ anyOf: [] } as OpenAPIV3_1.SchemaObject)).toEqual({ anyOf: [ref, onlyNull] })
+      expect(pet({ anyOf: [] })).toEqual({ anyOf: [ref, onlyNull] })
       // msgspec writes an `Enum` with no `type`.
       expect(pet({ enum: ['a', 1] })).toEqual({ oneOf: [ref, onlyNull] })
       expect(pet({ const: 'a' })).toEqual({ oneOf: [ref, onlyNull] })
@@ -1535,9 +1535,10 @@ describe('downgradeSchemaV31ToV30', () => {
       'enum',
     ])
     // A 3.0-style nullable means nothing in 3.1, so null stays out.
-    expect(
-      downgradeSchemaV31ToV30({ const: 'a', nullable: true } as OpenAPIV3_1.SchemaObject),
-    ).toEqual({ type: 'string', enum: ['a'] })
+    expect(downgradeSchemaV31ToV30({ const: 'a', nullable: true })).toEqual({
+      type: 'string',
+      enum: ['a'],
+    })
     // A non-plain value, such as a Date js-yaml loads, has no JSON type to give.
     expect(downgradeSchemaV31ToV30({ const: new Date(0) })).toEqual({ enum: [new Date(0)] })
   })
@@ -2376,7 +2377,7 @@ describe('downgradeSchemaV31ToV30', () => {
           anyOf: [{ $ref: '#/components/schemas/Cat' }, { $ref: '#/definitions/Dog' }],
           discriminator: { propertyName: 'kind' },
           definitions: { Dog: dog },
-        } as OpenAPIV3_1.SchemaObject),
+        }),
       ).toEqual({ anyOf: [{ $ref: '#/components/schemas/Cat' }, dog30] })
       // Kept over `$ref`s kept as written, or into `$defs` that dangle.
       for (const branches of [
@@ -2447,7 +2448,7 @@ describe('downgradeSchemaV31ToV30', () => {
               { description: 'Any other block' },
             ],
             discriminator,
-          } as OpenAPIV3_1.SchemaObject),
+          }),
         ).toEqual({
           [key]: [
             { $ref: text },
@@ -2467,7 +2468,7 @@ describe('downgradeSchemaV31ToV30', () => {
           oneOf: [...branches, { $ref: '#/$defs/Dog' }],
           discriminator,
           $defs: { Dog: { type: 'object' } },
-        } as OpenAPIV3_1.SchemaObject),
+        }),
       ).toEqual({
         oneOf: [
           { description: 'Text', allOf: [{ $ref: text }] },
@@ -2554,7 +2555,7 @@ describe('downgradeSchemaV31ToV30', () => {
         downgradeSchemaV31ToV30({
           properties: { a: { $ref: '#/$defs/A', description: 'A' } },
           $defs: { A: identification },
-        } as OpenAPIV3_1.SchemaObject),
+        }),
       ).toEqual({ properties: { a: { description: 'A', allOf: [identification] } } })
     })
 
@@ -2607,7 +2608,7 @@ describe('downgradeSchemaV31ToV30', () => {
           type: 'object',
           properties: { b: { $ref: '#/definitions/B' } },
           definitions: { B: { type: ['string', 'null'] } },
-        } as OpenAPIV3_1.SchemaObject),
+        }),
       ).toEqual({ type: 'object', properties: { b: { type: 'string', nullable: true } } })
     })
 
@@ -2624,7 +2625,7 @@ describe('downgradeSchemaV31ToV30', () => {
           },
           CustomTypes: { Path: { type: ['string', 'null'] } },
           components: { schemas: { Cat: { const: 'cat' } } },
-        } as OpenAPIV3_1.SchemaObject),
+        }),
       ).toEqual({
         'type': 'object',
         'properties': {
@@ -3989,7 +3990,7 @@ describe('downgradeSchemaV31ToV30', () => {
         'type': 'string',
         'x-native-type': 'date',
         'format': 'date-time',
-      } as OpenAPIV3_1.SchemaObject),
+      }),
     ).toEqual({ 'type': 'string', 'x-native-type': 'date', 'format': 'date-time' })
     // As zod `.meta()` keys and generators' custom keywords arrive.
     expect(
@@ -3998,14 +3999,14 @@ describe('downgradeSchemaV31ToV30', () => {
         'label': 'Name',
         'placeholder': 'Jane',
         'x-label': 'kept',
-      } as OpenAPIV3_1.SchemaObject),
+      }),
     ).toEqual({ 'type': 'string', 'x-label': 'kept', 'x-placeholder': 'Jane' })
     expect(
       downgradeSchemaV31ToV30({
         'type': 'string',
         'label': 'Name',
         'x-label': null,
-      } as OpenAPIV3_1.SchemaObject),
+      }),
     ).toEqual({ 'type': 'string', 'x-label': null })
   })
 

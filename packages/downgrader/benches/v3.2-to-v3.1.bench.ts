@@ -1,10 +1,10 @@
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import { bench, describe } from 'vitest'
 
-import { corpusV32 } from '../tests/corpus'
-import { createApiV32 } from './__shared__/api'
-import { callbackGraphV32, referenceDiamondV32, schemaDiamond } from './__shared__/graphs'
-import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
+import { corpusV32 } from '../tests/corpus.ts'
+import { createApiV32 } from './__shared__/api.ts'
+import { callbackGraphV32, referenceDiamondV32, schemaDiamond } from './__shared__/graphs.ts'
+import { ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas.ts'
 
 const API_10_RESOURCES = createApiV32(10)
 const API_100_RESOURCES = createApiV32(100)

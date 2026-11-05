@@ -1,6 +1,6 @@
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.2/3.2-query-example.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from '../../src/v3.2'
+import type { OpenAPIObject } from '../../src/v3.2.ts'
 
 export const doc: OpenAPIObject = {
   openapi: '3.2.0',

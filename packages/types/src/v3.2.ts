@@ -11,8 +11,8 @@ import type {
   SchemaObjectType,
   ServerVariableObject,
   SpecificationExtensions,
-} from './v3.1'
-import type * as V3_1 from './v3.1'
+} from './v3.1.ts'
+import type * as V3_1 from './v3.1.ts'
 
 export type {
   AuthorizationCodeOAuthFlowObject,
@@ -30,7 +30,7 @@ export type {
   SecuritySchemeType,
   ServerVariableObject,
   SpecificationExtensions,
-} from './v3.1'
+} from './v3.1.ts'
 
 /**
  * This is the root object of the OpenAPI Description.

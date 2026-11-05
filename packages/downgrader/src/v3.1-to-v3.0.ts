@@ -1,7 +1,7 @@
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import type { Context, Convert } from './shared'
+import type { Context, Convert } from './shared.ts'
 import {
   clone,
   convertObject,
@@ -20,7 +20,7 @@ import {
   map,
   resolve,
   resolvePointer,
-} from './shared'
+} from './shared.ts'
 
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
@@ -726,7 +726,7 @@ function tagsOf(schema: Record<string, unknown>, ctx: Context): Tags {
           ? property.enum
           : [property.const]
         : undefined
-    if (Array.isArray(held) && held.every((value) => typeof value !== 'object' || value === null)) {
+    if (Array.isArray(held) && held.every((item) => typeof item !== 'object' || item === null)) {
       values.set(name, { values: held, required: required.includes(name) })
     }
   }
@@ -1029,12 +1029,12 @@ function keptRejectsNull(schema: unknown, ctx: Context): boolean {
 // A schema with no `type` that rejects null all the same: an `enum` or
 // `const` without null, as msgspec writes an `Enum`, an `allOf` with a member
 // that rejects null, as OData writes a derived object, or a union whose
-// branches each do, as Zod writes a registered union. Unless `inline`, a
+// branches each do, as Zod writes a registered union. Unless `isInline`, a
 // `oneOf` with an object branch, as Zod writes a discriminated union, and
 // GitHub and Notion a tagged one, does not count, since NSwag writes a type it
 // never defines for a nullable `$ref` to one, where the `anyOf` pair gives an
 // empty class, though it reads an inline one as its first branch.
-function untypedRejectsNull(schema: unknown, ctx: Context, inline = false): boolean {
+function untypedRejectsNull(schema: unknown, ctx: Context, isInline = false): boolean {
   if (!isRecord(schema) || schema.type !== undefined) {
     return false
   }
@@ -1049,7 +1049,7 @@ function untypedRejectsNull(schema: unknown, ctx: Context, inline = false): bool
     (Array.isArray(branches) &&
       branches.length > 0 &&
       branches.every((branch) => refRejectsNull(branch, ctx)) &&
-      (inline ||
+      (isInline ||
         !(branches === schema.oneOf && branches.some((branch) => isObjectBranch(branch, ctx)))))
   )
 }

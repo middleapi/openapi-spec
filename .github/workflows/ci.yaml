@@ -42,3 +42,14 @@ jobs:
         if: matrix.node-version == 24
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  publish_preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - run: pnpm i
+
+      - run: pnpm exec pkg-pr-new publish './packages/*' --pnpm --compact

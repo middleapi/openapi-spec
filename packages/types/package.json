@@ -41,26 +41,23 @@
     "exports": {
       "./package.json": "./package.json",
       "./v3.0": {
-        "types": "./dist/v3.0.d.mts",
-        "import": "./dist/v3.0.mjs",
-        "default": "./dist/v3.0.mjs"
+        "types": "./dist/v3.0.d.ts",
+        "import": "./dist/v3.0.js",
+        "default": "./dist/v3.0.js"
       },
       "./v3.1": {
-        "types": "./dist/v3.1.d.mts",
-        "import": "./dist/v3.1.mjs",
-        "default": "./dist/v3.1.mjs"
+        "types": "./dist/v3.1.d.ts",
+        "import": "./dist/v3.1.js",
+        "default": "./dist/v3.1.js"
       },
       "./v3.2": {
-        "types": "./dist/v3.2.d.mts",
-        "import": "./dist/v3.2.mjs",
-        "default": "./dist/v3.2.mjs"
+        "types": "./dist/v3.2.d.ts",
+        "import": "./dist/v3.2.js",
+        "default": "./dist/v3.2.js"
       }
     }
   },
   "scripts": {
-    "prepack": "unbuild"
-  },
-  "unbuild": {
-    "declaration": "node16"
+    "prepack": "tsc"
   }
 }
