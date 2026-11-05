@@ -2611,6 +2611,33 @@ describe('downgradeSchemaV31ToV30', () => {
       ).toEqual({ type: 'object', properties: { b: { type: 'string', nullable: true } } })
     })
 
+    it('replaces a $ref into a root key that becomes an extension with its target', () => {
+      // SchemaStore-style schemas group definitions under keys of their own.
+      expect(
+        downgradeSchemaV31ToV30({
+          type: 'object',
+          properties: {
+            image: { $ref: '#/CustomTypes/Path' },
+            cat: { $ref: '#/components/schemas/Cat' },
+            kept: { $ref: '#/properties/image' },
+            self: { $ref: '#' },
+          },
+          CustomTypes: { Path: { type: ['string', 'null'] } },
+          components: { schemas: { Cat: { const: 'cat' } } },
+        } as OpenAPIV3_1.SchemaObject),
+      ).toEqual({
+        'type': 'object',
+        'properties': {
+          image: { type: 'string', nullable: true },
+          cat: { type: 'string', enum: ['cat'] },
+          kept: { $ref: '#/properties/image' },
+          self: { $ref: '#' },
+        },
+        'x-CustomTypes': { Path: { type: ['string', 'null'] } },
+        'x-components': { schemas: { Cat: { const: 'cat' } } },
+      })
+    })
+
     it('decodes percent-encoding, ~1, and ~0 in a $ref, in that order', () => {
       expect(
         downgradeSchemaV31ToV30({
