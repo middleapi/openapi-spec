@@ -141,6 +141,9 @@ const refTargets = new Set<unknown>()
 // holds it, also once the target it was cut at is no longer being inlined.
 const cutHolders = new Set<unknown>()
 
+// The input of `downgradeSchemaV31ToV30`, whose own keys `$ref`s can point into.
+let schemaRoot: unknown
+
 // Pairs of null and a `$ref` that became the `$ref` alone, with their branches.
 const collapsedPairs: [schema: Record<string, unknown>, anyOf: unknown[]][] = []
 
@@ -300,16 +303,16 @@ function isInlined(ref: string, ctx: Context): boolean {
   // Extensions pass through unconverted, so a target kept in one, as Stoplight
   // bundles files into `x-ext`, is converted where a `$ref` uses it.
   let unconverted = ref.startsWith('#/x-') || ref.startsWith('#/components/x-')
-  if (ref.startsWith('#/components/')) {
+  if (ctx.root === schemaRoot) {
+    // A key of a schema root that no keyword names becomes an extension too.
+    unconverted ||= ref.startsWith('#/') && becomesExtension(ref.slice(1))
+  } else if (ref.startsWith('#/components/')) {
     const name = ref.indexOf('/', 13) + 1
     const end = ref.indexOf('/', name)
     keywords = name === 0 || end === -1 ? '' : ref.slice(end)
-    // A key no keyword names becomes an extension, as when NocoDB groups
-    // schemas under one component.
+    // As when NocoDB groups schemas under one component.
     if (keywords !== '' && ref.startsWith('#/components/schemas/')) {
-      const next = keywords.indexOf('/', 1)
-      const key = next === -1 ? keywords.slice(1) : keywords.slice(1, next)
-      unconverted = !V30_SCHEMA_KEYWORDS.has(key) && !REMOVED_KEYWORDS.includes(key)
+      unconverted = becomesExtension(keywords)
     }
   }
   return (
@@ -327,6 +330,13 @@ function isInlined(ref: string, ctx: Context): boolean {
 }
 
 const INTO_REPLACED = /\/(?:items|additionalProperties)(?:\/|$)/
+
+/** Whether the first key of `path`, which starts with `/`, is one no keyword names, so a schema renames it to an extension. */
+function becomesExtension(path: string): boolean {
+  const next = path.indexOf('/', 1)
+  const key = next === -1 ? path.slice(1) : path.slice(1, next)
+  return !V30_SCHEMA_KEYWORDS.has(key) && !REMOVED_KEYWORDS.includes(key)
+}
 
 /** A 3.0 Reference Object holds only `$ref`. */
 function refOr(convert: Convert): Convert {
@@ -1774,6 +1784,7 @@ function leadsBack(schema: Record<string, unknown>, ctx: Context): boolean {
 function downgradeV30(root: unknown, convert: Convert): unknown {
   try {
     const ctx = createContext(root)
+    schemaRoot = convert === convertSchema ? root : undefined
     const out = convert(root, ctx)
     for (const [schema, input, key] of nullableUnions) {
       if (!unionTargets.has(input) && (key === 'oneOf' || dropEqualBranches(schema))) {
@@ -1807,6 +1818,7 @@ function downgradeV30(root: unknown, convert: Convert): unknown {
     cutHolders.clear()
     collapsedPairs.length = 0
     LOOSE.clear()
+    schemaRoot = undefined
   }
 }
 
