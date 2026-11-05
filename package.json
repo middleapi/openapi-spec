@@ -8,6 +8,7 @@
     "check": "oxlint",
     "fix": "oxlint --fix",
     "format": "oxfmt",
+    "repo:fix": "sherif --fix",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "vitest bench --run",
@@ -25,6 +26,7 @@
     "oxlint": "^1.91.0",
     "oxlint-tsgolint": "^7.0.2005",
     "pkg-pr-new": "^0.0.91",
+    "sherif": "^1.13.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
