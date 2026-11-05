@@ -27,7 +27,7 @@ for (const statement of source.statements) {
       exported: checker
         .getExportsOfModule(module)
         .map((symbol) => symbol.name)
-        .sort(),
+        .toSorted(),
       referenced: new Set(),
     })
   }
@@ -44,10 +44,10 @@ it('imports every version entry as a namespace', () => {
     .filter((entry) => entry !== './package.json')
     .map((entry) => `${pkg.name}/${entry.slice(2)}`)
 
-  expect(specifiers.sort()).toEqual(entries.sort())
+  expect(specifiers.toSorted()).toEqual(entries.toSorted())
 })
 
 it.each([...namespaces])('references every %s member as a type', (_, { exported, referenced }) => {
   expect(exported.length).toBeGreaterThan(0)
-  expect([...referenced].sort()).toEqual(exported)
+  expect([...referenced].toSorted()).toEqual(exported)
 })

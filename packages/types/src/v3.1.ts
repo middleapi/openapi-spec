@@ -8,8 +8,8 @@ import type {
   QueryParameterStyle,
   SpecificationExtensions,
   XMLObject,
-} from './v3.0'
-import type * as V3_0 from './v3.0'
+} from './v3.0.ts'
+import type * as V3_0 from './v3.0.ts'
 
 export type {
   ApiKeySecuritySchemeObject,
@@ -28,7 +28,7 @@ export type {
   QueryParameterStyle,
   SpecificationExtensions,
   XMLObject,
-} from './v3.0'
+} from './v3.0.ts'
 
 /**
  * An object representing a Server.

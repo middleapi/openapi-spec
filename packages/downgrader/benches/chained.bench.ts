@@ -6,9 +6,9 @@ import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '@openapi-spec/down
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 import { bench, describe } from 'vitest'
 
-import { corpusV32 } from '../tests/corpus'
-import { doc as orpcDocument } from '../tests/orpc-document'
-import { createApiV32 } from './__shared__/api'
+import { corpusV32 } from '../tests/corpus.ts'
+import { doc as orpcDocument } from '../tests/orpc-document.ts'
+import { createApiV32 } from './__shared__/api.ts'
 
 const API_100_RESOURCES = createApiV32(100)
 

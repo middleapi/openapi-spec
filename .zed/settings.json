@@ -1,15 +1,15 @@
 {
   "format_on_save": "on",
-  "formatter": {
-    "external": {
-      "command": "./node_modules/.bin/oxfmt",
-      "arguments": ["--stdin-filepath", "{buffer_path}"]
+  "formatter": [
+    {
+      "code_action": "source.fixAll.oxc"
+    },
+    {
+      "language_server": {
+        "name": "oxfmt"
+      }
     }
-  },
-  // Apply oxlint's auto fixes on save:
-  "code_actions_on_format": {
-    "source.fixAll.oxc": true
-  },
+  ],
   "lsp": {
     "typescript-language-server": {
       "settings": {

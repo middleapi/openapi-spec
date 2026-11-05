@@ -1,7 +1,7 @@
 import type { RouterMatch } from '@openapi-spec/router'
 import { createPrefixMatcher, Router } from '@openapi-spec/router'
 
-import { expectMatches } from './helpers'
+import { expectMatches } from './helpers.ts'
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 

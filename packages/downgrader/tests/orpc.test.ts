@@ -4,8 +4,8 @@
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { doc } from './orpc-document'
-import { expectValidDowngrade } from './validate'
+import { doc } from './orpc-document.ts'
+import { expectValidDowngrade } from './validate.ts'
 
 function downgradeTwice(spec: OpenAPIV3_2.OpenAPIObject) {
   return downgradeSpecV31ToV30(downgradeSpecV32ToV31(spec))

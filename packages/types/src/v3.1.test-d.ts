@@ -9,7 +9,7 @@ import type {
   ResponseObject,
   ResponsesObject,
   SchemaObject,
-} from './v3.1'
+} from './v3.1.ts'
 
 export const webhooksOnly = {
   components: {
