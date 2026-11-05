@@ -17,7 +17,7 @@
   "devDependencies": {
     "@codspeed/vitest-plugin": "^5.7.1",
     "@seriousme/openapi-schema-validator": "^2.11.0",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@typescript/typescript6": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.11",
     "bumpp": "^12.3.0",
@@ -25,7 +25,7 @@
     "oxfmt": "^0.76.0",
     "oxlint": "^1.91.0",
     "oxlint-tsgolint": "^7.0.2005",
-    "pkg-pr-new": "^0.0.91",
+    "pkg-pr-new": "^0.0.93",
     "sherif": "^1.13.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
