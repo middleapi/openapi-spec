@@ -1,24 +1,4 @@
 {
   "format_on_save": "on",
-  "formatter": [
-    {
-      "code_action": "source.fixAll.oxc"
-    },
-    {
-      "language_server": {
-        "name": "oxfmt"
-      }
-    }
-  ],
-  "lsp": {
-    "typescript-language-server": {
-      "settings": {
-        "typescript": {
-          "preferences": {
-            "includePackageJsonAutoImports": "on"
-          }
-        }
-      }
-    }
-  }
+  "formatter": [{ "code_action": "source.fixAll.oxc" }, { "language_server": { "name": "oxfmt" } }]
 }
