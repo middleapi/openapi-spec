@@ -669,8 +669,6 @@ function matchesCatchAll(
   return true
 }
 
-// `params` is spread only for a param named `__proto__`, not on every pass.
-/* oxlint-disable oxc/no-accumulating-spread */
 function toParams<T>(route: Route<T>, segments: readonly string[]): Record<string, string> {
   let params: Record<string, string> = {}
   const end = segments.length - route.tail
@@ -697,4 +695,3 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
 
   return params
 }
-/* oxlint-enable oxc/no-accumulating-spread */

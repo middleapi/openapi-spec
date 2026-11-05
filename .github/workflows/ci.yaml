@@ -21,6 +21,8 @@ jobs:
 
       - run: pnpm run check
 
+      - run: pnpm -r run prepack
+
   test_matrix:
     runs-on: ubuntu-latest
     strategy:
