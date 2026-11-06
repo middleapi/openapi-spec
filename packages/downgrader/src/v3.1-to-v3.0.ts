@@ -1438,10 +1438,7 @@ function scalarOneOf(out: Record<string, unknown>): void {
 }
 
 // The type of every value in a list, when they all have the same one.
-function sharedType(values: unknown): string | undefined {
-  if (!Array.isArray(values)) {
-    return undefined
-  }
+function sharedType(values: unknown[]): string | undefined {
   const type = valueType(values[0])
   return values.every((value) => valueType(value) === type) ? type : undefined
 }
@@ -1548,12 +1545,19 @@ function finishSchema(
   }
   // Code generators drop or leave untyped an `enum` with no `type`, as a
   // `const` becomes and ArkType writes a union of literals, so it gets the
-  // type its values share.
-  const enumType = out.type === undefined ? sharedType(out.enum) : undefined
+  // type its values share. A null among them needs `nullable`, which kin-openapi
+  // requires to accept null, as Zod writes a literal union with null.
+  const enumType =
+    out.type === undefined && Array.isArray(out.enum)
+      ? sharedType(out.enum.filter((value) => value !== null))
+      : undefined
   if (enumType !== undefined) {
-    const values = out.enum
+    const values = out.enum as unknown[]
     delete out.enum
     out.type = enumType
+    if (values.includes(null)) {
+      out.nullable = true
+    }
     out.enum = values
   }
   // NSwag reads a union of enums with no `type` beside it, as Zod writes a
