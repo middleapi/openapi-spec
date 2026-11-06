@@ -780,7 +780,11 @@ describe('downgradeSchemaV31ToV30', () => {
       ])
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: [null, 'a'] })).toEqual(onlyNull)
       expect(downgradeSchemaV31ToV30({ enum: [null] })).toEqual(onlyNull)
-      expect(downgradeSchemaV31ToV30({ enum: [null, 'a'] })).toEqual({ enum: [null, 'a'] })
+      expect(downgradeSchemaV31ToV30({ enum: [null, 'a'] })).toEqual({
+        type: 'string',
+        nullable: true,
+        enum: [null, 'a'],
+      })
       // Only null may match the type, and the enum rules it out.
       expect(downgradeSchemaV31ToV30({ type: 'null', enum: ['a'] })).toEqual({
         allOf: [{ not: {} }],
@@ -1865,11 +1869,24 @@ describe('downgradeSchemaV31ToV30', () => {
     expect(downgradeSchemaV31ToV30({ not: { enum: [true] } })).toEqual({
       not: { type: 'boolean', enum: [true] },
     })
-    // Values of different types, or with null, share no type to give.
-    const lists: unknown[][] = [['a', 1], [1, 1.5], ['a', null], [new Date(0)], []]
+    // Values of different types share no type to give, also beside null.
+    const lists: unknown[][] = [['a', 1], [1, 1.5], ['a', 1, null], [new Date(0)], []]
     for (const values of lists) {
       expect(downgradeSchemaV31ToV30({ enum: values })).not.toHaveProperty('type')
     }
+  })
+
+  it('makes an enum with no type and null nullable, as Zod writes a literal union with null', () => {
+    expect(downgradeSchemaV31ToV30({ enum: ['a', 'b', null] })).toStrictEqual({
+      type: 'string',
+      nullable: true,
+      enum: ['a', 'b', null],
+    })
+    expect(downgradeSchemaV31ToV30({ enum: [null, 1] })).toStrictEqual({
+      type: 'integer',
+      nullable: true,
+      enum: [null, 1],
+    })
   })
 
   it.each<[OpenAPIV3_1.SchemaObject, OpenAPIV3_0.SchemaObject]>([
@@ -2227,9 +2244,10 @@ describe('downgradeSchemaV31ToV30', () => {
       downgradeSchemaV31ToV30({ anyOf: [ref, { type: 'null' }, refB, { type: 'null' }] }),
     ).toEqual({ anyOf: [ref, nullBranch, refB, nullBranch] })
     // Other `enum`s that are copies still differ.
+    const nullableA = { type: 'string', nullable: true, enum: ['a', null] }
     expect(
       downgradeSchemaV31ToV30({ anyOf: [ref, { enum: ['a', null] }, { enum: ['a', null] }] }),
-    ).toEqual({ anyOf: [ref, { enum: ['a', null] }, { enum: ['a', null] }] })
+    ).toEqual({ anyOf: [ref, nullableA, nullableA] })
     // A `oneOf` rejects a value that two branches match.
     expect(downgradeSchemaV31ToV30({ oneOf: file.anyOf })).toEqual({ oneOf: [binary, binary] })
   })
