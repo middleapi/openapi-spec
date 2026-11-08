@@ -112,3 +112,34 @@ describe('prefix match, 10 pending lazy routers', () => {
     }
   })
 })
+
+describe('load 10 lazy routers in turn, a request into each, 703 REST-style procedures', () => {
+  // oRPC adds a lazy router's routes when a request first needs it, after the
+  // requests that came before, then matches that request.
+  const routes = restRoutes(100)
+  // the last one also holds the three routes past 700, catch-alls included
+  const lazyRouters = Array.from({ length: 10 }, (_, i) =>
+    routes.slice(i * 70, i === 9 ? undefined : i * 70 + 70),
+  )
+  const requests = lazyRouters.map((_, i) => `/api/v1/resource${i * 10}/1` as const)
+
+  bench('@openapi-spec/router', () => {
+    const router = new Router<string>()
+    for (const [i, lazyRouter] of lazyRouters.entries()) {
+      for (const [method, path] of lazyRouter) {
+        router.add(method, path, path)
+      }
+      router.match('GET', fresh(requests[i]!))
+    }
+  })
+
+  bench('rou3', () => {
+    const router = createRouter<string>()
+    for (const [i, lazyRouter] of lazyRouters.entries()) {
+      for (const [method, path] of lazyRouter) {
+        addRoute(router, method, toRou3Path(path), path)
+      }
+      findRoute(router, 'GET', fresh(requests[i]!))
+    }
+  })
+})
