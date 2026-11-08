@@ -117,7 +117,10 @@ describe('load 10 lazy routers in turn, a request into each, 703 REST-style proc
   // oRPC adds a lazy router's routes when a request first needs it, after the
   // requests that came before, then matches that request.
   const routes = restRoutes(100)
-  const lazyRouters = Array.from({ length: 10 }, (_, i) => routes.slice(i * 70, i * 70 + 70))
+  // the last one also holds the three routes past 700, catch-alls included
+  const lazyRouters = Array.from({ length: 10 }, (_, i) =>
+    routes.slice(i * 70, i === 9 ? undefined : i * 70 + 70),
+  )
   const requests = lazyRouters.map((_, i) => `/api/v1/resource${i * 10}/1` as const)
 
   bench('@openapi-spec/router', () => {
