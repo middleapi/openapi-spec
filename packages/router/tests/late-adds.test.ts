@@ -118,6 +118,22 @@ describe('routes added after requests', () => {
     })
   })
 
+  it('keeps the first of two duplicates when the second has a param written like a literal child', () => {
+    const router = routerOf('/x/%7Bid%7D')
+    // builds `/x`, with the literal child `{id}`
+    expectMatches(router, { '/x/{id}': ['/x/%7Bid%7D'] })
+
+    // waits at `/x`, as `{a}` is not the text of a literal child there
+    router.add('GET', '/x/{a}', '/x/{a}')
+    // goes in at once, as `{id}` is, but after the route waiting there
+    router.add('GET', '/x/{id}', 'duplicate')
+
+    expectMatches(router, {
+      '/x/1': ['/x/{a}', { a: '1' }],
+      '/x/{id}': ['/x/%7Bid%7D'],
+    })
+  })
+
   it('gives the same results whatever order routes are added in, with requests between them', () => {
     const routes: `/${string}`[] = [
       '/a/{x}',
