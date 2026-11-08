@@ -166,11 +166,9 @@ export class Router<T> {
 
     const encoded = path.includes('%')
 
-    // Adds the routes in `pending` to the tree. Once the tree has served a
-    // request, each goes in whole, as routes may no longer wait where the tree
-    // has grown past them.
+    // Adds the routes in `pending` to the tree, each up to where it waits.
     if (routes.pending.length > 0) {
-      expand(routes.root, routes.pending, 1, routes.unfiltered > 0)
+      expand(routes.root, routes.pending, 1)
       routes.pending = []
     }
 
@@ -381,10 +379,10 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
 /**
  * Adds the routes waiting at `node`, which is at `start` in the split path, to
  * the tree, in one loop rather than a call per route, which V8 would see as
- * hot and optimize during a cold start. Each route goes in `whole`, or up to
- * where it waits again.
+ * hot and optimize during a cold start. Each route goes in up to where it
+ * waits again.
  */
-function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: boolean): void {
+function expand<T>(node: Node<T>, pending: unknown[], start: number): void {
   node.pending = undefined
   // The parts of the previous route, how many of them come before its first
   // part starting with `{` once decoded, and the node after each of those, so
@@ -418,18 +416,20 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number, whole: bool
 
       // Only a part starting with `{` once decoded can be a param. Past its
       // first part, a route waits before one, and before literal text like it,
-      // which keeps the first of two that read the same. A route added whole
-      // goes after the routes waiting there.
+      // which keeps the first of two that read the same. It waits even where
+      // the tree has grown, as for a route added after requests, unless the
+      // node has a literal child with this text, which `find` tries before
+      // the routes waiting there. Then it goes after them.
       if (segment[0] === '{') {
         if (index < literals) {
           literals = index
         }
-        if (!whole && index > start) {
+        if (index > start && child.literal !== segment && child.literals?.has(segment) !== true) {
           ;(child.pending ??= []).push(parts, data, params)
           continue next
         }
         if (child.pending !== undefined) {
-          expand(child, child.pending, index, false)
+          expand(child, child.pending, index)
         }
         if (part !== lastPart || index !== lastIndex) {
           lastPart = part
@@ -616,11 +616,11 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
     }
   }
 
-  // Routes wait here only before a part starting with `{`, and only while the
-  // tree has no such part here, so any literal child beats them, and they can
+  // Routes wait here only before a part starting with `{` that is not the text
+  // of a literal child here, so any literal child beats them, and they can
   // wait until it fails.
   if (node.pending !== undefined) {
-    expand(node, node.pending, index, false)
+    expand(node, node.pending, index)
     return find(node, segments, index)
   }
 

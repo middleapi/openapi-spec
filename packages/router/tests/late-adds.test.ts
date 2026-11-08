@@ -98,6 +98,26 @@ describe('routes added after requests', () => {
     })
   })
 
+  it('prefers a later route through a literal like a param over an earlier one the tree built', () => {
+    const router = routerOf('/a/{x}/{a.b}/{y}', '/a/{x}/b', '/c/{x}/%7Bd%7D/{y}')
+    // builds the routes whole, with two literals after `/a/{x}` and one after `/c/{x}`
+    expectMatches(router, {
+      '/a/1/{a.b}/2': ['/a/{x}/{a.b}/{y}', { x: '1', y: '2' }],
+      '/c/1/{d}/2': ['/c/{x}/%7Bd%7D/{y}', { x: '1', y: '2' }],
+    })
+
+    router.add('GET', '/a/{x}/{a.b}/z', '/a/{x}/{a.b}/z')
+    router.add('GET', '/c/{x}/{d}/z', '/c/{x}/{d}/z')
+    router.add('GET', '/c/{x}/%7Bd%7D/z', '/c/{x}/%7Bd%7D/z')
+
+    expectMatches(router, {
+      '/a/1/{a.b}/z': ['/a/{x}/{a.b}/z', { x: '1' }],
+      '/a/1/{a.b}/2': ['/a/{x}/{a.b}/{y}', { x: '1', y: '2' }],
+      '/c/1/{d}/z': ['/c/{x}/%7Bd%7D/z', { x: '1' }],
+      '/c/1/e/z': ['/c/{x}/{d}/z', { x: '1', d: 'e' }],
+    })
+  })
+
   it('gives the same results whatever order routes are added in, with requests between them', () => {
     const routes: `/${string}`[] = [
       '/a/{x}',
