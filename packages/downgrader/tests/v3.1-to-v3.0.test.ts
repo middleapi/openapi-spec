@@ -301,6 +301,28 @@ describe('downgradeSpecV31ToV30', () => {
       })
       expect(out['x-ext']).toEqual(ext)
     })
+
+    it('inlines $refs into definitions or $defs at the document root, as a document converted from Swagger 2.0 keeps them', () => {
+      // Neither is a field of a 3.1 document, so the types reject them.
+      const roots = { definitions: { B: { type: ['string', 'null'] } }, $defs: { C: { const: 1 } } }
+      const out = convert({
+        components: {
+          schemas: {
+            A: {
+              type: 'object',
+              properties: { b: { $ref: '#/definitions/B' }, c: { $ref: '#/$defs/C' } },
+            },
+          },
+        },
+        ...roots,
+      })
+      expect(out.components?.schemas).toEqual({
+        A: {
+          type: 'object',
+          properties: { b: { type: 'string', nullable: true }, c: { type: 'integer', enum: [1] } },
+        },
+      })
+    })
   })
 
   describe('mutual TLS', () => {
