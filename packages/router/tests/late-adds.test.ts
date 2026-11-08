@@ -134,6 +134,18 @@ describe('routes added after requests', () => {
     })
   })
 
+  it('reads a param from its own segment when another route has the same param text at another segment', () => {
+    const router = routerOf('/x/%7Bid%7D')
+    // builds `/x`, with the literal child `{id}`
+    expectMatches(router, { '/x/{id}': ['/x/%7Bid%7D'] })
+
+    // both go into the tree in one pass, `{id}` first as the first segment,
+    // then as the second, which a literal child there lets go in at once
+    router.add('GET', '/{id}', '/{id}')
+    router.add('GET', '/x/{id}', '/x/{id}')
+    expectMatches(router, { '/y': ['/{id}', { id: 'y' }], '/x/1': ['/x/{id}', { id: '1' }] })
+  })
+
   it('gives the same results whatever order routes are added in, with requests between them', () => {
     const routes: `/${string}`[] = [
       '/a/{x}',
