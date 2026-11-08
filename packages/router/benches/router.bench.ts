@@ -87,6 +87,32 @@ describe('add, then a request for each method, 703 REST-style procedures', () =>
   })
 })
 
+describe('prefix match, 10 pending lazy routers', () => {
+  // oRPC tests each pending lazy router's prefix on every request until it loads.
+  const prefixes = Array.from({ length: 10 }, (_, i) => `/api/v1/lazy${i}` as const)
+  const ours = prefixes.map(createPrefixMatcher)
+  const rou3 = prefixes.map((prefix) => routeToRegExp(`${toRou3Path(prefix)}/**`))
+  const requests = restRequests(100)
+
+  bench('@openapi-spec/router', () => {
+    for (const [, pathname] of requests) {
+      const path = fresh(pathname)
+      for (const matches of ours) {
+        matches(path)
+      }
+    }
+  })
+
+  bench('rou3', () => {
+    for (const [, pathname] of requests) {
+      const path = fresh(pathname)
+      for (const regExp of rou3) {
+        regExp.test(path)
+      }
+    }
+  })
+})
+
 describe('load 10 lazy routers in turn, a request into each, 703 REST-style procedures', () => {
   // oRPC adds a lazy router's routes when a request first needs it, after the
   // requests that came before, then matches that request.
@@ -111,32 +137,6 @@ describe('load 10 lazy routers in turn, a request into each, 703 REST-style proc
         addRoute(router, method, toRou3Path(path), path)
       }
       findRoute(router, 'GET', fresh(requests[i]!))
-    }
-  })
-})
-
-describe('prefix match, 10 pending lazy routers', () => {
-  // oRPC tests each pending lazy router's prefix on every request until it loads.
-  const prefixes = Array.from({ length: 10 }, (_, i) => `/api/v1/lazy${i}` as const)
-  const ours = prefixes.map(createPrefixMatcher)
-  const rou3 = prefixes.map((prefix) => routeToRegExp(`${toRou3Path(prefix)}/**`))
-  const requests = restRequests(100)
-
-  bench('@openapi-spec/router', () => {
-    for (const [, pathname] of requests) {
-      const path = fresh(pathname)
-      for (const matches of ours) {
-        matches(path)
-      }
-    }
-  })
-
-  bench('rou3', () => {
-    for (const [, pathname] of requests) {
-      const path = fresh(pathname)
-      for (const regExp of rou3) {
-        regExp.test(path)
-      }
     }
   })
 })
