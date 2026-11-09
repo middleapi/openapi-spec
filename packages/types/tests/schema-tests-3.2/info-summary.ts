@@ -1,6 +1,6 @@
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.2-dev/tests/schema/pass/info_summary.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from '../../src/v3.2.ts'
+import type { OpenAPIObject } from '../../src/v3.2'
 
 export const doc: OpenAPIObject = {
   openapi: '3.2.0',

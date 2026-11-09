@@ -1,6 +1,6 @@
 import { Router } from '@openapi-spec/router'
 
-import { expectMatches, routerOf } from './helpers.ts'
+import { expectMatches, routerOf } from './helpers'
 
 describe('percent-encoding', () => {
   it('decodes each escape once, in param values and literal text', () => {

@@ -1,6 +1,6 @@
 // Generated from https://github.com/OAI/OpenAPI-Specification/tree/v3.1-dev/tests/schema/pass/minimal_hooks.yaml
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from '../../src/v3.1.ts'
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc: OpenAPIObject = {
   openapi: '3.1.0',

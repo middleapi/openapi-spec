@@ -1,7 +1,7 @@
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import type { Context, Convert } from './shared.ts'
+import type { Context, Convert } from './shared'
 import {
   clone,
   convertObject,
@@ -20,7 +20,7 @@ import {
   map,
   resolve,
   resolvePointer,
-} from './shared.ts'
+} from './shared'
 
 const V32_DIALECT_PREFIX = 'https://spec.openapis.org/oas/3.2/dialect/'
 const V31_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base'

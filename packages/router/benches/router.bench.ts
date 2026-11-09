@@ -2,7 +2,7 @@ import { createPrefixMatcher, Router } from '@openapi-spec/router'
 import { addRoute, createRouter, findRoute, routeToRegExp } from 'rou3'
 import { bench, describe } from 'vitest'
 
-import type { Requests, Routes } from './__shared__/routes.ts'
+import type { Requests, Routes } from './__shared__/routes'
 import {
   fresh,
   restRequests,
@@ -10,7 +10,7 @@ import {
   rpcRequests,
   rpcRoutes,
   toRou3Path,
-} from './__shared__/routes.ts'
+} from './__shared__/routes'
 
 // rou3 runs as is, without the percent-decoding oRPC does around it today,
 // so each comparison is against less work than this router does.

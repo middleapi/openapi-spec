@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { downgradeSchemaV32ToV31, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { expectValidDowngrade } from './validate.ts'
+import { expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 

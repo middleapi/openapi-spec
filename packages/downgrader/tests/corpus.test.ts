@@ -4,9 +4,9 @@
 import { downgradeSpecV31ToV30, downgradeSpecV32ToV31 } from '@openapi-spec/downgrader'
 import type * as OpenAPIV3_2 from '@openapi-spec/types/v3.2'
 
-import { doc as mega } from '../../types/tests/schema-tests-3.2/mega.ts'
-import { corpusV31, corpusV32 } from './corpus.ts'
-import { expectValidDowngrade } from './validate.ts'
+import { doc as mega } from '../../types/tests/schema-tests-3.2/mega'
+import { corpusV31, corpusV32 } from './corpus'
+import { expectValidDowngrade } from './validate'
 
 function downgradeTwice(doc: OpenAPIV3_2.OpenAPIObject) {
   return downgradeSpecV31ToV30(downgradeSpecV32ToV31(doc))

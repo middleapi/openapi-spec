@@ -1,6 +1,6 @@
 // Generated from https://github.com/OAI/learn.openapis.org/tree/main/examples/v3.1/tictactoe.json
 // Do not edit by hand; regenerate instead.
-import type { OpenAPIObject } from '../../src/v3.1.ts'
+import type { OpenAPIObject } from '../../src/v3.1'
 
 export const doc: OpenAPIObject = {
   openapi: '3.1.0',

@@ -7,7 +7,7 @@ import type {
   ResponseObject,
   ResponsesObject,
   SchemaObject,
-} from './v3.2.ts'
+} from './v3.2'
 
 export const streamingApi = {
   $self: 'https://example.com/openapi',
