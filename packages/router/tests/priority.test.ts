@@ -1,6 +1,6 @@
 import { Router } from '@openapi-spec/router'
 
-import { expectMatches, routerOf } from './helpers.ts'
+import { expectMatches, routerOf } from './helpers'
 
 describe('priority', () => {
   it('backtracks through several segments to the next best route', () => {

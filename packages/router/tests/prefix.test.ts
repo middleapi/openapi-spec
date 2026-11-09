@@ -1,6 +1,6 @@
 import { createPrefixMatcher } from '@openapi-spec/router'
 
-import { routerOf } from './helpers.ts'
+import { routerOf } from './helpers'
 
 /** Checks each request path against a prefix, by whether it should match. */
 function expectPrefix(prefix: `/${string}`, expected: Record<`/${string}`, boolean>): void {

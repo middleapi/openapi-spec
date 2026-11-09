@@ -2,7 +2,7 @@ import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/do
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import { expectValidDowngrade } from './validate.ts'
+import { expectValidDowngrade } from './validate'
 
 const info = { title: 'API', version: '1.0.0' }
 const responses = { 200: { description: 'ok' } }

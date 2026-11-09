@@ -1,15 +1,15 @@
 import { downgradeSchemaV31ToV30, downgradeSpecV31ToV30 } from '@openapi-spec/downgrader'
 import { bench, describe } from 'vitest'
 
-import { corpusV31 } from '../tests/corpus.ts'
-import { createApiV31 } from './__shared__/api.ts'
+import { corpusV31 } from '../tests/corpus'
+import { createApiV31 } from './__shared__/api'
 import {
   callbackGraphV31,
   pathItemChainV31,
   referenceDiamondV31,
   schemaDiamond,
-} from './__shared__/graphs.ts'
-import { constOutsideEnum, ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas.ts'
+} from './__shared__/graphs'
+import { constOutsideEnum, ORDER_SCHEMA, PROPERTY_SCHEMA } from './__shared__/schemas'
 
 const API_10_RESOURCES = createApiV31(10)
 const API_100_RESOURCES = createApiV31(100)

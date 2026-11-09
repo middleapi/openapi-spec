@@ -6,7 +6,7 @@ import type {
   ResponsesObject,
   SchemaObject,
   SecuritySchemeObject,
-} from './v3.0.ts'
+} from './v3.0'
 
 export const petstore = {
   'components': {

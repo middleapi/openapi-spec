@@ -42,7 +42,7 @@
     }
   },
   "scripts": {
-    "prepack": "tsc"
+    "prepack": "tsdown"
   },
   "devDependencies": {
     "rou3": "^1.0.0"

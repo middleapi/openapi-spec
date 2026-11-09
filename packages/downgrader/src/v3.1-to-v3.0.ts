@@ -1,7 +1,7 @@
 import type * as OpenAPIV3_0 from '@openapi-spec/types/v3.0'
 import type * as OpenAPIV3_1 from '@openapi-spec/types/v3.1'
 
-import type { Context, Convert } from './shared.ts'
+import type { Context, Convert } from './shared'
 import {
   clone,
   convertObject,
@@ -20,7 +20,7 @@ import {
   map,
   resolve,
   resolvePointer,
-} from './shared.ts'
+} from './shared'
 
 // Keywords 3.0 lacks that restrict values, so removing one loosens a schema.
 const RESTRICTING_KEYWORDS = new Set([
