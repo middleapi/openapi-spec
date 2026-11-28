@@ -68,6 +68,15 @@ describe('params with text around them in a segment', () => {
     })
   })
 
+  it('falls back to the next one when the rest of the path does not match', () => {
+    const router = routerOf('/h/{name}.json/raw', '/h/{a}.{b}/other')
+
+    expectMatches(router, {
+      '/h/x.json/raw': ['/h/{name}.json/raw', { name: 'x' }],
+      '/h/x.json/other': ['/h/{a}.{b}/other', { a: 'x', b: 'json' }],
+    })
+  })
+
   it('orders two with as much literal text the same way, whatever the order routes were added in', () => {
     const paths = ['/{a}-x', '/x-{b}'] as const
 
