@@ -35,6 +35,16 @@ describe('params with text around them in a segment', () => {
     })
   })
 
+  it('reads a long segment in linear time, where a lazy RegExp would backtrack', () => {
+    const router = routerOf('/p/{a}-{b}-{c}.zip')
+
+    expect(router.match('GET', `/p/${'-'.repeat(100_000)}`)).toBeUndefined()
+    expect(router.match('GET', `/p/${'a-'.repeat(50_000)}.zip`)).toStrictEqual({
+      data: '/p/{a}-{b}-{c}.zip',
+      params: { a: 'a', b: 'a', c: 'a-'.repeat(49_998) },
+    })
+  })
+
   it('ranks them after literals and before params, more literal text first', () => {
     const router = routerOf(
       '/f/{x}',

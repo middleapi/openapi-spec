@@ -28,11 +28,13 @@ interface RouteParam {
  * `{name}-{version}.zip`.
  */
 interface Template {
-  /** Matches a decoded segment, capturing the value of each param. */
-  readonly pattern: RegExp
+  /** The decoded literal text before, between, and after its params. */
+  readonly texts: readonly string[]
   readonly names: readonly string[]
   /** The length of its literal text, which sorts the more specific template first. */
   readonly size: number
+  /** Its literal text as one string, which tells templates apart and orders those of the same size. */
+  readonly key: string
 }
 
 interface CatchAll<T> {
@@ -312,7 +314,7 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
       } else if (text !== undefined) {
         text += '/' + segment
       }
-    } else if ('pattern' in segment) {
+    } else if ('texts' in segment) {
       head.push(segment)
       text = undefined
     } else if (segment.catchAll) {
@@ -472,7 +474,7 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number): void {
         continue
       }
 
-      if ('pattern' in segment) {
+      if ('texts' in segment) {
         params = pushTemplateParams(params, segment, index)
         child = templateChild(child, segment)
         continue
@@ -518,7 +520,7 @@ function addCatchAll<T>(
     if (typeof after === 'string') {
       tail.push(after)
       order = `0${order}`
-    } else if ('pattern' in after) {
+    } else if ('texts' in after) {
       tail.push(after)
       pushTemplateParams(params, after, i - parts.length)
       order = `1${order}`
@@ -555,10 +557,8 @@ function pushTemplateParams(
  */
 function templateChild<T>(node: Node<T>, template: Template): Node<T> {
   const templates = (node.templates ??= [])
-  // A pattern's source is its literal text, escaped.
-  const source = template.pattern.source
   for (const entry of templates) {
-    if (entry.template.pattern.source === source) {
+    if (entry.template.key === template.key) {
       return entry.node
     }
   }
@@ -568,9 +568,7 @@ function templateChild<T>(node: Node<T>, template: Template): Node<T> {
   // Templates with as much literal text compare by it, so that their order does
   // not depend on the order routes were added.
   templates.sort(
-    (a, b) =>
-      b.template.size - a.template.size ||
-      (a.template.pattern.source < b.template.pattern.source ? -1 : 1),
+    (a, b) => b.template.size - a.template.size || (a.template.key < b.template.key ? -1 : 1),
   )
   return child
 }
@@ -622,25 +620,51 @@ function toSegment(text: string, index: number): Segment {
 function toTemplate(text: string): Template | undefined {
   // Splitting on a pattern with a group puts each param name between the texts around it.
   const parts = text.split(TEMPLATE_PARAM)
+  const texts: string[] = []
   const names: string[] = []
-  let source = '^'
-  let size = 0
   for (let i = 0; i < parts.length; i += 2) {
     const literal = decode(parts[i]!)
     if (literal === '' && i > 0 && i < parts.length - 1) {
       return undefined
     }
-    size += literal.length
-    source += literal.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&')
+    texts.push(literal)
     if (i < parts.length - 1) {
       names.push(parts[i + 1]!)
-      // Lazy, so that each text between two params matches where it first
-      // appears, as ordered as the params' values read.
-      source += '(.+?)'
     }
   }
 
-  return names.length === 0 ? undefined : { pattern: new RegExp(`${source}$`, 's'), names, size }
+  return names.length === 0
+    ? undefined
+    : { texts, names, size: texts.join('').length, key: JSON.stringify(texts) }
+}
+
+/**
+ * The values of a template's params in a decoded segment, each non-empty, or
+ * `undefined` if the segment does not match. Each text between two params is
+ * taken where it first appears, which leaves the most room for the rest, so
+ * no other place needs trying, and the time stays linear in the segment's
+ * length, where a RegExp with a lazy group per param backtracks.
+ */
+function splitTemplate(texts: readonly string[], segment: string): string[] | undefined {
+  const last = texts.length - 1
+  const end = segment.length - texts[last]!.length
+  let start = texts[0]!.length
+  if (end - start < last || !segment.startsWith(texts[0]!) || !segment.endsWith(texts[last]!)) {
+    return undefined
+  }
+
+  const values: string[] = []
+  for (let i = 1; i < last; i++) {
+    const at = segment.indexOf(texts[i]!, start + 1)
+    if (at === -1 || at + texts[i]!.length >= end) {
+      return undefined
+    }
+    values.push(segment.slice(start, at))
+    start = at + texts[i]!.length
+  }
+
+  values.push(segment.slice(start, end))
+  return values
 }
 
 /**
@@ -652,7 +676,7 @@ function matchesPart(expected: string | Template | undefined, segment: string): 
     ? segment !== ''
     : typeof expected === 'string'
       ? segment === expected
-      : expected.pattern.test(segment)
+      : splitTemplate(expected.texts, segment) !== undefined
 }
 
 /**
@@ -779,7 +803,7 @@ function findTemplate<T>(
   index: number,
 ): Route<T> | undefined {
   for (const { template, node } of templates) {
-    if (template.pattern.test(segments[index]!)) {
+    if (splitTemplate(template.texts, segments[index]!) !== undefined) {
       const route = find(node, segments, index + 1)
       if (route !== undefined) {
         return route
@@ -819,7 +843,7 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   for (const { name, index, catchAll, template, place } of route.params!) {
     let value = segments[index < 0 ? segments.length + index : index]!
     if (template !== undefined) {
-      value = template.pattern.exec(value)![place + 1]!
+      value = splitTemplate(template.texts, value)![place]!
     }
 
     // Faster than `segments.slice(index, end).join('/')`. A template literal
