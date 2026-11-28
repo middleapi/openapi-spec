@@ -67,7 +67,7 @@ underUser('/projects/42') // false
 
 ## Priority
 
-When more than one route matches, segments compare from left to right. At each segment a literal beats a param with text around it, which beats a param, which beats a catch-all param, and a route that fails further on falls back to the next candidate. Of two params with text around them, the one with more literal text wins, as `{name}.json` does over `{name}.{ext}`, in the same order whatever order the routes were added in:
+When more than one route matches, segments compare from left to right. At each segment a literal beats a param with text around it, which beats a param, which beats a catch-all param, and a route that fails further on falls back to the next candidate:
 
 ```ts
 router.add('GET', '/users/me', 'me')
@@ -81,7 +81,7 @@ router.match('GET', '/users/me/posts') // 'posts', with { id: 'me' }
 router.match('GET', '/users/me/likes') // 'fallback'
 ```
 
-Catch-all params that start at the same segment compare the segments after them from the last one, so `/files/{+path}/raw` beats `/files/{+path}` for `/files/a/raw`. A route with the same method and segments as one added earlier, even with other param names, is ignored.
+Of two params with text around them, the one with more literal text wins, as `{name}.json` does over `{name}.{ext}`, whatever order they were added in. Catch-all params that start at the same segment compare the segments after them from the last one, so `/files/{+path}/raw` beats `/files/{+path}` for `/files/a/raw`. A route with the same method and segments as one added earlier, even with other param names, is ignored.
 
 ## Performance
 
