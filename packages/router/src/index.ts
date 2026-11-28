@@ -17,15 +17,31 @@ interface RouteParam {
   /** The index into the split path, or a negative one from its end for a segment after the catch-all param. */
   readonly index: number
   readonly catchAll: boolean
+  /** The template of its segment, for a param with literal text around it there. */
+  readonly template: Template | undefined
+  /** Which of the template's params this is. */
+  readonly place: number
+}
+
+/**
+ * A segment with params and literal text around them, as in `{id}.json` or
+ * `{name}-{version}.zip`.
+ */
+interface Template {
+  /** Matches a decoded segment, capturing the value of each param. */
+  readonly pattern: RegExp
+  readonly names: readonly string[]
+  /** The length of its literal text, which sorts the more specific template first. */
+  readonly size: number
 }
 
 interface CatchAll<T> {
-  /** Each segment after the catch-all param: its literal text, or `undefined` for a param. */
-  readonly tail: readonly (string | undefined)[]
+  /** Each segment after the catch-all param: its literal text, its template, or `undefined` for a param. */
+  readonly tail: readonly (string | Template | undefined)[]
   /**
    * Sorts the more specific of two catch-alls starting at the same segment
    * first: a digit for each segment after the param, from the last one, `0`
-   * for a literal and `1` for a param, then `2`, for none.
+   * for a literal, `1` for a template and `2` for a param, then `3`, for none.
    */
   readonly order: string
   readonly route: Route<T>
@@ -38,6 +54,8 @@ interface Node<T> {
   literal: string | undefined
   /** The only literal child, while `literal` holds its text. */
   literalNode: Node<T> | undefined
+  /** The children for segments with a template, most specific first. */
+  templates: { readonly template: Template; readonly node: Node<T> }[] | undefined
   param: Node<T> | undefined
   /** The routes whose catch-all param starts here, most specific first. */
   catchAlls: CatchAll<T>[] | undefined
@@ -82,10 +100,12 @@ interface MethodRoutes<T> {
   pending: unknown[]
 }
 
-/** A literal segment's decoded text, or a param. */
-type Segment = string | RouteParam
+/** A literal segment's decoded text, a param, or a template. */
+type Segment = string | RouteParam | Template
 
 const PARAM_NAME = /^[\w-]+$/
+
+const TEMPLATE_PARAM = /\{([\w-]+)\}/
 
 const FILTER_AFTER = 1024
 
@@ -98,6 +118,7 @@ const EMPTY_NODE: Readonly<Node<never>> = {
   literals: undefined,
   literal: undefined,
   literalNode: undefined,
+  templates: undefined,
   param: undefined,
   catchAlls: undefined,
   route: undefined,
@@ -109,6 +130,9 @@ const EMPTY_NODE: Readonly<Node<never>> = {
  * them:
  *
  * - `{name}` as a whole segment is a param, matching one non-empty segment.
+ * - `{name}` with literal text around it in a segment, as in `{id}.json`, is
+ *   a param too, with a non-empty value. Params in one segment need text
+ *   between them, and each takes the shortest value that lets the rest match.
  * - `{+name}` as a whole segment is a catch-all param, matching one or more
  *   segments, slashes included, with a non-empty value. A path can have one,
  *   and segments can follow it, as in `/files/{+path}/raw`.
@@ -117,9 +141,11 @@ const EMPTY_NODE: Readonly<Node<never>> = {
  *   segment.
  * - One trailing slash is ignored, in routes and requests.
  * - Segments compare from left to right, and at each one a literal beats a
- *   param, which beats a catch-all param, falling back to the next one when
- *   the rest of the path does not match. Catch-all params starting at the same
- *   segment compare the segments after them from the end.
+ *   param with text around it, which beats a param, which beats a catch-all
+ *   param, falling back to the next one when the rest of the path does not
+ *   match. Of two params with text around them, the one with more literal text
+ *   wins. Catch-all params starting at the same segment compare the segments
+ *   after them from the end.
  * - A route with the same method and segments as an earlier one is ignored.
  */
 export class Router<T> {
@@ -208,7 +234,7 @@ function addParsed<T>(
     if (
       catchAll !== -1 &&
       path.includes('{+', catchAll + 2) &&
-      parse(path).filter((segment) => typeof segment !== 'string' && segment.catchAll).length > 1
+      parse(path).filter((segment) => (segment as Partial<RouteParam>).catchAll === true).length > 1
     ) {
       throw new TypeError(
         `OpenAPI path "${path}" has more than one catch-all param ({+name}), but only one is supported per path.`,
@@ -273,7 +299,7 @@ function addStatic<T>(
  * prefix, or from its catch-all param on, are not checked.
  */
 export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string}`) => boolean {
-  const head: (string | undefined)[] = []
+  const head: (string | Template | undefined)[] = []
   // Built in this loop rather than with `every` and `map`, which a cold start
   // would compile as two more functions.
   let text: string | undefined = ''
@@ -286,6 +312,9 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
       } else if (text !== undefined) {
         text += '/' + segment
       }
+    } else if ('pattern' in segment) {
+      head.push(segment)
+      text = undefined
     } else if (segment.catchAll) {
       break
     } else {
@@ -321,7 +350,7 @@ export function createPrefixMatcher(prefix: `/${string}`): (pathname: `/${string
  * for a param. Kept out of the prefix matcher, so that a cold start compiles it
  * only for a prefix with params or a path with `%` inside the prefix.
  */
-function matchesHead(head: readonly (string | undefined)[], pathname: string): boolean {
+function matchesHead(head: readonly (string | Template | undefined)[], pathname: string): boolean {
   let start = 1
 
   for (const expected of head) {
@@ -335,9 +364,7 @@ function matchesHead(head: readonly (string | undefined)[], pathname: string): b
       end = pathname.length
     }
 
-    // `undefined` stands for a param, which needs a non-empty segment.
-    const segment = decode(pathname.slice(start, end))
-    if (expected === undefined ? segment === '' : segment !== expected) {
+    if (!matchesPart(expected, decode(pathname.slice(start, end)))) {
       return false
     }
 
@@ -414,13 +441,13 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number): void {
       const part = parts[index]!
       let segment: Segment = part.includes('%') ? decode(part) : part
 
-      // Only a part starting with `{` once decoded can be a param. Past its
-      // first part, a route waits before one, and before literal text like it,
+      // Only a part with `{` once decoded can have a param. Past its first
+      // part, a route waits before one, and before literal text like it,
       // which keeps the first of two that read the same. It waits even where
       // the tree has grown, as for a route added after requests, unless the
       // node has a literal child with this text, which `find` tries before
       // the routes waiting there. Then it goes after them.
-      if (segment[0] === '{') {
+      if (segment.includes('{')) {
         if (index < literals) {
           literals = index
         }
@@ -442,6 +469,12 @@ function expand<T>(node: Node<T>, pending: unknown[], start: number): void {
       if (typeof segment === 'string') {
         child = literalChild(child, segment)
         nodes[index - start + 1] = child
+        continue
+      }
+
+      if ('pattern' in segment) {
+        params = pushTemplateParams(params, segment, index)
+        child = templateChild(child, segment)
         continue
       }
 
@@ -478,17 +511,21 @@ function addCatchAll<T>(
   data: T,
   params: RouteParam[],
 ): void {
-  const tail: (string | undefined)[] = []
-  let order = '2'
+  const tail: (string | Template | undefined)[] = []
+  let order = '3'
   for (let i = index + 1; i < parts.length; i++) {
     const after = toSegment(parts[i]!, i - parts.length)
     if (typeof after === 'string') {
       tail.push(after)
       order = `0${order}`
+    } else if ('pattern' in after) {
+      tail.push(after)
+      pushTemplateParams(params, after, i - parts.length)
+      order = `1${order}`
     } else {
       tail.push(undefined)
       params.push(after)
-      order = `1${order}`
+      order = `2${order}`
     }
   }
 
@@ -497,6 +534,45 @@ function addCatchAll<T>(
   node.catchAlls ??= []
   node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
   node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+}
+
+function pushTemplateParams(
+  params: RouteParam[] | undefined,
+  template: Template,
+  index: number,
+): RouteParam[] {
+  const list = params ?? []
+  for (let place = 0; place < template.names.length; place++) {
+    list.push({ name: template.names[place]!, index, catchAll: false, template, place })
+  }
+  return list
+}
+
+/**
+ * The child for `template`, the one already there for a template with the
+ * same literal text, with any param names, or a new one, kept after those
+ * with more literal text.
+ */
+function templateChild<T>(node: Node<T>, template: Template): Node<T> {
+  const templates = (node.templates ??= [])
+  // A pattern's source is its literal text, escaped.
+  const source = template.pattern.source
+  for (const entry of templates) {
+    if (entry.template.pattern.source === source) {
+      return entry.node
+    }
+  }
+
+  const child = { ...EMPTY_NODE }
+  templates.push({ template, node: child })
+  // Templates with as much literal text compare by it, so that their order does
+  // not depend on the order routes were added.
+  templates.sort(
+    (a, b) =>
+      b.template.size - a.template.size ||
+      (a.template.pattern.source < b.template.pattern.source ? -1 : 1),
+  )
+  return child
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
@@ -531,11 +607,52 @@ function toSegment(text: string, index: number): Segment {
     const catchAll = text.charCodeAt(1) === 43
     const name = text.slice(catchAll ? 2 : 1, -1)
     if (PARAM_NAME.test(name)) {
-      return { name, index, catchAll }
+      return { name, index, catchAll, template: undefined, place: 0 }
     }
   }
 
-  return decode(text)
+  return (text.includes('{') && toTemplate(text)) || decode(text)
+}
+
+/**
+ * Reads a segment with `{name}` params inside literal text, as in `{id}.json`,
+ * or returns `undefined` when it has none, or two with no text between them,
+ * which would make their values ambiguous.
+ */
+function toTemplate(text: string): Template | undefined {
+  // Splitting on a pattern with a group puts each param name between the texts around it.
+  const parts = text.split(TEMPLATE_PARAM)
+  const names: string[] = []
+  let source = '^'
+  let size = 0
+  for (let i = 0; i < parts.length; i += 2) {
+    const literal = decode(parts[i]!)
+    if (literal === '' && i > 0 && i < parts.length - 1) {
+      return undefined
+    }
+    size += literal.length
+    source += literal.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&')
+    if (i < parts.length - 1) {
+      names.push(parts[i + 1]!)
+      // Lazy, so that each text between two params matches where it first
+      // appears, as ordered as the params' values read.
+      source += '(.+?)'
+    }
+  }
+
+  return names.length === 0 ? undefined : { pattern: new RegExp(`${source}$`, 's'), names, size }
+}
+
+/**
+ * Whether a decoded segment matches literal text, a template, or, for
+ * `undefined`, a param, which needs a non-empty segment.
+ */
+function matchesPart(expected: string | Template | undefined, segment: string): boolean {
+  return expected === undefined
+    ? segment !== ''
+    : typeof expected === 'string'
+      ? segment === expected
+      : expected.pattern.test(segment)
 }
 
 /**
@@ -624,6 +741,13 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
     return find(node, segments, index)
   }
 
+  if (node.templates !== undefined) {
+    const route = findTemplate(node.templates, segments, index)
+    if (route !== undefined) {
+      return route
+    }
+  }
+
   if (node.param !== undefined && segment !== '') {
     const route = find(node.param, segments, index + 1)
     if (route !== undefined) {
@@ -645,8 +769,28 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
   return undefined
 }
 
+/**
+ * Tries the templates at a node in turn. Kept out of `find`, so that V8
+ * compiles it only for route sets with templates.
+ */
+function findTemplate<T>(
+  templates: readonly { readonly template: Template; readonly node: Node<T> }[],
+  segments: readonly string[],
+  index: number,
+): Route<T> | undefined {
+  for (const { template, node } of templates) {
+    if (template.pattern.test(segments[index]!)) {
+      const route = find(node, segments, index + 1)
+      if (route !== undefined) {
+        return route
+      }
+    }
+  }
+  return undefined
+}
+
 function matchesCatchAll(
-  tail: readonly (string | undefined)[],
+  tail: readonly (string | Template | undefined)[],
   segments: readonly string[],
   index: number,
 ): boolean {
@@ -660,8 +804,7 @@ function matchesCatchAll(
   for (let i = 0; i < tail.length; i++) {
     const expected = tail[i]
     const segment = segments[end + i]!
-    // `undefined` stands for a param, which needs a non-empty segment.
-    if (expected === undefined ? segment === '' : segment !== expected) {
+    if (!matchesPart(expected, segment)) {
       return false
     }
   }
@@ -673,8 +816,11 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   let params: Record<string, string> = {}
   const end = segments.length - route.tail
 
-  for (const { name, index, catchAll } of route.params!) {
+  for (const { name, index, catchAll, template, place } of route.params!) {
     let value = segments[index < 0 ? segments.length + index : index]!
+    if (template !== undefined) {
+      value = template.pattern.exec(value)![place + 1]!
+    }
 
     // Faster than `segments.slice(index, end).join('/')`. A template literal
     // would call `ToString` on each segment, which is already a string.
