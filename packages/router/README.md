@@ -58,15 +58,16 @@ underUser('/projects/42') // false
 ## Path templates
 
 - `{name}` as a whole segment is a param. It matches one non-empty segment. Names are made of letters, digits, `_`, and `-`.
+- `{name}` with literal text around it in a segment, as in `/files/{name}.json` or `/apps/{id}:publish`, is a param too, and its value cannot be empty. Params in one segment need text between them, as in `{name}-{version}.zip`, and each one takes the shortest value that lets the rest of the segment match.
 - `{+name}` as a whole segment is a catch-all param. It matches one or more segments, slashes included, and its value cannot be empty. A path can have one, and segments can follow it, as in `/files/{+path}/raw`. Adding a path with more than one throws a `TypeError`.
-- Any other text is literal, including braces that are not a whole segment, as in `/a/{id}.json`, and characters other routers treat as syntax, such as `:`, `*`, `?`, `(`, and `.`.
+- Any other text is literal, including braces around other names, as in `/{a.b}`, a segment where two params touch, as in `/{a}{b}`, and characters other routers treat as syntax, such as `:`, `*`, `?`, `(`, and `.`.
 - Literal text matches however the route or the request percent-encodes it: `/café` matches `/caf%C3%A9`, and `/v1^beta` matches `/v1%5Ebeta`. A `%2F` stays inside its segment. Text whose percent-encoding is malformed is compared as written.
 - Param values are percent-decoded. A catch-all param joins its decoded segments with `/`.
 - One trailing slash is ignored, in routes and in requests. Other empty segments are kept: `/a//b` does not match `/a/b`.
 
 ## Priority
 
-When more than one route matches, segments compare from left to right. At each segment a literal beats a param, which beats a catch-all param, and a route that fails further on falls back to the next candidate:
+When more than one route matches, segments compare from left to right. At each segment a literal beats a param with text around it, which beats a param, which beats a catch-all param, and a route that fails further on falls back to the next candidate:
 
 ```ts
 router.add('GET', '/users/me', 'me')
@@ -80,11 +81,11 @@ router.match('GET', '/users/me/posts') // 'posts', with { id: 'me' }
 router.match('GET', '/users/me/likes') // 'fallback'
 ```
 
-Catch-all params that start at the same segment compare the segments after them from the last one, so `/files/{+path}/raw` beats `/files/{+path}` for `/files/a/raw`. A route with the same method and segments as one added earlier, even with other param names, is ignored.
+Of two params with text around them, the one with more literal text wins, as `{name}.json` does over `{name}.{ext}`, whatever order they were added in. Catch-all params that start at the same segment compare the segments after them from the last one, so `/files/{+path}/raw` beats `/files/{+path}` for `/files/a/raw`. A route with the same method and segments as one added earlier, even with other param names, is ignored.
 
 ## Performance
 
-A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
+A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. Params with text around them at one segment, as in `{name}.json` and `{name}.xml`, are tried one at a time. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
 
 `add` keeps each route with params as written, and the tree is built as requests reach it: a method's first request that needs the tree adds each route's segments up to its first param, and the segments from each param on wait until a request reaches that point. A process that starts cold and serves a few requests pays only for the methods it serves and the params their requests reach.
 
