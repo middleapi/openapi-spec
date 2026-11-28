@@ -9,6 +9,8 @@ import {
   restRoutes,
   rpcRequests,
   rpcRoutes,
+  templateRequests,
+  templateRoutes,
   toRou3Path,
 } from './__shared__/routes'
 
@@ -62,6 +64,11 @@ function compare(name: string, routes: Routes, requests: Requests): void {
 
 compare('match, 250 RPC-style procedures', rpcRoutes(50), rpcRequests(50))
 compare('match, 703 REST-style procedures', restRoutes(100), restRequests(100))
+compare(
+  'match, 300 procedures with params like {id}.json',
+  templateRoutes(100),
+  templateRequests(100),
+)
 
 describe('add, then a request for each method, 703 REST-style procedures', () => {
   const routes = restRoutes(100)

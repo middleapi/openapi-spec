@@ -63,6 +63,28 @@ export function restRequests(resources: number): Requests {
   ]
 }
 
+/** Procedures whose paths have a param with literal text around it, as in `/{id}.json`. */
+export function templateRoutes(resources: number): Routes {
+  return Array.from({ length: resources }, (_, i) => {
+    const base = `/api/v1/resource${i}` as const
+    return [
+      ['GET', `${base}/{id}`],
+      ['GET', `${base}/{id}.json`],
+      ['GET', `${base}/{id}.xml`],
+    ] as const
+  }).flat()
+}
+
+export function templateRequests(resources: number): Requests {
+  const base = `/api/v1/resource${resources - 1}` as const
+  return [
+    ['GET', `${base}/123.json`],
+    ['GET', `${base}/123.xml`],
+    ['GET', `${base}/123`],
+    ['GET', `${base}/123.csv`],
+  ]
+}
+
 /** The same path in rou3's syntax. */
 export function toRou3Path(path: string): string {
   return path.replaceAll(/\{\+([\w-]+)\}/g, '**:$1').replaceAll(/\{([\w-]+)\}/g, ':$1')
