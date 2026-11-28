@@ -18,9 +18,9 @@ interface RouteParam {
   readonly index: number
   readonly catchAll: boolean
   /** The template of its segment, for a param with literal text around it there. */
-  readonly template: Template | undefined
+  readonly template?: Template | undefined
   /** Which of the template's params this is. */
-  readonly place: number
+  readonly place?: number | undefined
 }
 
 /**
@@ -605,7 +605,7 @@ function toSegment(text: string, index: number): Segment {
     const catchAll = text.charCodeAt(1) === 43
     const name = text.slice(catchAll ? 2 : 1, -1)
     if (PARAM_NAME.test(name)) {
-      return { name, index, catchAll, template: undefined, place: 0 }
+      return { name, index, catchAll }
     }
   }
 
@@ -850,7 +850,7 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   for (const { name, index, catchAll, template, place } of route.params!) {
     let value = segments[index < 0 ? segments.length + index : index]!
     if (template !== undefined) {
-      value = splitTemplate(template.texts, value)![place]!
+      value = splitTemplate(template.texts, value)![place!]!
     }
 
     // Faster than `segments.slice(index, end).join('/')`. A template literal
