@@ -85,7 +85,7 @@ Of two params with text around them, the one with more literal text wins, as `{n
 
 ## Performance
 
-A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
+A request path without `%` that matches a route without params is found with one lookup. Other paths are split into segments once and walk a tree of literal, param, and catch-all children, so the work grows with the number of segments, not the number of routes. Params with text around them at one segment, as in `{name}.json` and `{name}.xml`, are tried one at a time. A tree that holds, at many segments in a row, both literals and params a request could take can fall back many times before it finds a match, as with any router that backtracks.
 
 `add` keeps each route with params as written, and the tree is built as requests reach it: a method's first request that needs the tree adds each route's segments up to its first param, and the segments from each param on wait until a request reaches that point. A process that starts cold and serves a few requests pays only for the methods it serves and the params their requests reach.
 
