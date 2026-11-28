@@ -22,6 +22,19 @@ describe('params with text around them in a segment', () => {
     })
   })
 
+  it('matches text around the param however the route percent-encodes it', () => {
+    const router = routerOf('/files/{name}%2Ejson', '/caf%C3%A9/{+path}/{id}%3Araw')
+
+    expectMatches(router, {
+      '/files/report.json': ['/files/{name}%2Ejson', { name: 'report' }],
+      '/files/report%2ejson': ['/files/{name}%2Ejson', { name: 'report' }],
+      '/files/report%2Exml': undefined,
+      '/caf%C3%A9/a/b/1:raw': ['/caf%C3%A9/{+path}/{id}%3Araw', { path: 'a/b', id: '1' }],
+    })
+    expect(createPrefixMatcher('/files/{name}%2Ejson')('/files/report.json')).toBe(true)
+    expect(createPrefixMatcher('/files/{name}%2Ejson')('/files/report.xml')).toBe(false)
+  })
+
   it('reads params with text between them from left to right', () => {
     const router = routerOf('/p/{name}-{version}.zip', '/q/{a}.{b}')
 
