@@ -646,13 +646,19 @@ function toTemplate(text: string): Template | undefined {
 }
 
 /**
- * The values of a template's params in a decoded segment, each non-empty, or
- * `undefined` if the segment does not match. Each text between two params is
- * taken where it first appears, which leaves the most room for the rest, so
- * no other place needs trying, and the time stays linear in the segment's
- * length, where a RegExp with a lazy group per param backtracks.
+ * The value of a template's param at `place`, or of its last one, in a decoded
+ * segment, or `undefined` if the segment does not match. Values are never
+ * empty. Each text between two params is taken where it first appears, which
+ * leaves the most room for the rest, so no other place needs trying, and the
+ * time stays linear in the segment's length, where a RegExp with a lazy group
+ * per param backtracks. One value, rather than an array of all of them,
+ * spares each match an allocation.
  */
-function splitTemplate(texts: readonly string[], segment: string): string[] | undefined {
+function templateValue(
+  texts: readonly string[],
+  segment: string,
+  place?: number,
+): string | undefined {
   const last = texts.length - 1
   const end = segment.length - texts[last]!.length
   let start = texts[0]!.length
@@ -660,18 +666,19 @@ function splitTemplate(texts: readonly string[], segment: string): string[] | un
     return undefined
   }
 
-  const values: string[] = []
+  let value: string | undefined
   for (let i = 1; i < last; i++) {
     const at = segment.indexOf(texts[i]!, start + 1)
     if (at === -1 || at + texts[i]!.length >= end) {
       return undefined
     }
-    values.push(segment.slice(start, at))
+    if (i - 1 === place) {
+      value = segment.slice(start, at)
+    }
     start = at + texts[i]!.length
   }
 
-  values.push(segment.slice(start, end))
-  return values
+  return value ?? segment.slice(start, end)
 }
 
 /**
@@ -683,7 +690,7 @@ function matchesPart(expected: string | Template | undefined, segment: string): 
     ? segment !== ''
     : typeof expected === 'string'
       ? segment === expected
-      : splitTemplate(expected.texts, segment) !== undefined
+      : templateValue(expected.texts, segment) !== undefined
 }
 
 /**
@@ -810,7 +817,7 @@ function findTemplate<T>(
   index: number,
 ): Route<T> | undefined {
   for (const { template, node } of templates) {
-    if (splitTemplate(template.texts, segments[index]!) !== undefined) {
+    if (templateValue(template.texts, segments[index]!) !== undefined) {
       const route = find(node, segments, index + 1)
       if (route !== undefined) {
         return route
@@ -850,7 +857,7 @@ function toParams<T>(route: Route<T>, segments: readonly string[]): Record<strin
   for (const { name, index, catchAll, template, place } of route.params!) {
     let value = segments[index < 0 ? segments.length + index : index]!
     if (template !== undefined) {
-      value = splitTemplate(template.texts, value)![place!]!
+      value = templateValue(template.texts, value, place)!
     }
 
     // Faster than `segments.slice(index, end).join('/')`. A template literal
