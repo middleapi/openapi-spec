@@ -65,7 +65,7 @@ interface Node<T> {
   catchAlls: CatchAll<T>[] | undefined
   route: Route<T> | undefined
   /**
-   * The routes waiting here, before a part that starts with `{` once decoded,
+   * The routes waiting here, before a part with `{` once decoded,
    * until a request needs the tree past this node, so that a cold start builds
    * only the params its requests need: the split path of each, its data, and
    * its params so far, in the order they were added.
@@ -416,12 +416,12 @@ function indexStatics<T>(routes: MethodRoutes<T>): void {
 function expand<T>(node: Node<T>, pending: unknown[], start: number): void {
   node.pending = undefined
   // The parts of the previous route, how many of them come before its first
-  // part starting with `{` once decoded, and the node after each of those, so
+  // part with `{` once decoded, and the node after each of those, so
   // that the next route skips parsing the parts it shares with them.
   let shared: string[] = []
   let literals = 0
   const nodes: Node<T>[] = [node]
-  // The part starting with `{` parsed last, its index, and its segment. Routes
+  // The part with `{` parsed last, its index, and its segment. Routes
   // waiting at one node often start with the same param, as in
   // `/repos/{owner}/{repo}/...`, and reuse its segment instead of parsing it.
   let lastPart: string | undefined
@@ -764,7 +764,7 @@ function find<T>(node: Node<T>, segments: readonly string[], index: number): Rou
     }
   }
 
-  // Routes wait here only before a part starting with `{` that is not the text
+  // Routes wait here only before a part with `{` that is not the text
   // of a literal child here, so any literal child beats them, and they can
   // wait until it fails.
   if (node.pending !== undefined) {
