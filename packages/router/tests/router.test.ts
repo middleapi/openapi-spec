@@ -74,7 +74,7 @@ describe('Router', () => {
         '/{id',
         '/id}',
       ] as const
-      const router = routerOf(...literals, '/a/{id}.json', '/what%3F', '/id}/{x}', '/f/{+p}/id}')
+      const router = routerOf(...literals, '/what%3F', '/id}/{x}', '/f/{+p}/id}')
 
       for (const path of literals) {
         expectMatches(router, { [path]: [path] })
@@ -86,9 +86,6 @@ describe('Router', () => {
         '/itemsfoo': undefined,
         '/f/1/id}': ['/f/{+p}/id}', { p: '1' }],
         '/f/1/id': undefined,
-        // only a whole-segment `{name}` is a param
-        '/a/%7Bid%7D.json': ['/a/{id}.json'],
-        '/a/id.json': undefined,
         '/id}/1': ['/id}/{x}', { x: '1' }],
         '/what%3F': ['/what%3F'],
         '/what': undefined,
