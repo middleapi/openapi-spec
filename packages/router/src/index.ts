@@ -65,7 +65,7 @@ interface Node<T> {
   catchAlls: CatchAll<T>[] | undefined
   route: Route<T> | undefined
   /**
-   * The routes waiting here, before a part that starts with `{` once decoded,
+   * The routes waiting here, before a part with `{` once decoded,
    * until a request needs the tree past this node, so that a cold start builds
    * only the params its requests need: the split path of each, its data, and
    * its params so far, in the order they were added.
