@@ -31,9 +31,10 @@ interface Template {
   /** The decoded literal text before, between, and after its params. */
   readonly texts: readonly string[]
   readonly names: readonly string[]
-  /** The length of its literal text, which sorts the more specific template first. */
-  readonly size: number
-  /** Its literal text as one string, which tells templates apart and orders those of the same size. */
+  /**
+   * Tells templates apart by their literal text, and sorts the one with more
+   * of it first, then those with as much by that text.
+   */
   readonly key: string
 }
 
@@ -43,8 +44,8 @@ interface CatchAll<T> {
   /**
    * Sorts the more specific of two catch-alls starting at the same segment
    * first: a digit for each segment after the param, from the last one, `0`
-   * for a literal, `1` for a template and `2` for a param, then `3`, for none.
-   * Templates at the same places then compare as at any other segment.
+   * for a literal, `1` for a template and `2` for a param, then `3`, for none,
+   * then the keys of its templates, from the last one.
    */
   readonly order: string
   readonly route: Route<T>
@@ -516,6 +517,7 @@ function addCatchAll<T>(
 ): void {
   const tail: (string | Template | undefined)[] = []
   let order = '3'
+  let keys = ''
   for (let i = index + 1; i < parts.length; i++) {
     const after = toSegment(parts[i]!, i - parts.length)
     if (typeof after === 'string') {
@@ -525,6 +527,7 @@ function addCatchAll<T>(
       tail.push(after)
       pushTemplateParams(params, after, i - parts.length)
       order = `1${order}`
+      keys = after.key + keys
     } else {
       tail.push(undefined)
       params.push(after)
@@ -535,28 +538,8 @@ function addCatchAll<T>(
   // A stable sort keeps a route with the same segments as an earlier one
   // after it, where it never matches.
   node.catchAlls ??= []
-  node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
-  node.catchAlls.sort((a, b) =>
-    a.order < b.order ? -1 : a.order > b.order ? 1 : compareTailTemplates(a.tail, b.tail),
-  )
-}
-
-/** Compares the templates of two tails with the same kinds of segments, from the last one. */
-function compareTailTemplates(
-  a: readonly (string | Template | undefined)[],
-  b: readonly (string | Template | undefined)[],
-): number {
-  for (let i = a.length - 1; i >= 0; i--) {
-    // The same kinds of segments, so `b` has a template wherever `a` has one.
-    const x = a[i]
-    if (typeof x === 'object') {
-      const order = compareTemplates(x, b[i] as Template)
-      if (order !== 0) {
-        return order
-      }
-    }
-  }
-  return 0
+  node.catchAlls.push({ tail, order: order + keys, route: { data, params, tail: tail.length } })
+  node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
 }
 
 function pushTemplateParams(
@@ -586,17 +569,8 @@ function templateChild<T>(node: Node<T>, template: Template): Node<T> {
 
   const child = { ...EMPTY_NODE }
   templates.push({ template, node: child })
-  templates.sort((a, b) => compareTemplates(a.template, b.template))
+  templates.sort((a, b) => (a.template.key < b.template.key ? -1 : 1))
   return child
-}
-
-/**
- * Sorts the template with more literal text first. Those with as much compare
- * by that text, so that their order does not depend on the order routes were
- * added in.
- */
-function compareTemplates(a: Template, b: Template): number {
-  return b.size - a.size || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
@@ -659,9 +633,16 @@ function toTemplate(text: string): Template | undefined {
     }
   }
 
+  // The first character sorts the template with more literal text first, and
+  // JSON keeps one key from being the start of another.
   return names.length === 0
     ? undefined
-    : { texts, names, size: texts.join('').length, key: JSON.stringify(texts) }
+    : {
+        texts,
+        names,
+        key:
+          String.fromCharCode(Math.max(0, 65535 - texts.join('').length)) + JSON.stringify(texts),
+      }
 }
 
 /**
