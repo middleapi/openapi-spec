@@ -90,10 +90,17 @@ describe('params with text around them in a segment', () => {
   })
 
   it('ignores a later route with the same text around other param names', () => {
-    const router = routerOf('/files/{name}.json', '/files/{id}.json', '/files/%7Bname%7D.json')
+    const router = routerOf(
+      '/files/{name}.json',
+      '/files/{id}.json',
+      '/files/%7Bname%7D.json',
+      '/raw/{+path}/{name}.json',
+      '/raw/{+file}/{id}.json',
+    )
 
     expectMatches(router, {
       '/files/a.json': ['/files/{name}.json', { name: 'a' }],
+      '/raw/a/b.json': ['/raw/{+path}/{name}.json', { path: 'a', name: 'b' }],
       '/files/%7Bname%7D.json': ['/files/%7Bname%7D.json'],
     })
   })
@@ -106,6 +113,17 @@ describe('params with text around them in a segment', () => {
       '/files/a/b/c.xml': ['/files/{+path}', { path: 'a/b/c.xml' }],
       '/files/c.json': ['/files/{+path}', { path: 'c.json' }],
     })
+  })
+
+  it('ranks templates after a catch-all param the same way', () => {
+    const paths = ['/f/{+p}/{a}-{b}', '/f/{+p}/{name}.json'] as const
+
+    for (const router of [routerOf(...paths), routerOf(...paths.toReversed())]) {
+      expectMatches(router, {
+        '/f/x/a-b.json': ['/f/{+p}/{name}.json', { p: 'x', name: 'a-b' }],
+        '/f/x/a-b': ['/f/{+p}/{a}-{b}', { p: 'x', a: 'a', b: 'b' }],
+      })
+    }
   })
 
   it('matches routes added after requests', () => {

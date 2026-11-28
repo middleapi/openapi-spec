@@ -44,6 +44,7 @@ interface CatchAll<T> {
    * Sorts the more specific of two catch-alls starting at the same segment
    * first: a digit for each segment after the param, from the last one, `0`
    * for a literal, `1` for a template and `2` for a param, then `3`, for none.
+   * Templates at the same places then compare as at any other segment.
    */
   readonly order: string
   readonly route: Route<T>
@@ -535,7 +536,27 @@ function addCatchAll<T>(
   // after it, where it never matches.
   node.catchAlls ??= []
   node.catchAlls.push({ tail, order, route: { data, params, tail: tail.length } })
-  node.catchAlls.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+  node.catchAlls.sort((a, b) =>
+    a.order < b.order ? -1 : a.order > b.order ? 1 : compareTailTemplates(a.tail, b.tail),
+  )
+}
+
+/** Compares the templates of two tails with the same kinds of segments, from the last one. */
+function compareTailTemplates(
+  a: readonly (string | Template | undefined)[],
+  b: readonly (string | Template | undefined)[],
+): number {
+  for (let i = a.length - 1; i >= 0; i--) {
+    // The same kinds of segments, so `b` has a template wherever `a` has one.
+    const x = a[i]
+    if (typeof x === 'object') {
+      const order = compareTemplates(x, b[i] as Template)
+      if (order !== 0) {
+        return order
+      }
+    }
+  }
+  return 0
 }
 
 function pushTemplateParams(
@@ -565,12 +586,17 @@ function templateChild<T>(node: Node<T>, template: Template): Node<T> {
 
   const child = { ...EMPTY_NODE }
   templates.push({ template, node: child })
-  // Templates with as much literal text compare by it, so that their order does
-  // not depend on the order routes were added.
-  templates.sort(
-    (a, b) => b.template.size - a.template.size || (a.template.key < b.template.key ? -1 : 1),
-  )
+  templates.sort((a, b) => compareTemplates(a.template, b.template))
   return child
+}
+
+/**
+ * Sorts the template with more literal text first. Those with as much compare
+ * by that text, so that their order does not depend on the order routes were
+ * added in.
+ */
+function compareTemplates(a: Template, b: Template): number {
+  return b.size - a.size || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
 }
 
 function literalChild<T>(node: Node<T>, segment: string): Node<T> {
